@@ -86,11 +86,11 @@ export function Photographs() {
   // Get current view based on navigation path
   const currentView = useMemo(() => {
     if (navigationPath.length === 0) {
-      // Show years (including "Unknown")
+      // Show years (including "Unknown") - sorted ascending
       const years = Object.keys(hierarchy).filter(key => key !== "Unknown");
       const sortedYears = years.sort((a, b) => {
         if (a === "Unknown" || b === "Unknown") return 0;
-        return parseInt(b) - parseInt(a);
+        return parseInt(a) - parseInt(b); // Ascending
       });
       // Add "Unknown" at the end
       if (hierarchy["Unknown"]) {
@@ -111,7 +111,7 @@ export function Photographs() {
       }
       return {
         type: "months" as const,
-        items: Object.keys(hierarchy[year] || {}).sort((a, b) => parseInt(b) - parseInt(a)),
+        items: Object.keys(hierarchy[year] || {}).sort((a, b) => parseInt(a) - parseInt(b)), // Ascending
         year,
       };
     } else if (navigationPath.length === 2) {
@@ -120,7 +120,7 @@ export function Photographs() {
       const month = navigationPath[1].value;
       return {
         type: "days" as const,
-        items: Object.keys(hierarchy[year]?.[month] || {}).sort((a, b) => parseInt(b) - parseInt(a)),
+        items: Object.keys(hierarchy[year]?.[month] || {}).sort((a, b) => parseInt(a) - parseInt(b)), // Ascending
         year,
         month,
       };
