@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 
 from django.db import transaction
+from tqdm import tqdm
 
 from photograph.models import PhotoPath, Photograph
 from photofinder.protocols import calculate_hash as calculate_file_hash
@@ -196,49 +197,64 @@ def ingest_photos(
             result["success"] = False
             return result
 
-        # Process each image file
-        for file_path in image_files:
-            try:
-                file_path_str = str(file_path.resolve())
+        # Process each image file with progress bar
+        # Use tqdm to show progress across all files (including nested ones) in a single bar
+        with tqdm(
+            total=len(image_files),
+            desc="Ingesting photos",
+            unit="file",
+            unit_scale=False,
+            dynamic_ncols=True,
+        ) as pbar:
+            for file_path in image_files:
+                try:
+                    file_path_str = str(file_path.resolve())
+                    # Update progress bar description with current file name
+                    pbar.set_postfix_str(
+                        os.path.basename(file_path_str)[:50], refresh=False
+                    )
 
-                # Check if PhotoPath already exists for this path and device
-                existing_path = PhotoPath.objects.filter(
-                    path=file_path_str, device=device
-                ).first()
+                    # Check if PhotoPath already exists for this path and device
+                    existing_path = PhotoPath.objects.filter(
+                        path=file_path_str, device=device
+                    ).first()
 
-                if existing_path:
-                    # Skip if already exists
-                    continue
+                    if existing_path:
+                        # Skip if already exists
+                        pbar.update(1)
+                        continue
 
-                # If hash calculation is requested, do it before creating PhotoPath
-                # This way the Photograph will be created with the hash
-                photograph = None
-                if calculate_hash:
-                    hash_value = calculate_file_hash(file_path_str)
-                    if hash_value:
-                        # Check if Photograph with this hash exists
-                        photograph, created = Photograph.objects.get_or_create(
-                            hash=hash_value, defaults={}
-                        )
-                        result["hashes_calculated"] += 1
+                    # If hash calculation is requested, do it before creating PhotoPath
+                    # This way the Photograph will be created with the hash
+                    photograph = None
+                    if calculate_hash:
+                        hash_value = calculate_file_hash(file_path_str)
+                        if hash_value:
+                            # Check if Photograph with this hash exists
+                            photograph, created = Photograph.objects.get_or_create(
+                                hash=hash_value, defaults={}
+                            )
+                            result["hashes_calculated"] += 1
 
-                # Create PhotoPath
-                # Note: The save() method will automatically create/link Photograph
-                # if the file exists and no photograph is set. If we already have
-                # a photograph (from hash calculation), it will be used.
-                photo_path = PhotoPath(
-                    path=file_path_str,
-                    device=device,
-                    photograph=photograph,
-                )
-                photo_path.save()
+                    # Create PhotoPath
+                    # Note: The save() method will automatically create/link Photograph
+                    # if the file exists and no photograph is set. If we already have
+                    # a photograph (from hash calculation), it will be used.
+                    photo_path = PhotoPath(
+                        path=file_path_str,
+                        device=device,
+                        photograph=photograph,
+                    )
+                    photo_path.save()
 
-                result["count"] += 1
+                    result["count"] += 1
+                    pbar.update(1)
 
-            except Exception as e:
-                error_msg = f"Error processing {file_path}: {str(e)}"
-                result["errors"].append(error_msg)
-                # Continue processing other files
+                except Exception as e:
+                    error_msg = f"Error processing {file_path}: {str(e)}"
+                    result["errors"].append(error_msg)
+                    pbar.update(1)
+                    # Continue processing other files
 
         if result["errors"]:
             # Some errors occurred but we may have processed some files
