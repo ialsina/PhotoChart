@@ -12,7 +12,7 @@ from typing import Optional, Dict, Any, List, Tuple
 from django.db import transaction
 
 from photograph.models import PhotoPath, Photograph
-from photofinder.protocols import calculate_hash
+from photofinder.protocols import calculate_hash as calculate_file_hash
 from photofinder.resolution import parse_resolution
 
 
@@ -214,7 +214,7 @@ def ingest_photos(
                 # This way the Photograph will be created with the hash
                 photograph = None
                 if calculate_hash:
-                    hash_value = calculate_hash(file_path_str)
+                    hash_value = calculate_file_hash(file_path_str)
                     if hash_value:
                         # Check if Photograph with this hash exists
                         photograph, created = Photograph.objects.get_or_create(
