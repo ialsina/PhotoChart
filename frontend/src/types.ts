@@ -16,6 +16,13 @@ export interface PhotoPath {
   path: string;
   device: string;
   photograph: number | null;
+  photograph_image_url: string | null;
+  photograph_paths_count: number;
+  other_paths: Array<{
+    id: number;
+    path: string;
+    device: string;
+  }>;
   created_at: string;
   updated_at: string;
 }

@@ -9,11 +9,15 @@ type NavigationPath = {
   fullPath: string;
 };
 
+type SortMode = "id" | "path" | "device" | "date";
+
 export function PhotoPaths() {
   const [paths, setPaths] = useState<PhotoPath[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [navigationPath, setNavigationPath] = useState<NavigationPath[]>([]);
+  const [sortMode, setSortMode] = useState<SortMode>("id");
+  const [ascending, setAscending] = useState<boolean>(true);
 
   useEffect(() => {
     loadPaths();
@@ -119,6 +123,43 @@ export function PhotoPaths() {
     setNavigationPath(navigationPath.slice(0, level));
   };
 
+  const toggleSort = () => {
+    const modes: SortMode[] = ["id", "path", "device", "date"];
+    const currentIndex = modes.indexOf(sortMode);
+    const nextIndex = (currentIndex + 1) % modes.length;
+    setSortMode(modes[nextIndex]);
+  };
+
+  const toggleOrder = () => {
+    setAscending((prev) => !prev);
+  };
+
+  // Sort paths based on current sort mode and order
+  const sortPaths = (pathsToSort: PhotoPath[]): PhotoPath[] => {
+    const sorted = [...pathsToSort].sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortMode) {
+        case "id":
+          comparison = a.id - b.id;
+          break;
+        case "path":
+          comparison = a.path.localeCompare(b.path);
+          break;
+        case "device":
+          comparison = a.device.localeCompare(b.device);
+          break;
+        case "date":
+          comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+          break;
+      }
+
+      return ascending ? comparison : -comparison;
+    });
+
+    return sorted;
+  };
+
   // Get paths that match the current navigation path
   const getFilteredPaths = () => {
     if (navigationPath.length === 0) {
@@ -140,9 +181,35 @@ export function PhotoPaths() {
     return <div className="error">Error: {error}</div>;
   }
 
+  const getSortModeLabel = () => {
+    switch (sortMode) {
+      case "id":
+        return "ID";
+      case "path":
+        return "Path";
+      case "device":
+        return "Device";
+      case "date":
+        return "Date";
+    }
+  };
+
   return (
     <div className="photo-paths">
-      <h2>Photo Paths ({paths.length})</h2>
+      <div className="photo-paths-header">
+        <h2>Photo Paths ({paths.length})</h2>
+        {(currentView.type === "root" || currentView.type === "mixed") &&
+         (currentView.paths.length > 0 || (currentView.type === "root" && currentView.segments.length === 0)) && (
+          <div className="sort-controls">
+            <button className="sort-toggle" onClick={toggleSort}>
+              Sort by: {getSortModeLabel()}
+            </button>
+            <button className="sort-order" onClick={toggleOrder} title={ascending ? "Ascending" : "Descending"}>
+              {ascending ? "▲" : "▼"}
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Breadcrumb Navigation */}
       <div className="breadcrumb">
@@ -193,36 +260,67 @@ export function PhotoPaths() {
             <div className="paths-section">
               <h3>Files ({currentView.paths.length})</h3>
               <div className="paths-list">
-                {currentView.paths.map((path) => (
+                {sortPaths(currentView.paths).map((path) => (
                   <div key={path.id} className="path-card">
-                    <div className="path-header">
-                      <span className="path-id">ID: {path.id}</span>
-                      <span className="path-device">
-                        <span className="field-label">Device:</span> {path.device}
-                      </span>
-                    </div>
-                    <div className="path-value">
-                      <span className="field-label">Path:</span> {path.path}
-                    </div>
-                    <div className="path-photograph-link">
-                      {path.photograph ? (
-                        <span className="path-photograph">
-                          <span className="field-label">Linked to Photograph:</span> #{path.photograph}
-                        </span>
-                      ) : (
-                        <span className="path-no-photograph">
-                          <span className="field-label">Photograph:</span> No photograph linked
-                        </span>
-                      )}
-                    </div>
-                    <div className="path-footer">
-                      <div className="path-date">
-                        <span className="field-label">Created:</span>{" "}
-                        {new Date(path.created_at).toLocaleString()}
+                    {path.photograph_image_url && (
+                      <div className="path-image-container">
+                        <img
+                          src={path.photograph_image_url}
+                          alt={`Photo for path ${path.id}`}
+                          className="path-image"
+                        />
                       </div>
-                      <div className="path-date">
-                        <span className="field-label">Updated:</span>{" "}
-                        {new Date(path.updated_at).toLocaleString()}
+                    )}
+                    <div className="path-content">
+                      <div className="path-header">
+                        <span className="path-id">ID: {path.id}</span>
+                        <span className="path-device">
+                          <span className="field-label">Device:</span> {path.device}
+                        </span>
+                      </div>
+                      <div className="path-value">
+                        <span className="field-label">Path:</span> {path.path}
+                      </div>
+                      <div className="path-photograph-link">
+                        {path.photograph ? (
+                          <div>
+                            <span className="path-photograph">
+                              <span className="field-label">Linked to Photograph:</span> #{path.photograph}
+                            </span>
+                            {path.photograph_paths_count > 1 && (
+                              <div className="path-other-paths">
+                                <span className="field-label">Other paths ({path.photograph_paths_count - 1}):</span>
+                                <div className="other-paths-list">
+                                  {path.other_paths.map((otherPath) => (
+                                    <div key={otherPath.id} className="other-path-item">
+                                      <span className="other-path-device">{otherPath.device}</span>
+                                      <span className="other-path-value">{otherPath.path}</span>
+                                    </div>
+                                  ))}
+                                  {path.photograph_paths_count - 1 > path.other_paths.length && (
+                                    <div className="other-path-more">
+                                      ... and {path.photograph_paths_count - 1 - path.other_paths.length} more
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="path-no-photograph">
+                            <span className="field-label">Photograph:</span> No photograph linked
+                          </span>
+                        )}
+                      </div>
+                      <div className="path-footer">
+                        <div className="path-date">
+                          <span className="field-label">Created:</span>{" "}
+                          {new Date(path.created_at).toLocaleString()}
+                        </div>
+                        <div className="path-date">
+                          <span className="field-label">Updated:</span>{" "}
+                          {new Date(path.updated_at).toLocaleString()}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -265,36 +363,67 @@ export function PhotoPaths() {
             <div className="paths-section">
               <h3>Files ({currentView.paths.length})</h3>
               <div className="paths-list">
-                {currentView.paths.map((path) => (
+                {sortPaths(currentView.paths).map((path) => (
                   <div key={path.id} className="path-card">
-                    <div className="path-header">
-                      <span className="path-id">ID: {path.id}</span>
-                      <span className="path-device">
-                        <span className="field-label">Device:</span> {path.device}
-                      </span>
-                    </div>
-                    <div className="path-value">
-                      <span className="field-label">Path:</span> {path.path}
-                    </div>
-                    <div className="path-photograph-link">
-                      {path.photograph ? (
-                        <span className="path-photograph">
-                          <span className="field-label">Linked to Photograph:</span> #{path.photograph}
-                        </span>
-                      ) : (
-                        <span className="path-no-photograph">
-                          <span className="field-label">Photograph:</span> No photograph linked
-                        </span>
-                      )}
-                    </div>
-                    <div className="path-footer">
-                      <div className="path-date">
-                        <span className="field-label">Created:</span>{" "}
-                        {new Date(path.created_at).toLocaleString()}
+                    {path.photograph_image_url && (
+                      <div className="path-image-container">
+                        <img
+                          src={path.photograph_image_url}
+                          alt={`Photo for path ${path.id}`}
+                          className="path-image"
+                        />
                       </div>
-                      <div className="path-date">
-                        <span className="field-label">Updated:</span>{" "}
-                        {new Date(path.updated_at).toLocaleString()}
+                    )}
+                    <div className="path-content">
+                      <div className="path-header">
+                        <span className="path-id">ID: {path.id}</span>
+                        <span className="path-device">
+                          <span className="field-label">Device:</span> {path.device}
+                        </span>
+                      </div>
+                      <div className="path-value">
+                        <span className="field-label">Path:</span> {path.path}
+                      </div>
+                      <div className="path-photograph-link">
+                        {path.photograph ? (
+                          <div>
+                            <span className="path-photograph">
+                              <span className="field-label">Linked to Photograph:</span> #{path.photograph}
+                            </span>
+                            {path.photograph_paths_count > 1 && (
+                              <div className="path-other-paths">
+                                <span className="field-label">Other paths ({path.photograph_paths_count - 1}):</span>
+                                <div className="other-paths-list">
+                                  {path.other_paths.map((otherPath) => (
+                                    <div key={otherPath.id} className="other-path-item">
+                                      <span className="other-path-device">{otherPath.device}</span>
+                                      <span className="other-path-value">{otherPath.path}</span>
+                                    </div>
+                                  ))}
+                                  {path.photograph_paths_count - 1 > path.other_paths.length && (
+                                    <div className="other-path-more">
+                                      ... and {path.photograph_paths_count - 1 - path.other_paths.length} more
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="path-no-photograph">
+                            <span className="field-label">Photograph:</span> No photograph linked
+                          </span>
+                        )}
+                      </div>
+                      <div className="path-footer">
+                        <div className="path-date">
+                          <span className="field-label">Created:</span>{" "}
+                          {new Date(path.created_at).toLocaleString()}
+                        </div>
+                        <div className="path-date">
+                          <span className="field-label">Updated:</span>{" "}
+                          {new Date(path.updated_at).toLocaleString()}
+                        </div>
                       </div>
                     </div>
                   </div>

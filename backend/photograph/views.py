@@ -36,3 +36,9 @@ class PhotoPathViewSet(viewsets.ModelViewSet):
 
     queryset = PhotoPath.objects.all().select_related("photograph")
     serializer_class = PhotoPathSerializer
+
+    def get_serializer_context(self):
+        """Add request to serializer context for image URLs."""
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
