@@ -23,20 +23,20 @@ export function Catalog() {
       setError(null);
       switch (activeTab) {
         case "hashes":
-          const hashResponse = await api.getHashes();
-          setHashes(hashResponse.results);
+          const allHashes = await api.getAllHashes();
+          setHashes(allHashes);
           break;
         case "directories":
-          const dirResponse = await api.getDirectories();
-          setDirectories(dirResponse.results);
+          const allDirectories = await api.getAllDirectories();
+          setDirectories(allDirectories);
           break;
         case "locations":
-          const locResponse = await api.getLocations();
-          setLocations(locResponse.results);
+          const allLocations = await api.getAllLocations();
+          setLocations(allLocations);
           break;
         case "timelocs":
-          const tlResponse = await api.getTimeLocs();
-          setTimeLocs(tlResponse.results);
+          const allTimeLocs = await api.getAllTimeLocs();
+          setTimeLocs(allTimeLocs);
           break;
       }
     } catch (err) {

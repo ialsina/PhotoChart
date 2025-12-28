@@ -19,13 +19,35 @@ export function Photographs() {
 
   useEffect(() => {
     loadPhotographs();
-  }, []);
+  }, [navigationPath]);
 
   const loadPhotographs = async () => {
     try {
       setLoading(true);
-      const response = await api.getPhotographs();
-      setPhotographs(response.results);
+
+      // Build filter parameters based on navigation path
+      const params: { year?: string; month?: string; day?: string } = {};
+
+      if (navigationPath.length > 0) {
+        params.year = navigationPath[0].value;
+      }
+      if (navigationPath.length > 1) {
+        params.month = navigationPath[1].value;
+      }
+      if (navigationPath.length > 2) {
+        params.day = navigationPath[2].value;
+      }
+
+      // Fetch filtered data based on current navigation level
+      // At root (length 0): need all to build year hierarchy
+      // At year level (length 1): fetch filtered by year to build month hierarchy
+      // At month level (length 2): fetch filtered by year+month to build day hierarchy
+      // At day level (length 3): fetch filtered by year+month+day to show photos
+      const allPhotographs = await api.getAllPhotographs(
+        navigationPath.length > 0 ? params : undefined
+      );
+      setPhotographs(allPhotographs);
+
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load photographs");

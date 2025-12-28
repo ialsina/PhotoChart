@@ -21,13 +21,19 @@ export function PhotoPaths() {
 
   useEffect(() => {
     loadPaths();
-  }, []);
+  }, [navigationPath]);
 
   const loadPaths = async () => {
     try {
       setLoading(true);
-      const response = await api.getPhotoPaths();
-      setPaths(response.results);
+
+      // Build path prefix from navigation path
+      const pathPrefix = navigationPath.length > 0
+        ? navigationPath.map(n => n.value).join("/")
+        : undefined;
+
+      const allPaths = await api.getAllPhotoPaths(pathPrefix);
+      setPaths(allPaths);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load photo paths");
