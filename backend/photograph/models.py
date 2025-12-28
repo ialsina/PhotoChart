@@ -272,7 +272,7 @@ class PhotoPath(models.Model):
         store_image = kwargs.pop("store_image", False)
         resolution = kwargs.pop("resolution", None)
 
-        # Only process if photograph is not already set and file exists
+        # Process photograph creation/linking if not already set and file exists
         if not self.photograph and self.path and os.path.exists(self.path):
             from photofinder.protocols import calculate_hash
 
@@ -285,12 +285,13 @@ class PhotoPath(models.Model):
                     hash=hash_value, defaults={}
                 )
 
-                # Store image if requested and not already stored
-                if store_image and not photograph.image:
-                    photograph.get_image_from_file(self.path, resolution=resolution)
-
                 # Link this PhotoPath to the Photograph
                 self.photograph = photograph
+
+        # Store image if requested (regardless of whether photograph was just created or already existed)
+        if store_image and self.photograph and self.path and os.path.exists(self.path):
+            if not self.photograph.image:
+                self.photograph.get_image_from_file(self.path, resolution=resolution)
 
         # Call the parent save method
         super().save(*args, **kwargs)
