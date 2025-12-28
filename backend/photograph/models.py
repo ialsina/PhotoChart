@@ -6,9 +6,11 @@ photo paths across different devices.
 """
 
 import os
+from datetime import datetime
 from django.db import models
 from django.core.files import File
 from django.core.validators import RegexValidator
+from django.utils import timezone
 
 
 class Photograph(models.Model):
@@ -43,6 +45,11 @@ class Photograph(models.Model):
     updated_at = models.DateTimeField(
         auto_now=True, help_text="Timestamp when the photograph record was last updated"
     )
+    time = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Photograph time extracted from EXIF metadata (when the photo was taken)",
+    )
 
     class Meta:
         verbose_name = "Photograph"
@@ -59,6 +66,62 @@ class Photograph(models.Model):
             return f"Photograph ({self.image.name})"
         else:
             return f"Photograph (id: {self.id})"
+
+    def _extract_exif_datetime(self, file_path):
+        """Extract datetime from EXIF metadata of an image file.
+
+        Tries to extract the datetime from EXIF tags in order of preference:
+        1. DateTimeOriginal (tag 36867) - when the photo was taken
+        2. DateTimeDigitized (tag 36868) - when the photo was digitized
+        3. DateTime (tag 306) - general datetime
+
+        Args:
+            file_path: Path to the image file
+
+        Returns:
+            datetime object if found, None otherwise
+        """
+        try:
+            from PIL import Image
+
+            with Image.open(file_path) as img:
+                # Get EXIF data
+                exif_data = img.getexif()
+                if not exif_data:
+                    return None
+
+                # Try to find datetime tags
+                # EXIF tag numbers for datetime fields
+                DATETIME_ORIGINAL = 36867
+                DATETIME_DIGITIZED = 36868
+                DATETIME = 306
+
+                datetime_str = None
+
+                # Priority 1: DateTimeOriginal
+                if DATETIME_ORIGINAL in exif_data:
+                    datetime_str = exif_data[DATETIME_ORIGINAL]
+                # Priority 2: DateTimeDigitized
+                elif DATETIME_DIGITIZED in exif_data:
+                    datetime_str = exif_data[DATETIME_DIGITIZED]
+                # Priority 3: DateTime
+                elif DATETIME in exif_data:
+                    datetime_str = exif_data[DATETIME]
+
+                if datetime_str:
+                    # Parse EXIF datetime format: "YYYY:MM:DD HH:MM:SS"
+                    try:
+                        return datetime.strptime(datetime_str, "%Y:%m:%d %H:%M:%S")
+                    except (ValueError, TypeError):
+                        # Try alternative formats if standard format fails
+                        try:
+                            return datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%S")
+                        except (ValueError, TypeError):
+                            return None
+
+        except Exception:
+            # If EXIF extraction fails for any reason, return None
+            return None
 
     def compute_hash_from_image(self):
         """Compute and set the hash from the image file if available.
@@ -100,11 +163,54 @@ class Photograph(models.Model):
             self.save(update_fields=["hash"])
         return hash_value
 
+    def _generate_timestamp_filename(self, original_file_path, extension=None):
+        """Generate a timestamp-based filename to avoid clashes.
+
+        Uses the Photograph's created_at timestamp if available,
+        otherwise uses the current time.
+
+        Args:
+            original_file_path: Original file path (used to determine extension if not provided)
+            extension: File extension to use (e.g., ".jpg", ".png"). If None, auto-detects from original file.
+
+        Returns:
+            A filename string based on the creation timestamp
+        """
+        # Use created_at timestamp if available, otherwise use current time
+        if self.created_at:
+            timestamp = self.created_at
+        else:
+            timestamp = timezone.now()
+
+        # Format timestamp as YYYYMMDD_HHMMSS_microseconds
+        timestamp_str = timestamp.strftime("%Y%m%d_%H%M%S_%f")
+
+        # If extension not provided, try to get it from original file
+        if extension is None:
+            _, original_ext = os.path.splitext(original_file_path)
+            if original_ext and original_ext.lower() in [
+                ".jpg",
+                ".jpeg",
+                ".png",
+                ".gif",
+                ".bmp",
+                ".tiff",
+                ".tif",
+                ".webp",
+            ]:
+                extension = original_ext.lower()
+                if extension == ".jpeg":
+                    extension = ".jpg"
+            else:
+                extension = ".jpg"  # Default to .jpg if extension not recognized
+
+        return f"{timestamp_str}{extension}"
+
     def get_image_from_file(self, file_path, resolution=None):
         """Load an image from an external file path into the image field.
 
         Opens the file at the given path and saves it to the model's image field.
-        The file will be saved with its original filename in the upload directory.
+        The file will be saved with a timestamp-based filename to avoid clashes.
         If the file requires special processing (e.g., NEF files), it will be
         processed through the appropriate backend.
 
@@ -139,19 +245,27 @@ class Photograph(models.Model):
 
             if processed_image:
                 # Backend processed the image successfully
-                # Get the filename and change extension to .jpg if needed
-                filename = os.path.basename(file_path)
-                base_name, ext = os.path.splitext(filename)
-                if ext.lower() in [".nef", ".raw", ".cr2", ".arw"]:
-                    filename = f"{base_name}.jpg"
+                # Generate timestamp-based filename (processed images are always JPEG)
+                filename = self._generate_timestamp_filename(
+                    file_path, extension=".jpg"
+                )
 
                 self.image.save(filename, File(processed_image), save=True)
+
+                # Extract and set photograph time from EXIF if not already set
+                if not self.time:
+                    exif_time = self._extract_exif_datetime(file_path)
+                    if exif_time:
+                        self.time = (
+                            timezone.make_aware(exif_time)
+                            if timezone.is_naive(exif_time)
+                            else exif_time
+                        )
+                        self.save(update_fields=["time"])
+
                 return True
 
             # Fallback to direct file copy for standard formats
-            # Get the filename from the path
-            filename = os.path.basename(file_path)
-
             # If resolution is specified, we need to process even standard formats
             if resolution_tuple:
                 from PIL import Image
@@ -195,16 +309,30 @@ class Photograph(models.Model):
                 image.save(output_buffer, format="JPEG", quality=95)
                 output_buffer.seek(0)
 
-                # Update filename extension if needed
-                base_name, ext = os.path.splitext(filename)
-                if ext.lower() not in [".jpg", ".jpeg"]:
-                    filename = f"{base_name}.jpg"
+                # Use timestamp-based filename with .jpg extension for resized images
+                filename = self._generate_timestamp_filename(
+                    file_path, extension=".jpg"
+                )
 
                 self.image.save(filename, File(output_buffer), save=True)
             else:
                 # No resolution specified, just copy the file directly
+                # Generate timestamp-based filename preserving original extension
+                filename = self._generate_timestamp_filename(file_path, extension=None)
                 with open(file_path, "rb") as f:
                     self.image.save(filename, File(f), save=True)
+
+            # Extract and set photograph time from EXIF if not already set
+            if not self.time:
+                exif_time = self._extract_exif_datetime(file_path)
+                if exif_time:
+                    self.time = (
+                        timezone.make_aware(exif_time)
+                        if timezone.is_naive(exif_time)
+                        else exif_time
+                    )
+                    self.save(update_fields=["time"])
+
             return True
         except Exception as e:
             # Log error if needed (you might want to add logging here)
@@ -235,6 +363,16 @@ class PhotoPath(models.Model):
     )
     updated_at = models.DateTimeField(
         auto_now=True, help_text="Timestamp when the path record was last updated"
+    )
+    file_created_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="File creation timestamp from the filesystem",
+    )
+    file_updated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="File modification timestamp from the filesystem",
     )
 
     class Meta:
@@ -272,6 +410,30 @@ class PhotoPath(models.Model):
         store_image = kwargs.pop("store_image", False)
         resolution = kwargs.pop("resolution", None)
 
+        # Update file timestamps if path exists
+        if self.path and os.path.exists(self.path):
+            try:
+                # Get file creation and modification times
+                file_created = os.path.getctime(self.path)
+                file_updated = os.path.getmtime(self.path)
+
+                # Convert to datetime objects (fromtimestamp returns naive datetime in local timezone)
+                file_created_dt = datetime.fromtimestamp(file_created)
+                file_updated_dt = datetime.fromtimestamp(file_updated)
+
+                # Make timezone-aware using Django's default timezone
+                if timezone.is_naive(file_created_dt):
+                    file_created_dt = timezone.make_aware(file_created_dt)
+                if timezone.is_naive(file_updated_dt):
+                    file_updated_dt = timezone.make_aware(file_updated_dt)
+
+                # Always update file timestamps to reflect current file state
+                self.file_created_at = file_created_dt
+                self.file_updated_at = file_updated_dt
+            except (OSError, ValueError):
+                # If we can't get file timestamps, leave fields as None
+                pass
+
         # Process photograph creation/linking if not already set and file exists
         if not self.photograph and self.path and os.path.exists(self.path):
             from photofinder.protocols import calculate_hash
@@ -292,6 +454,17 @@ class PhotoPath(models.Model):
         if store_image and self.photograph and self.path and os.path.exists(self.path):
             if not self.photograph.image:
                 self.photograph.get_image_from_file(self.path, resolution=resolution)
+
+            # Extract and set photograph time from EXIF if not already set
+            if not self.photograph.time:
+                exif_time = self.photograph._extract_exif_datetime(self.path)
+                if exif_time:
+                    self.photograph.time = (
+                        timezone.make_aware(exif_time)
+                        if timezone.is_naive(exif_time)
+                        else exif_time
+                    )
+                    self.photograph.save(update_fields=["time"])
 
         # Call the parent save method
         super().save(*args, **kwargs)
