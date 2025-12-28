@@ -79,6 +79,102 @@
   font-style: italic;
 }
 
+/* Breadcrumb Navigation */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  padding: 0.75rem;
+  background-color: #2a2a2a;
+  border-radius: 6px;
+  border: 1px solid #3a3a3a;
+  flex-wrap: wrap;
+}
+
+.breadcrumb > span {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.breadcrumb-item {
+  background: none;
+  border: none;
+  color: #646cff;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.breadcrumb-item:hover {
+  background-color: #3a3a3a;
+  color: #7c84ff;
+}
+
+.breadcrumb-separator {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.9rem;
+}
+
+/* Hierarchy Grid */
+.hierarchy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.hierarchy-item {
+  background-color: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.hierarchy-item:hover {
+  background-color: #333;
+  border-color: #646cff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.hierarchy-item-name {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 0.5rem;
+  font-size: 1rem;
+}
+
+.hierarchy-item-count {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.hierarchy-section {
+  margin-bottom: 2rem;
+}
+
+.hierarchy-section h3 {
+  margin-bottom: 1rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 1.1rem;
+}
+
+.paths-section {
+  margin-top: 2rem;
+}
+
+.paths-section h3 {
+  margin-bottom: 1rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 1.1rem;
+}
+
 /* Photographs */
 .photographs-header {
   display: flex;
@@ -590,6 +686,47 @@
   .directory-kind,
   .timeloc-location {
     background-color: #ffffff;
+  }
+
+  .breadcrumb {
+    background-color: #f5f5f5;
+    border-color: #e0e0e0;
+  }
+
+  .breadcrumb-item {
+    color: #646cff;
+  }
+
+  .breadcrumb-item:hover {
+    background-color: #e8e8e8;
+    color: #535bf2;
+  }
+
+  .breadcrumb-separator {
+    color: rgba(33, 53, 71, 0.4);
+  }
+
+  .hierarchy-item {
+    background-color: #f5f5f5;
+    border-color: #e0e0e0;
+  }
+
+  .hierarchy-item:hover {
+    background-color: #eeeeee;
+    border-color: #646cff;
+  }
+
+  .hierarchy-item-name {
+    color: rgba(33, 53, 71, 0.9);
+  }
+
+  .hierarchy-item-count {
+    color: rgba(33, 53, 71, 0.6);
+  }
+
+  .hierarchy-section h3,
+  .paths-section h3 {
+    color: rgba(33, 53, 71, 0.8);
   }
 }
 
