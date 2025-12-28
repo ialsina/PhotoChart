@@ -167,3 +167,34 @@ class PhotoPath(models.Model):
 
     def __str__(self):
         return f"{self.path} on {self.device}"
+
+    def save(self, *args, **kwargs):
+        """Override save to automatically create or link Photograph.
+
+        When a PhotoPath is saved and no photograph is linked, this will:
+        1. Check if the file at the path exists
+        2. Compute the hash from the file
+        3. Find or create a Photograph with that hash
+        4. Link this PhotoPath to the Photograph
+
+        If a Photograph with the same hash already exists, it will be linked.
+        Otherwise, a new Photograph will be created with the computed hash.
+        """
+        # Only process if photograph is not already set and file exists
+        if not self.photograph and self.path and os.path.exists(self.path):
+            from photofinder.protocols import calculate_hash
+
+            # Compute hash from the file
+            hash_value = calculate_hash(self.path)
+
+            if hash_value:
+                # Find or create a Photograph with this hash
+                photograph, created = Photograph.objects.get_or_create(
+                    hash=hash_value, defaults={}
+                )
+
+                # Link this PhotoPath to the Photograph
+                self.photograph = photograph
+
+        # Call the parent save method
+        super().save(*args, **kwargs)
