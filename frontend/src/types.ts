@@ -5,6 +5,7 @@ export interface Photograph {
   hash: string | null;
   image: string | null;
   image_url: string | null;
+  time: string | null;
   paths: PhotoPath[];
   created_at: string;
   updated_at: string;

@@ -26,6 +26,7 @@ class PhotographSerializer(serializers.ModelSerializer):
             "hash",
             "image",
             "image_url",
+            "time",
             "paths",
             "created_at",
             "updated_at",

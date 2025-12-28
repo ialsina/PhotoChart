@@ -42,21 +42,34 @@ export function PhotoPaths() {
           {paths.map((path) => (
             <div key={path.id} className="path-card">
               <div className="path-header">
-                <span className="path-id">#{path.id}</span>
-                <span className="path-device">{path.device}</span>
+                <span className="path-id">ID: {path.id}</span>
+                <span className="path-device">
+                  <span className="field-label">Device:</span> {path.device}
+                </span>
               </div>
-              <div className="path-value">{path.path}</div>
-              <div className="path-footer">
+              <div className="path-value">
+                <span className="field-label">Path:</span> {path.path}
+              </div>
+              <div className="path-photograph-link">
                 {path.photograph ? (
                   <span className="path-photograph">
-                    Linked to photograph #{path.photograph}
+                    <span className="field-label">Linked to Photograph:</span> #{path.photograph}
                   </span>
                 ) : (
-                  <span className="path-no-photograph">No photograph linked</span>
+                  <span className="path-no-photograph">
+                    <span className="field-label">Photograph:</span> No photograph linked
+                  </span>
                 )}
-                <span className="path-date">
+              </div>
+              <div className="path-footer">
+                <div className="path-date">
+                  <span className="field-label">Created:</span>{" "}
                   {new Date(path.created_at).toLocaleString()}
-                </span>
+                </div>
+                <div className="path-date">
+                  <span className="field-label">Updated:</span>{" "}
+                  {new Date(path.updated_at).toLocaleString()}
+                </div>
               </div>
             </div>
           ))}
