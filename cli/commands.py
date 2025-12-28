@@ -25,6 +25,7 @@ except Exception:  # pragma: no cover
 # Django models - these will be imported after django.setup() in main.py
 from photograph.models import PhotoPath
 from photofinder.resolution import get_resolution_presets
+from photofinder.metadata import extract_metadata
 
 
 def cmd_ingest(args: argparse.Namespace) -> int:
@@ -165,4 +166,160 @@ def cmd_list_resolutions(args: argparse.Namespace) -> int:
 
     _console.print(Panel.fit(table, title="[bold green]Resolution Presets[/]"))
     _console.print("\n[dim]You can also use explicit resolutions like '1920x1080'[/]")
+    return 0
+
+
+def cmd_info(args: argparse.Namespace) -> int:
+    """Display metadata for an image file."""
+    file_path = args.file
+    path = Path(file_path)
+
+    if not path.exists():
+        print(f"Error: File does not exist: {file_path}", file=sys.stderr)
+        return 1
+
+    # Extract metadata
+    metadata = extract_metadata(file_path)
+
+    if not HAS_RICH:
+        # Plain text output
+        print(f"Metadata for: {file_path}")
+        print("=" * 80)
+
+        # File information
+        if metadata.get("file"):
+            print("\n[File Information]")
+            file_info = metadata["file"]
+            print(f"  Path: {file_info.get('path', 'N/A')}")
+            print(f"  Name: {file_info.get('name', 'N/A')}")
+            print(f"  Extension: {file_info.get('extension', 'N/A')}")
+            print(
+                f"  Size: {file_info.get('size_mb', 0)} MB ({file_info.get('size', 0)} bytes)"
+            )
+
+        # Image information
+        if metadata.get("image"):
+            print("\n[Image Properties]")
+            img_info = metadata["image"]
+            if "size" in img_info:
+                print(
+                    f"  Dimensions: {img_info['size'].get('width', 'N/A')}x{img_info['size'].get('height', 'N/A')}"
+                )
+            print(f"  Format: {img_info.get('format', 'N/A')}")
+            print(f"  Mode: {img_info.get('mode', 'N/A')}")
+            print(f"  Has Transparency: {img_info.get('has_transparency', False)}")
+
+        # EXIF information
+        if metadata.get("exif"):
+            print("\n[EXIF Data]")
+            exif = metadata["exif"]
+            for key, value in sorted(exif.items()):
+                # Truncate very long values
+                value_str = str(value)
+                if len(value_str) > 100:
+                    value_str = value_str[:97] + "..."
+                print(f"  {key}: {value_str}")
+
+        # RAW information
+        if metadata.get("raw"):
+            print("\n[RAW Metadata]")
+            raw_info = metadata["raw"]
+            for key, value in sorted(raw_info.items()):
+                value_str = str(value)
+                if len(value_str) > 100:
+                    value_str = value_str[:97] + "..."
+                print(f"  {key}: {value_str}")
+
+        return 0
+
+    # Rich output
+    from rich.text import Text
+
+    panels = []
+
+    # File information panel
+    if metadata.get("file"):
+        file_info = metadata["file"]
+        file_text = Text()
+        file_text.append("Path: ", style="bold")
+        file_text.append(f"{file_info.get('path', 'N/A')}\n")
+        file_text.append("Name: ", style="bold")
+        file_text.append(f"{file_info.get('name', 'N/A')}\n")
+        file_text.append("Extension: ", style="bold")
+        file_text.append(f"{file_info.get('extension', 'N/A')}\n")
+        file_text.append("Size: ", style="bold")
+        file_text.append(
+            f"{file_info.get('size_mb', 0)} MB ({file_info.get('size', 0)} bytes)\n"
+        )
+        panels.append(
+            Panel(
+                file_text, title="[bold cyan]File Information[/]", border_style="cyan"
+            )
+        )
+
+    # Image information panel
+    if metadata.get("image"):
+        img_info = metadata["image"]
+        img_text = Text()
+        if "size" in img_info:
+            img_text.append("Dimensions: ", style="bold")
+            img_text.append(
+                f"{img_info['size'].get('width', 'N/A')}x{img_info['size'].get('height', 'N/A')}\n"
+            )
+        img_text.append("Format: ", style="bold")
+        img_text.append(f"{img_info.get('format', 'N/A')}\n")
+        img_text.append("Mode: ", style="bold")
+        img_text.append(f"{img_info.get('mode', 'N/A')}\n")
+        img_text.append("Has Transparency: ", style="bold")
+        img_text.append(f"{img_info.get('has_transparency', False)}")
+        panels.append(
+            Panel(
+                img_text, title="[bold green]Image Properties[/]", border_style="green"
+            )
+        )
+
+    # EXIF information panel
+    if metadata.get("exif"):
+        exif = metadata["exif"]
+        exif_text = Text()
+        for key, value in sorted(exif.items()):
+            exif_text.append(f"{key}: ", style="bold yellow")
+            value_str = str(value)
+            # Truncate very long values
+            if len(value_str) > 150:
+                value_str = value_str[:147] + "..."
+            exif_text.append(f"{value_str}\n")
+        if exif_text:
+            panels.append(
+                Panel(
+                    exif_text,
+                    title="[bold magenta]EXIF Data[/]",
+                    border_style="magenta",
+                )
+            )
+
+    # RAW information panel
+    if metadata.get("raw"):
+        raw_info = metadata["raw"]
+        raw_text = Text()
+        for key, value in sorted(raw_info.items()):
+            raw_text.append(f"{key}: ", style="bold blue")
+            value_str = str(value)
+            # Truncate very long values
+            if len(value_str) > 150:
+                value_str = value_str[:147] + "..."
+            raw_text.append(f"{value_str}\n")
+        if raw_text:
+            panels.append(
+                Panel(raw_text, title="[bold blue]RAW Metadata[/]", border_style="blue")
+            )
+
+    # Display all panels
+    if panels:
+        _console.print(f"\n[bold]Metadata for:[/] [cyan]{file_path}[/]\n")
+        for panel in panels:
+            _console.print(panel)
+    else:
+        _console.print(f"[yellow]No metadata found for: {file_path}[/]")
+
     return 0

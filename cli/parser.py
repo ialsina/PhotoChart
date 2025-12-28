@@ -21,6 +21,7 @@ from .commands import (
     cmd_ingest,
     cmd_convert,
     cmd_list_resolutions,
+    cmd_info,
     HAS_RICH,
 )
 
@@ -170,6 +171,18 @@ def build_parser() -> argparse.ArgumentParser:
         description="Display all available resolution presets that can be used with --resolution",
     )
     p_res.set_defaults(func=cmd_list_resolutions)
+
+    # info
+    p_info = sub.add_parser(
+        "info",
+        help="Show metadata for a raw image",
+        description="Display all available metadata from a raw image file, including EXIF data and RAW-specific information",
+    )
+    p_info.add_argument(
+        "file",
+        help="Path to the image file to inspect",
+    )
+    p_info.set_defaults(func=cmd_info)
 
     return p
 
