@@ -100,14 +100,18 @@ class Photograph(models.Model):
             self.save(update_fields=["hash"])
         return hash_value
 
-    def get_image_from_file(self, file_path):
+    def get_image_from_file(self, file_path, resolution=None):
         """Load an image from an external file path into the image field.
 
         Opens the file at the given path and saves it to the model's image field.
         The file will be saved with its original filename in the upload directory.
+        If the file requires special processing (e.g., NEF files), it will be
+        processed through the appropriate backend.
 
         Args:
             file_path: Path to the image file to load
+            resolution: Optional target resolution as (width, height) tuple or
+                resolution string (e.g., "1920x1080" or "low", "medium", "high")
 
         Returns:
             True if the image was successfully loaded, False otherwise
@@ -116,12 +120,91 @@ class Photograph(models.Model):
             return False
 
         try:
+            # Parse resolution if it's a string
+            resolution_tuple = None
+            if resolution:
+                if isinstance(resolution, str):
+                    from photofinder.resolution import parse_resolution
+
+                    resolution_tuple = parse_resolution(resolution)
+                elif isinstance(resolution, tuple) and len(resolution) == 2:
+                    resolution_tuple = resolution
+
+            # Try to process through backend first (for special formats like NEF)
+            from photofinder.backends import process_image_file
+
+            processed_image = process_image_file(
+                file_path, output_format="JPEG", resolution=resolution_tuple
+            )
+
+            if processed_image:
+                # Backend processed the image successfully
+                # Get the filename and change extension to .jpg if needed
+                filename = os.path.basename(file_path)
+                base_name, ext = os.path.splitext(filename)
+                if ext.lower() in [".nef", ".raw", ".cr2", ".arw"]:
+                    filename = f"{base_name}.jpg"
+
+                self.image.save(filename, File(processed_image), save=True)
+                return True
+
+            # Fallback to direct file copy for standard formats
             # Get the filename from the path
             filename = os.path.basename(file_path)
 
-            # Open the file and save it to the image field
-            with open(file_path, "rb") as f:
-                self.image.save(filename, File(f), save=True)
+            # If resolution is specified, we need to process even standard formats
+            if resolution_tuple:
+                from PIL import Image
+
+                # Open and resize the image
+                image = Image.open(file_path)
+                target_width, target_height = resolution_tuple
+
+                # Maintain aspect ratio
+                original_width, original_height = image.size
+                aspect_ratio = original_width / original_height
+                target_aspect = target_width / target_height
+
+                if aspect_ratio > target_aspect:
+                    # Image is wider - fit to width
+                    new_width = target_width
+                    new_height = int(target_width / aspect_ratio)
+                else:
+                    # Image is taller - fit to height
+                    new_height = target_height
+                    new_width = int(target_height * aspect_ratio)
+
+                image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+                # Save to BytesIO
+                import io
+
+                output_buffer = io.BytesIO()
+                if image.mode in ("RGBA", "LA", "P"):
+                    # Convert to RGB for JPEG
+                    rgb_image = Image.new("RGB", image.size, (255, 255, 255))
+                    if image.mode == "P":
+                        image = image.convert("RGBA")
+                    rgb_image.paste(
+                        image, mask=image.split()[-1] if image.mode == "RGBA" else None
+                    )
+                    image = rgb_image
+                elif image.mode not in ("RGB", "L"):
+                    image = image.convert("RGB")
+
+                image.save(output_buffer, format="JPEG", quality=95)
+                output_buffer.seek(0)
+
+                # Update filename extension if needed
+                base_name, ext = os.path.splitext(filename)
+                if ext.lower() not in [".jpg", ".jpeg"]:
+                    filename = f"{base_name}.jpg"
+
+                self.image.save(filename, File(output_buffer), save=True)
+            else:
+                # No resolution specified, just copy the file directly
+                with open(file_path, "rb") as f:
+                    self.image.save(filename, File(f), save=True)
             return True
         except Exception as e:
             # Log error if needed (you might want to add logging here)

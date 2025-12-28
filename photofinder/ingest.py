@@ -7,12 +7,13 @@ calculating hashes, and storing them in the database.
 import os
 import socket
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
 from django.db import transaction
 
 from photograph.models import PhotoPath, Photograph
 from photofinder.protocols import calculate_hash
+from photofinder.resolution import parse_resolution
 
 
 # Common image file extensions
@@ -150,7 +151,9 @@ def ingest_photos(
 
     Args:
         path: Path to directory or file to ingest
-        resolution: Optional resolution for the image (currently not used, reserved for future)
+        resolution: Optional resolution for the image. Can be explicit (e.g., '1920x1080')
+            or a preset name (e.g., 'low', 'medium', 'high'). Images will be resized
+            to this resolution when processed through backends.
         calculate_hash: Whether to calculate and store hash for each photo
         recursive: Whether to search subdirectories recursively
         device: Device identifier (defaults to hostname)
@@ -173,6 +176,17 @@ def ingest_photos(
         # Get device name
         if device is None:
             device = get_device_name()
+
+        # Parse resolution if provided
+        resolution_tuple: Optional[Tuple[int, int]] = None
+        if resolution:
+            resolution_tuple = parse_resolution(resolution)
+            if resolution_tuple is None:
+                result["errors"].append(
+                    f"Invalid resolution format: '{resolution}'. "
+                    "Use format 'WIDTHxHEIGHT' or a preset name (e.g., 'low', 'medium', 'high')"
+                )
+                # Continue anyway, just without resolution processing
 
         # Get all image files
         image_files = get_image_files(path, recursive=recursive)

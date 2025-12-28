@@ -34,13 +34,17 @@ class ImageBackend(Protocol):
         ...
 
     def process_to_standard_format(
-        self, file_path: str, output_format: str = "JPEG"
+        self,
+        file_path: str,
+        output_format: str = "JPEG",
+        resolution: Optional[tuple[int, int]] = None,
     ) -> Optional[io.BytesIO]:
         """Process the image file and return it as a standard format.
 
         Args:
             file_path: Path to the image file to process
             output_format: Desired output format (e.g., "JPEG", "PNG")
+            resolution: Optional target resolution as (width, height) tuple
 
         Returns:
             BytesIO object containing the processed image, or None if processing fails
@@ -98,7 +102,10 @@ class NEFBackend:
         return path.suffix.lower() == ".nef" and os.path.exists(file_path)
 
     def process_to_standard_format(
-        self, file_path: str, output_format: str = "JPEG"
+        self,
+        file_path: str,
+        output_format: str = "JPEG",
+        resolution: Optional[tuple[int, int]] = None,
     ) -> Optional[io.BytesIO]:
         """Process a NEF file and return it as a standard format.
 
@@ -109,6 +116,7 @@ class NEFBackend:
         Args:
             file_path: Path to the NEF file
             output_format: Desired output format (default: "JPEG")
+            resolution: Optional target resolution as (width, height) tuple
 
         Returns:
             BytesIO object containing the processed image, or None if processing fails
@@ -176,6 +184,36 @@ class NEFBackend:
                         image = rgb_image
                     elif image.mode not in ("RGB", "L"):
                         image = image.convert("RGB")
+
+                # Resize image if resolution is specified
+                if resolution:
+                    target_width, target_height = resolution
+                    # Maintain aspect ratio
+                    original_width, original_height = image.size
+                    aspect_ratio = original_width / original_height
+                    target_aspect = target_width / target_height
+
+                    if aspect_ratio > target_aspect:
+                        # Image is wider - fit to width
+                        new_width = target_width
+                        new_height = int(target_width / aspect_ratio)
+                    else:
+                        # Image is taller - fit to height
+                        new_height = target_height
+                        new_width = int(target_height * aspect_ratio)
+
+                    image = image.resize(
+                        (new_width, new_height), Image.Resampling.LANCZOS
+                    )
+                    self.logger.debug(
+                        "Resized image to %dx%d (requested: %dx%d)",
+                        new_width,
+                        new_height,
+                        target_width,
+                        target_height,
+                    )
+
+                if output_format.upper() == "JPEG":
                     image.save(output_buffer, format="JPEG", quality=95)
                 else:
                     image.save(output_buffer, format=output_format)
@@ -227,7 +265,10 @@ def get_backend(file_path: str) -> Optional[ImageBackend]:
 
 
 def process_image_file(
-    file_path: str, output_format: str = "JPEG", logger: Logger = LOGGER
+    file_path: str,
+    output_format: str = "JPEG",
+    resolution: Optional[tuple[int, int]] = None,
+    logger: Logger = LOGGER,
 ) -> Optional[io.BytesIO]:
     """Process an image file using the appropriate backend.
 
@@ -237,6 +278,7 @@ def process_image_file(
     Args:
         file_path: Path to the image file to process
         output_format: Desired output format (default: "JPEG")
+        resolution: Optional target resolution as (width, height) tuple
         logger: Logger instance for error reporting
 
     Returns:
@@ -248,7 +290,7 @@ def process_image_file(
         # Return None to indicate it should be handled by default methods
         return None
 
-    return backend.process_to_standard_format(file_path, output_format)
+    return backend.process_to_standard_format(file_path, output_format, resolution)
 
 
 # Register the NEF backend

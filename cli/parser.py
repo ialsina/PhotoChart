@@ -106,7 +106,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_ing.add_argument(
         "--resolution",
-        help="Optional resolution for the image (e.g., '1920x1080')",
+        help=(
+            "Optional resolution for the image. Can be explicit (e.g., '1920x1080') "
+            "or a preset name (e.g., 'low', 'medium', 'high', '4k', '1080p', '720p'). "
+            "Presets: low (640x480), medium (1920x1080), high (3840x2160)"
+        ),
     )
     p_ing.add_argument(
         "--hash",
