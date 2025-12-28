@@ -134,7 +134,6 @@ def get_image_files(path: str, recursive: bool = True) -> List[Path]:
     return image_files
 
 
-@transaction.atomic
 def ingest_photos(
     path: str,
     resolution: Optional[str] = None,
@@ -151,6 +150,9 @@ def ingest_photos(
     3. Calculates hash if instructed
     4. Optionally stores image files in the database
     5. Creates PhotoPath models (which automatically create/link Photograph models)
+
+    Each photo is persisted to the database immediately after processing to avoid
+    creating orphaned files in the media directory if the process is aborted.
 
     Args:
         path: Path to directory or file to ingest
@@ -215,57 +217,61 @@ def ingest_photos(
             dynamic_ncols=True,
         ) as pbar:
             for file_path in image_files:
+                # Use a transaction per file to ensure each file is persisted immediately
+                # This prevents orphaned files in the media directory if the process is aborted
                 try:
-                    file_path_str = str(file_path.resolve())
-                    # Update progress bar description with current file name
-                    pbar.set_postfix_str(
-                        os.path.basename(file_path_str)[:50], refresh=False
-                    )
+                    with transaction.atomic():
+                        file_path_str = str(file_path.resolve())
+                        # Update progress bar description with current file name
+                        pbar.set_postfix_str(
+                            os.path.basename(file_path_str)[:50], refresh=False
+                        )
 
-                    # Check if PhotoPath already exists for this path and device
-                    existing_path = PhotoPath.objects.filter(
-                        path=file_path_str, device=device
-                    ).first()
+                        # Check if PhotoPath already exists for this path and device
+                        existing_path = PhotoPath.objects.filter(
+                            path=file_path_str, device=device
+                        ).first()
 
-                    if existing_path:
-                        # Skip if already exists
+                        if existing_path:
+                            # Skip if already exists
+                            pbar.update(1)
+                            continue
+
+                        # If hash calculation is requested, do it before creating PhotoPath
+                        # This way the Photograph will be created with the hash
+                        photograph = None
+                        if calculate_hash:
+                            hash_value = calculate_file_hash(file_path_str)
+                            if hash_value:
+                                # Check if Photograph with this hash exists
+                                photograph, created = Photograph.objects.get_or_create(
+                                    hash=hash_value, defaults={}
+                                )
+                                result["hashes_calculated"] += 1
+
+                        # Create PhotoPath
+                        # Note: The save() method will automatically create/link Photograph
+                        # if the file exists and no photograph is set. If we already have
+                        # a photograph (from hash calculation), it will be used.
+                        photo_path = PhotoPath(
+                            path=file_path_str,
+                            device=device,
+                            photograph=photograph,
+                        )
+                        # Pass store_image and resolution to save() method
+                        photo_path.save(store_image=store_images, resolution=resolution)
+
+                        # Count images stored if requested
+                        if (
+                            store_images
+                            and photo_path.photograph
+                            and photo_path.photograph.image
+                        ):
+                            result["images_stored"] += 1
+
+                        result["count"] += 1
+                        # Transaction commits here automatically when exiting the context
                         pbar.update(1)
-                        continue
-
-                    # If hash calculation is requested, do it before creating PhotoPath
-                    # This way the Photograph will be created with the hash
-                    photograph = None
-                    if calculate_hash:
-                        hash_value = calculate_file_hash(file_path_str)
-                        if hash_value:
-                            # Check if Photograph with this hash exists
-                            photograph, created = Photograph.objects.get_or_create(
-                                hash=hash_value, defaults={}
-                            )
-                            result["hashes_calculated"] += 1
-
-                    # Create PhotoPath
-                    # Note: The save() method will automatically create/link Photograph
-                    # if the file exists and no photograph is set. If we already have
-                    # a photograph (from hash calculation), it will be used.
-                    photo_path = PhotoPath(
-                        path=file_path_str,
-                        device=device,
-                        photograph=photograph,
-                    )
-                    # Pass store_image and resolution to save() method
-                    photo_path.save(store_image=store_images, resolution=resolution)
-
-                    # Count images stored if requested
-                    if (
-                        store_images
-                        and photo_path.photograph
-                        and photo_path.photograph.image
-                    ):
-                        result["images_stored"] += 1
-
-                    result["count"] += 1
-                    pbar.update(1)
 
                 except Exception as e:
                     error_msg = f"Error processing {file_path}: {str(e)}"
