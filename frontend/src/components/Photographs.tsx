@@ -42,13 +42,23 @@ export function Photographs() {
     setAscending((prev) => !prev);
   };
 
-  // Build hierarchical structure: Year > Month > Day
+  // Build hierarchical structure: Year > Month > Day, with "Unknown" for photos without time
   const hierarchy = useMemo(() => {
     const structure: Record<string, Record<string, Record<string, Photograph[]>>> = {};
+    const unknownPhotos: Photograph[] = [];
 
     photographs.forEach((photo) => {
-      const date = photo.time ? new Date(photo.time) : new Date(photo.created_at);
-      if (isNaN(date.getTime())) return;
+      // Check if photo has a valid time
+      if (!photo.time || photo.time === null || photo.time === "") {
+        unknownPhotos.push(photo);
+        return;
+      }
+
+      const date = new Date(photo.time);
+      if (isNaN(date.getTime())) {
+        unknownPhotos.push(photo);
+        return;
+      }
 
       const year = date.getFullYear().toString();
       const month = (date.getMonth() + 1).toString().padStart(2, "0");
@@ -61,20 +71,44 @@ export function Photographs() {
       structure[year][month][day].push(photo);
     });
 
+    // Add "Unknown" category if there are photos without time
+    if (unknownPhotos.length > 0) {
+      structure["Unknown"] = {
+        "": {
+          "": unknownPhotos
+        }
+      };
+    }
+
     return structure;
   }, [photographs]);
 
   // Get current view based on navigation path
   const currentView = useMemo(() => {
     if (navigationPath.length === 0) {
-      // Show years
+      // Show years (including "Unknown")
+      const years = Object.keys(hierarchy).filter(key => key !== "Unknown");
+      const sortedYears = years.sort((a, b) => {
+        if (a === "Unknown" || b === "Unknown") return 0;
+        return parseInt(b) - parseInt(a);
+      });
+      // Add "Unknown" at the end
+      if (hierarchy["Unknown"]) {
+        sortedYears.push("Unknown");
+      }
       return {
         type: "years" as const,
-        items: Object.keys(hierarchy).sort((a, b) => parseInt(b) - parseInt(a)),
+        items: sortedYears,
       };
     } else if (navigationPath.length === 1) {
-      // Show months for selected year
+      // Show months for selected year, or go directly to photos if "Unknown"
       const year = navigationPath[0].value;
+      if (year === "Unknown") {
+        return {
+          type: "photographs" as const,
+          items: hierarchy["Unknown"]?.[""]?.[""] || [],
+        };
+      }
       return {
         type: "months" as const,
         items: Object.keys(hierarchy[year] || {}).sort((a, b) => parseInt(b) - parseInt(a)),
@@ -117,6 +151,10 @@ export function Photographs() {
         { type, value, label },
       ]);
     }
+  };
+
+  const navigateToUnknown = () => {
+    setNavigationPath([{ type: "year" as const, value: "Unknown", label: "Unknown" }]);
   };
 
   const navigateUp = (level: number) => {
@@ -212,14 +250,19 @@ export function Photographs() {
       {currentView.type === "years" && (
         <div className="hierarchy-grid">
           {currentView.items.map((year) => {
-            const yearPhotos = Object.values(hierarchy[year] || {})
-              .flatMap(months => Object.values(months))
-              .flat();
+            let yearPhotos: Photograph[] = [];
+            if (year === "Unknown") {
+              yearPhotos = hierarchy["Unknown"]?.[""]?.[""] || [];
+            } else {
+              yearPhotos = Object.values(hierarchy[year] || {})
+                .flatMap(months => Object.values(months))
+                .flat();
+            }
             return (
               <div
                 key={year}
                 className="hierarchy-item"
-                onClick={() => navigateTo("year", year, year)}
+                onClick={() => year === "Unknown" ? navigateToUnknown() : navigateTo("year", year, year)}
               >
                 <div className="hierarchy-item-name">{year}</div>
                 <div className="hierarchy-item-count">{yearPhotos.length} photos</div>
