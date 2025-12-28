@@ -14,16 +14,35 @@ RESOLUTION_PRESETS = {
     "medium": (1920, 1080),
     "high": (3840, 2160),  # 4K
     "4k": (3840, 2160),
-    "1080p": (1920, 1080),
-    "720p": (1280, 720),
-    "480p": (854, 480),
+    "2160p": (3840, 2160),  # 4K UHD
+    "1440p": (2560, 1440),  # QHD
+    "1080p": (1920, 1080),  # Full HD
+    "720p": (1280, 720),  # HD
+    "480p": (854, 480),  # SD
     "360p": (640, 360),
     "240p": (426, 240),
+    "144p": (256, 144),
     "small": (640, 480),
     "large": (3840, 2160),
     "xsmall": (320, 240),
     "xlarge": (7680, 4320),  # 8K
     "8k": (7680, 4320),
+    "5k": (5120, 2880),  # 5K
+    "2k": (2048, 1080),  # 2K DCI
+    "qhd": (2560, 1440),  # Quad HD
+    "fhd": (1920, 1080),  # Full HD
+    "hd": (1280, 720),  # HD
+    "square": (1024, 1024),  # Square 1:1
+    "square-small": (512, 512),
+    "square-large": (2048, 2048),
+    "portrait": (1080, 1920),  # Vertical/Portrait
+    "landscape": (1920, 1080),  # Horizontal/Landscape
+    "instagram": (1080, 1080),  # Instagram square
+    "instagram-story": (1080, 1920),  # Instagram story
+    "facebook": (1200, 630),  # Facebook link preview
+    "twitter": (1200, 675),  # Twitter card
+    "thumbnail": (150, 150),  # Small thumbnail
+    "icon": (256, 256),  # Icon size
 }
 
 

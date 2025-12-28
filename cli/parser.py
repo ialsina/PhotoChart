@@ -19,6 +19,8 @@ except Exception:
 
 from .commands import (
     cmd_ingest,
+    cmd_convert,
+    cmd_list_resolutions,
     HAS_RICH,
 )
 
@@ -109,7 +111,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Optional resolution for the image. Can be explicit (e.g., '1920x1080') "
             "or a preset name (e.g., 'low', 'medium', 'high', '4k', '1080p', '720p'). "
-            "Presets: low (640x480), medium (1920x1080), high (3840x2160)"
+            "Use 'pf list-resolutions' to see all available presets."
         ),
     )
     p_ing.add_argument(
@@ -128,6 +130,46 @@ def build_parser() -> argparse.ArgumentParser:
         help="Store image files in the database media directory. If --resolution is specified, images will be resized accordingly.",
     )
     p_ing.set_defaults(func=cmd_ingest)
+
+    # convert
+    p_conv = sub.add_parser(
+        "convert",
+        help="Convert an image to a standard format",
+        description="Convert an image file to a standard format (e.g., JPEG) with optional resizing",
+    )
+    p_conv.add_argument(
+        "source",
+        help="Path to the source image file",
+    )
+    p_conv.add_argument(
+        "--output",
+        "-o",
+        help="Path to the output image file (defaults to the same path as input with appropriate extension)",
+    )
+    p_conv.add_argument(
+        "--resolution",
+        help=(
+            "Optional resolution for the output image. Can be explicit (e.g., '1920x1080') "
+            "or a preset name (e.g., 'low', 'medium', 'high', '4k', '1080p', '720p'). "
+            "Use 'pf list-resolutions' to see all available presets. "
+            "If not specified, original resolution is preserved."
+        ),
+    )
+    p_conv.add_argument(
+        "--format",
+        default="JPEG",
+        choices=["JPEG", "PNG"],
+        help="Output format (default: JPEG)",
+    )
+    p_conv.set_defaults(func=cmd_convert)
+
+    # list-resolutions
+    p_res = sub.add_parser(
+        "list-resolutions",
+        help="List all available resolution presets",
+        description="Display all available resolution presets that can be used with --resolution",
+    )
+    p_res.set_defaults(func=cmd_list_resolutions)
 
     return p
 
