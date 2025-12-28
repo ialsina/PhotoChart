@@ -141,6 +141,7 @@ def ingest_photos(
     calculate_hash: bool = False,
     recursive: bool = True,
     device: Optional[str] = None,
+    store_images: bool = False,
 ) -> Dict[str, Any]:
     """Ingest photos from a directory and store them in the database.
 
@@ -148,28 +149,35 @@ def ingest_photos(
     1. Finds all image files in the given path (recursively or not)
     2. Recognizes which files are pictures
     3. Calculates hash if instructed
-    4. Creates PhotoPath models (which automatically create/link Photograph models)
+    4. Optionally stores image files in the database
+    5. Creates PhotoPath models (which automatically create/link Photograph models)
 
     Args:
         path: Path to directory or file to ingest
         resolution: Optional resolution for the image. Can be explicit (e.g., '1920x1080')
             or a preset name (e.g., 'low', 'medium', 'high'). Images will be resized
-            to this resolution when processed through backends.
+            to this resolution when processed through backends. If store_images is True,
+            images will be stored at this resolution.
         calculate_hash: Whether to calculate and store hash for each photo
         recursive: Whether to search subdirectories recursively
         device: Device identifier (defaults to hostname)
+        store_images: Whether to store image files in the Photograph's image field.
+            If True, images will be copied to the media directory. If resolution is
+            specified, images will be resized accordingly.
 
     Returns:
         Dictionary with:
             - success: bool indicating if ingestion was successful
             - count: number of photos ingested
             - hashes_calculated: number of hashes calculated
+            - images_stored: number of images stored (if store_images=True)
             - errors: list of error messages
     """
     result = {
         "success": True,
         "count": 0,
         "hashes_calculated": 0,
+        "images_stored": 0,
         "errors": [],
     }
 
@@ -245,7 +253,16 @@ def ingest_photos(
                         device=device,
                         photograph=photograph,
                     )
-                    photo_path.save()
+                    # Pass store_image and resolution to save() method
+                    photo_path.save(store_image=store_images, resolution=resolution)
+
+                    # Count images stored if requested
+                    if (
+                        store_images
+                        and photo_path.photograph
+                        and photo_path.photograph.image
+                    ):
+                        result["images_stored"] += 1
 
                     result["count"] += 1
                     pbar.update(1)

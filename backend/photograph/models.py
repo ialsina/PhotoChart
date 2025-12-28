@@ -258,11 +258,20 @@ class PhotoPath(models.Model):
         1. Check if the file at the path exists
         2. Compute the hash from the file
         3. Find or create a Photograph with that hash
-        4. Link this PhotoPath to the Photograph
+        4. Optionally store the image file if store_image is True
+        5. Link this PhotoPath to the Photograph
 
         If a Photograph with the same hash already exists, it will be linked.
         Otherwise, a new Photograph will be created with the computed hash.
+
+        Keyword Args:
+            store_image: If True, store the image file in the Photograph's image field
+            resolution: Optional resolution for image storage (only used if store_image=True)
         """
+        # Extract custom kwargs
+        store_image = kwargs.pop("store_image", False)
+        resolution = kwargs.pop("resolution", None)
+
         # Only process if photograph is not already set and file exists
         if not self.photograph and self.path and os.path.exists(self.path):
             from photofinder.protocols import calculate_hash
@@ -275,6 +284,10 @@ class PhotoPath(models.Model):
                 photograph, created = Photograph.objects.get_or_create(
                     hash=hash_value, defaults={}
                 )
+
+                # Store image if requested and not already stored
+                if store_image and not photograph.image:
+                    photograph.get_image_from_file(self.path, resolution=resolution)
 
                 # Link this PhotoPath to the Photograph
                 self.photograph = photograph
