@@ -54,6 +54,10 @@ docs = [
   "sphinx-rtd-theme==2.0.0",
   "sphinx-autodoc-typehints==1.25.2",
 ]
+nef = [
+  "rawpy>=0.20.0",
+  "Pillow>=10.0.0",
+]
 
 [tool.setuptools]
 include-package-data = true
