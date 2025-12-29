@@ -115,6 +115,12 @@ class Photograph(models.Model):
         blank=True,
         help_text="Photograph time extracted from EXIF metadata (when the photo was taken)",
     )
+    model = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Camera model extracted from EXIF metadata",
+    )
     has_errors = models.BooleanField(
         default=False,
         help_text="True if any error occurred during image creation or data reading",
@@ -136,58 +142,23 @@ class Photograph(models.Model):
         else:
             return f"Photograph (id: {self.id})"
 
-    def _extract_exif_datetime(self, file_path):
-        """Extract datetime from EXIF metadata of an image file.
+    def _extract_exif_data(self, file_path):
+        """Extract EXIF metadata (datetime and model) from an image file.
 
-        Tries to extract the datetime from EXIF tags in order of preference:
-        1. DateTimeOriginal (tag 36867) - when the photo was taken
-        2. DateTimeDigitized (tag 36868) - when the photo was digitized
-        3. DateTime (tag 306) - general datetime
+        Uses the photofinder.exif module to extract both datetime and model
+        in a single image read operation.
 
         Args:
             file_path: Path to the image file
 
         Returns:
-            datetime object if found, None otherwise
+            Dictionary with 'datetime' and 'model' keys, or None if extraction fails
         """
         try:
-            from PIL import Image
+            from photofinder.exif import extract_exif, ExifTagName
 
-            with Image.open(file_path) as img:
-                # Get EXIF data
-                exif_data = img.getexif()
-                if not exif_data:
-                    return None
-
-                # Try to find datetime tags
-                # EXIF tag numbers for datetime fields
-                DATETIME_ORIGINAL = 36867
-                DATETIME_DIGITIZED = 36868
-                DATETIME = 306
-
-                datetime_str = None
-
-                # Priority 1: DateTimeOriginal
-                if DATETIME_ORIGINAL in exif_data:
-                    datetime_str = exif_data[DATETIME_ORIGINAL]
-                # Priority 2: DateTimeDigitized
-                elif DATETIME_DIGITIZED in exif_data:
-                    datetime_str = exif_data[DATETIME_DIGITIZED]
-                # Priority 3: DateTime
-                elif DATETIME in exif_data:
-                    datetime_str = exif_data[DATETIME]
-
-                if datetime_str:
-                    # Parse EXIF datetime format: "YYYY:MM:DD HH:MM:SS"
-                    try:
-                        return datetime.strptime(datetime_str, "%Y:%m:%d %H:%M:%S")
-                    except (ValueError, TypeError):
-                        # Try alternative formats if standard format fails
-                        try:
-                            return datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%S")
-                        except (ValueError, TypeError):
-                            return None
-
+            result = extract_exif(file_path, [ExifTagName.DATETIME, ExifTagName.MODEL])
+            return result
         except Exception:
             # If EXIF extraction fails for any reason, mark as error and return None
             self.has_errors = True
@@ -346,16 +317,28 @@ class Photograph(models.Model):
 
                 self.image.save(filename, File(processed_image), save=True)
 
-                # Extract and set photograph time from EXIF if not already set
-                if not self.time:
-                    exif_time = self._extract_exif_datetime(file_path)
-                    if exif_time:
+                # Extract and set EXIF data (datetime and model) if not already set
+                exif_data = self._extract_exif_data(file_path)
+                if exif_data:
+                    update_fields = []
+
+                    # Set datetime if not already set
+                    if not self.time and exif_data.get("datetime"):
+                        exif_time = exif_data["datetime"]
                         self.time = (
                             timezone.make_aware(exif_time)
                             if timezone.is_naive(exif_time)
                             else exif_time
                         )
-                        self.save(update_fields=["time"])
+                        update_fields.append("time")
+
+                    # Set model if not already set
+                    if not self.model and exif_data.get("model"):
+                        self.model = exif_data["model"]
+                        update_fields.append("model")
+
+                    if update_fields:
+                        self.save(update_fields=update_fields)
 
                 return True
 
@@ -416,16 +399,28 @@ class Photograph(models.Model):
                 with open(file_path, "rb") as f:
                     self.image.save(filename, File(f), save=True)
 
-            # Extract and set photograph time from EXIF if not already set
-            if not self.time:
-                exif_time = self._extract_exif_datetime(file_path)
-                if exif_time:
+            # Extract and set EXIF data (datetime and model) if not already set
+            exif_data = self._extract_exif_data(file_path)
+            if exif_data:
+                update_fields = []
+
+                # Set datetime if not already set
+                if not self.time and exif_data.get("datetime"):
+                    exif_time = exif_data["datetime"]
                     self.time = (
                         timezone.make_aware(exif_time)
                         if timezone.is_naive(exif_time)
                         else exif_time
                     )
-                    self.save(update_fields=["time"])
+                    update_fields.append("time")
+
+                # Set model if not already set
+                if not self.model and exif_data.get("model"):
+                    self.model = exif_data["model"]
+                    update_fields.append("model")
+
+                if update_fields:
+                    self.save(update_fields=update_fields)
 
             return True
         except Exception as e:
@@ -571,16 +566,28 @@ class PhotoPath(models.Model):
                         # Image loading failed - error already set in get_image_from_file
                         pass
 
-                # Extract and set photograph time from EXIF if not already set
-                if not self.photograph.time:
-                    exif_time = self.photograph._extract_exif_datetime(self.path)
-                    if exif_time:
+                # Extract and set EXIF data (datetime and model) if not already set
+                exif_data = self.photograph._extract_exif_data(self.path)
+                if exif_data:
+                    update_fields = []
+
+                    # Set datetime if not already set
+                    if not self.photograph.time and exif_data.get("datetime"):
+                        exif_time = exif_data["datetime"]
                         self.photograph.time = (
                             timezone.make_aware(exif_time)
                             if timezone.is_naive(exif_time)
                             else exif_time
                         )
-                        self.photograph.save(update_fields=["time"])
+                        update_fields.append("time")
+
+                    # Set model if not already set
+                    if not self.photograph.model and exif_data.get("model"):
+                        self.photograph.model = exif_data["model"]
+                        update_fields.append("model")
+
+                    if update_fields:
+                        self.photograph.save(update_fields=update_fields)
             except Exception:
                 # Any error during image storage or EXIF extraction
                 self.photograph.has_errors = True
