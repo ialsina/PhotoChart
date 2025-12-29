@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { api } from "../api";
 import type { PhotoPath } from "../types";
 
@@ -19,23 +19,14 @@ export function PhotoPaths() {
   const [sortMode, setSortMode] = useState<SortMode>("id");
   const [ascending, setAscending] = useState<boolean>(true);
 
-  useEffect(() => {
-    loadPaths();
-  }, [navigationPath]);
+  // Fetch directory structure summary
+  const [directoryStructure, setDirectoryStructure] = useState<Array<{
+    name: string;
+    is_directory: boolean;
+    count: number;
+  }>>([]);
 
-  useEffect(() => {
-    // Only fetch paths when directory structure indicates there are files at this level
-    // This prevents unnecessary pagination requests when only directories are present
-    const hasFiles = directoryStructure.some(item => !item.is_directory);
-    if (hasFiles) {
-      loadPaths();
-    } else if (directoryStructure.length > 0) {
-      // Only directories, no need to fetch paths yet
-      setPaths([]);
-    }
-  }, [navigationPath, directoryStructure]);
-
-  const loadPaths = async () => {
+  const loadPaths = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -54,14 +45,20 @@ export function PhotoPaths() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigationPath]);
 
-  // Fetch directory structure summary
-  const [directoryStructure, setDirectoryStructure] = useState<Array<{
-    name: string;
-    is_directory: boolean;
-    count: number;
-  }>>([]);
+  // Only fetch paths when directory structure indicates there are files at this level
+  // This prevents unnecessary pagination requests when only directories are present
+  useEffect(() => {
+    const hasFiles = directoryStructure.some(item => !item.is_directory);
+    if (hasFiles) {
+      loadPaths();
+    } else if (directoryStructure.length > 0) {
+      // Only directories, no need to fetch paths yet
+      setPaths([]);
+      setLoading(false);
+    }
+  }, [navigationPath, directoryStructure, loadPaths]);
 
   useEffect(() => {
     const loadDirectoryStructure = async () => {

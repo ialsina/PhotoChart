@@ -189,7 +189,11 @@ class PhotographViewSet(viewsets.ModelViewSet):
 class PhotoPathViewSet(viewsets.ModelViewSet):
     """ViewSet for viewing and editing PhotoPath instances."""
 
-    queryset = PhotoPath.objects.all().select_related("photograph")
+    queryset = (
+        PhotoPath.objects.all()
+        .select_related("photograph", "photograph__image")
+        .prefetch_related("photograph__paths")
+    )
     serializer_class = PhotoPathSerializer
 
     def get_queryset(self):
@@ -238,69 +242,132 @@ class PhotoPathViewSet(viewsets.ModelViewSet):
 
         return queryset
 
-    @action(detail=False, methods=["get"])
-    def directories(self, request):
-        """Get directory structure for a given path prefix."""
-        from django.db.models import Count
+    def _extract_segments_from_paths(self, paths, path_prefix=""):
+        """Extract directory/file segments from a list of paths.
 
-        path_prefix = request.query_params.get("path_prefix", "")
-        normalized_prefix = path_prefix.replace("\\", "/") if path_prefix else ""
+        Args:
+            paths: List of path strings
+            path_prefix: Optional prefix to filter and remove from paths
 
-        queryset = self.get_queryset()
-        if normalized_prefix:
-            # Add trailing slash for proper matching
-            if not normalized_prefix.endswith("/"):
-                normalized_prefix_with_slash = normalized_prefix + "/"
-            else:
-                normalized_prefix_with_slash = normalized_prefix
-            queryset = queryset.filter(path__startswith=normalized_prefix_with_slash)
-        else:
-            # Root level - get all paths
-            queryset = queryset.all()
+        Returns:
+            Dictionary mapping (segment_name, is_directory) to set of paths
+        """
+        segments = {}  # key: (segment_name, is_directory), value: set of paths
 
-        # Extract directory segments efficiently using database aggregation
-        directories = {}
-        files = {}
+        # Normalize prefix
+        normalized_prefix = (
+            path_prefix.replace("\\", "/").strip("/") if path_prefix else ""
+        )
 
-        for path_obj in queryset.values_list("path", flat=True)[
-            :10000
-        ]:  # Limit to prevent memory issues
+        for path_obj in paths:
+            if not path_obj:
+                continue
+
+            # Normalize path separators
             normalized_path = path_obj.replace("\\", "/")
-            # Remove prefix and get next segment
+            normalized_path_clean = normalized_path.strip("/")
+
+            # Remove prefix and get remaining path
             if normalized_prefix:
-                if normalized_path.startswith(normalized_prefix_with_slash):
-                    remaining = normalized_path[len(normalized_prefix_with_slash) :]
-                elif normalized_path == normalized_prefix:
+                if normalized_path_clean.startswith(normalized_prefix + "/"):
+                    remaining = normalized_path_clean[len(normalized_prefix) + 1 :]
+                elif normalized_path_clean == normalized_prefix:
                     continue  # This is the prefix itself, skip
                 else:
                     continue
             else:
-                remaining = normalized_path
+                remaining = normalized_path_clean
+
+            if not remaining:
+                continue
 
             # Get first segment (directory or file)
-            parts = remaining.split("/")
-            if len(parts) > 0 and parts[0]:
+            # Split on "/" and get the first non-empty part
+            parts = [p for p in remaining.split("/") if p]  # Filter out empty parts
+            if len(parts) > 0:
                 first_segment = parts[0]
-                is_directory = len(parts) > 1
+                is_directory = len(parts) > 1  # Has more parts after the first
 
+                # Track this segment
+                segment_key = (first_segment, is_directory)
+                if segment_key not in segments:
+                    segments[segment_key] = set()
+                segments[segment_key].add(normalized_path)  # Store path for counting
+
+        return segments
+
+    @action(detail=False, methods=["get"])
+    def directories(self, request):
+        """Get directory structure for a given path prefix."""
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        try:
+            path_prefix = request.query_params.get("path_prefix", "")
+            normalized_prefix = path_prefix.replace("\\", "/") if path_prefix else ""
+
+            # Build queryset - only get paths we need
+            if normalized_prefix:
+                # Normalize prefix for database query
+                normalized_prefix_clean = normalized_prefix.strip("/")
+                # Try multiple patterns to match paths with/without leading slashes
+                from django.db.models import Q
+
+                # Pattern 1: prefix/ (e.g., "home/")
+                pattern1 = normalized_prefix_clean + "/"
+                # Pattern 2: /prefix/ (e.g., "/home/")
+                pattern2 = "/" + normalized_prefix_clean + "/"
+                # Pattern 3: prefix exactly (for files, e.g., "home")
+                pattern3 = normalized_prefix_clean
+
+                queryset = PhotoPath.objects.filter(
+                    Q(path__startswith=pattern1)
+                    | Q(path__startswith=pattern2)
+                    | Q(path=pattern3)
+                )
+            else:
+                # Root level - get all paths
+                queryset = PhotoPath.objects.all()
+
+            # Get distinct paths and process them in Python
+            # Limit to prevent memory issues with very large datasets
+            paths = list(queryset.values_list("path", flat=True).distinct()[:10000])
+
+            logger.debug(f"Found {len(paths)} paths for prefix: {normalized_prefix}")
+
+            # Extract segments using helper function
+            segments = self._extract_segments_from_paths(paths, normalized_prefix)
+
+            # Build result with counts
+            directories = {}
+            files = {}
+
+            for (segment_name, is_directory), path_set in segments.items():
+                count = len(path_set)
                 if is_directory:
-                    if first_segment not in directories:
-                        directories[first_segment] = 0
-                    directories[first_segment] += 1
+                    directories[segment_name] = count
                 else:
-                    if first_segment not in files:
-                        files[first_segment] = 0
-                    files[first_segment] += 1
+                    files[segment_name] = count
 
-        result = [
-            {"name": name, "is_directory": True, "count": count}
-            for name, count in sorted(directories.items())
-        ] + [
-            {"name": name, "is_directory": False, "count": count}
-            for name, count in sorted(files.items())
-        ]
+            # Combine and sort results
+            result = [
+                {"name": name, "is_directory": True, "count": count}
+                for name, count in sorted(directories.items())
+            ] + [
+                {"name": name, "is_directory": False, "count": count}
+                for name, count in sorted(files.items())
+            ]
 
-        return Response(result)
+            logger.debug(
+                f"Returning {len(result)} segments: {len(directories)} directories, {len(files)} files"
+            )
+            if result:
+                logger.debug(f"Sample segments: {result[:5]}")
+            return Response(result)
+        except Exception as e:
+            logger.error(f"Error in directories endpoint: {str(e)}", exc_info=True)
+            return Response([])
 
     def get_serializer_context(self):
         """Add request to serializer context for image URLs."""

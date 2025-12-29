@@ -38,13 +38,34 @@ class PhotoPathSerializer(serializers.ModelSerializer):
     def get_photograph_paths_count(self, obj):
         """Get the total number of paths linked to this photograph."""
         if obj.photograph:
+            # Use prefetched paths if available to avoid extra query
+            # When prefetched, we can use len() which is O(1) for prefetched querysets
+            if (
+                hasattr(obj.photograph, "_prefetched_objects_cache")
+                and "paths" in obj.photograph._prefetched_objects_cache
+            ):
+                return len(obj.photograph._prefetched_objects_cache["paths"])
+            # Fallback to count() if not prefetched
             return obj.photograph.paths.count()
         return 0
 
     def get_other_paths(self, obj):
         """Get other paths that link to the same photograph (excluding this one)."""
         if obj.photograph:
-            other_paths = obj.photograph.paths.exclude(id=obj.id)
+            # Use prefetched paths if available to avoid extra query
+            if (
+                hasattr(obj.photograph, "_prefetched_objects_cache")
+                and "paths" in obj.photograph._prefetched_objects_cache
+            ):
+                # Use prefetched queryset - filter in Python
+                other_paths = [
+                    p
+                    for p in obj.photograph._prefetched_objects_cache["paths"]
+                    if p.id != obj.id
+                ]
+            else:
+                # Fallback to database query
+                other_paths = obj.photograph.paths.exclude(id=obj.id)
             return [
                 {
                     "id": path.id,
