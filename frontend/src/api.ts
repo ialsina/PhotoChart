@@ -63,6 +63,15 @@ export const api = {
     return fetchAllPages<Photograph>("/photographs/", Object.keys(queryParams).length > 0 ? queryParams : undefined);
   },
 
+  getPhotographYears: (): Promise<Array<{ year: string; count: number }>> =>
+    fetchAPI("/photographs/years/"),
+
+  getPhotographMonths: (year: string): Promise<Array<{ month: string; count: number }>> =>
+    fetchAPI(`/photographs/months/?year=${year}`),
+
+  getPhotographDays: (year: string, month: string): Promise<Array<{ day: string; count: number }>> =>
+    fetchAPI(`/photographs/days/?year=${year}&month=${month}`),
+
   getPhotograph: (id: number): Promise<Photograph> =>
     fetchAPI(`/photographs/${id}/`),
 
@@ -70,9 +79,22 @@ export const api = {
   getPhotoPaths: (): Promise<PaginatedResponse<PhotoPath>> =>
     fetchAPI("/photo-paths/"),
 
-  getAllPhotoPaths: (pathPrefix?: string): Promise<PhotoPath[]> => {
-    const params = pathPrefix ? { path_prefix: pathPrefix } : undefined;
-    return fetchAllPages<PhotoPath>("/photo-paths/", params);
+  getAllPhotoPaths: (pathPrefix?: string, onlyDirect?: boolean): Promise<PhotoPath[]> => {
+    const params: Record<string, string> = {};
+    if (pathPrefix) {
+      params.path_prefix = pathPrefix;
+    }
+    if (onlyDirect) {
+      params.only_direct = "true";
+    }
+    return fetchAllPages<PhotoPath>("/photo-paths/", Object.keys(params).length > 0 ? params : undefined);
+  },
+
+  getPhotoPathDirectories: (pathPrefix?: string): Promise<Array<{ name: string; is_directory: boolean; count: number }>> => {
+    const url = pathPrefix
+      ? `/photo-paths/directories/?path_prefix=${encodeURIComponent(pathPrefix)}`
+      : "/photo-paths/directories/";
+    return fetchAPI(url);
   },
 
   getPhotoPath: (id: number): Promise<PhotoPath> =>

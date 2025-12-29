@@ -11,19 +11,42 @@ type NavigationPath = {
 
 export function Photographs() {
   const [photographs, setPhotographs] = useState<Photograph[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Start as false, only set true when actually fetching
   const [error, setError] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("id");
   const [ascending, setAscending] = useState<boolean>(true);
   const [navigationPath, setNavigationPath] = useState<NavigationPath[]>([]);
 
+  // Only fetch photographs when at leaf level (day or Unknown)
+  // For hierarchy navigation (year/month), use summary endpoints instead
   useEffect(() => {
-    loadPhotographs();
+    const shouldFetchPhotos =
+      navigationPath.length === 3 || // At day level
+      (navigationPath.length === 1 && navigationPath[0].value === "Unknown"); // At Unknown level
+
+    if (shouldFetchPhotos) {
+      loadPhotographs();
+    } else {
+      // Clear photos when not at leaf level to save memory
+      setPhotographs([]);
+    }
   }, [navigationPath]);
 
   const loadPhotographs = async () => {
     try {
       setLoading(true);
+
+      // Only fetch photos when at leaf level (day or Unknown)
+      // This prevents pagination through thousands of photos when just navigating
+      const shouldFetch =
+        navigationPath.length === 3 || // At day level
+        (navigationPath.length === 1 && navigationPath[0].value === "Unknown"); // At Unknown level
+
+      if (!shouldFetch) {
+        setPhotographs([]);
+        setLoading(false);
+        return;
+      }
 
       // Build filter parameters based on navigation path
       const params: { year?: string; month?: string; day?: string } = {};
@@ -38,14 +61,15 @@ export function Photographs() {
         params.day = navigationPath[2].value;
       }
 
-      // Fetch filtered data based on current navigation level
-      // At root (length 0): need all to build year hierarchy
-      // At year level (length 1): fetch filtered by year to build month hierarchy
-      // At month level (length 2): fetch filtered by year+month to build day hierarchy
-      // At day level (length 3): fetch filtered by year+month+day to show photos
-      const allPhotographs = await api.getAllPhotographs(
-        navigationPath.length > 0 ? params : undefined
-      );
+      // Ensure we have at least one filter parameter
+      if (Object.keys(params).length === 0) {
+        console.warn("loadPhotographs called without filters, skipping");
+        setPhotographs([]);
+        setLoading(false);
+        return;
+      }
+
+      const allPhotographs = await api.getAllPhotographs(params);
       setPhotographs(allPhotographs);
 
       setError(null);
@@ -65,6 +89,7 @@ export function Photographs() {
   };
 
   // Build hierarchical structure: Year > Month > Day, with "Unknown" for photos without time
+  // This is now only used when we have actual photo data (at leaf levels)
   const hierarchy = useMemo(() => {
     const structure: Record<string, Record<string, Record<string, Photograph[]>>> = {};
     const unknownPhotos: Photograph[] = [];
@@ -105,22 +130,55 @@ export function Photographs() {
     return structure;
   }, [photographs]);
 
+  // Fetch hierarchy summary data (years/months/days) without loading all photos
+  const [hierarchyData, setHierarchyData] = useState<{
+    years?: Array<{ year: string; count: number }>;
+    months?: Array<{ month: string; count: number }>;
+    days?: Array<{ day: string; count: number }>;
+  }>({});
+
+  useEffect(() => {
+    const loadHierarchyData = async () => {
+      try {
+        if (navigationPath.length === 0) {
+          // Load years
+          const years = await api.getPhotographYears();
+          setHierarchyData({ years });
+        } else if (navigationPath.length === 1 && navigationPath[0].value !== "Unknown") {
+          // Load months for selected year
+          const months = await api.getPhotographMonths(navigationPath[0].value);
+          setHierarchyData({ months });
+        } else if (navigationPath.length === 2) {
+          // Load days for selected year/month
+          const days = await api.getPhotographDays(navigationPath[0].value, navigationPath[1].value);
+          setHierarchyData({ days });
+        } else {
+          setHierarchyData({});
+        }
+      } catch (err) {
+        console.error("Failed to load hierarchy data:", err);
+      }
+    };
+
+    loadHierarchyData();
+  }, [navigationPath]);
+
   // Get current view based on navigation path
+  // Use hierarchyData (from summary endpoints) for navigation, hierarchy (from photos) only for leaf display
   const currentView = useMemo(() => {
     if (navigationPath.length === 0) {
-      // Show years (including "Unknown") - sorted ascending
-      const years = Object.keys(hierarchy).filter(key => key !== "Unknown");
-      const sortedYears = years.sort((a, b) => {
-        if (a === "Unknown" || b === "Unknown") return 0;
-        return parseInt(a) - parseInt(b); // Ascending
-      });
-      // Add "Unknown" at the end
-      if (hierarchy["Unknown"]) {
-        sortedYears.push("Unknown");
-      }
+      // Show years from summary data - sorted ascending
+      const years = hierarchyData.years || [];
+      const sortedYears = years
+        .map(y => y.year)
+        .sort((a, b) => {
+          if (a === "Unknown" || b === "Unknown") return 0;
+          return parseInt(a) - parseInt(b); // Ascending
+        });
       return {
         type: "years" as const,
         items: sortedYears,
+        counts: Object.fromEntries(years.map(y => [y.year, y.count])),
       };
     } else if (navigationPath.length === 1) {
       // Show months for selected year, or go directly to photos if "Unknown"
@@ -131,20 +189,30 @@ export function Photographs() {
           items: hierarchy["Unknown"]?.[""]?.[""] || [],
         };
       }
+      const months = hierarchyData.months || [];
+      const sortedMonths = months
+        .map(m => m.month)
+        .sort((a, b) => parseInt(a) - parseInt(b)); // Ascending
       return {
         type: "months" as const,
-        items: Object.keys(hierarchy[year] || {}).sort((a, b) => parseInt(a) - parseInt(b)), // Ascending
+        items: sortedMonths,
         year,
+        counts: Object.fromEntries(months.map(m => [m.month, m.count])),
       };
     } else if (navigationPath.length === 2) {
       // Show days for selected year/month
       const year = navigationPath[0].value;
       const month = navigationPath[1].value;
+      const days = hierarchyData.days || [];
+      const sortedDays = days
+        .map(d => d.day)
+        .sort((a, b) => parseInt(a) - parseInt(b)); // Ascending
       return {
         type: "days" as const,
-        items: Object.keys(hierarchy[year]?.[month] || {}).sort((a, b) => parseInt(a) - parseInt(b)), // Ascending
+        items: sortedDays,
         year,
         month,
+        counts: Object.fromEntries(days.map(d => [d.day, d.count])),
       };
     } else {
       // Show photographs for selected year/month/day
@@ -156,7 +224,7 @@ export function Photographs() {
         items: hierarchy[year]?.[month]?.[day] || [],
       };
     }
-  }, [navigationPath, hierarchy]);
+  }, [navigationPath, hierarchy, hierarchyData]);
 
   const navigateTo = (type: "year" | "month" | "day", value: string, label: string) => {
     if (type === "year") {
@@ -223,8 +291,17 @@ export function Photographs() {
     }
   };
 
-  if (loading) {
-    return <div className="loading">Loading photographs...</div>;
+  // Show loading only when actually fetching data
+  const isActuallyLoading = loading && (
+    navigationPath.length === 3 ||
+    (navigationPath.length === 1 && navigationPath[0].value === "Unknown") ||
+    (navigationPath.length === 0 && !hierarchyData.years) ||
+    (navigationPath.length === 1 && navigationPath[0].value !== "Unknown" && !hierarchyData.months) ||
+    (navigationPath.length === 2 && !hierarchyData.days)
+  );
+
+  if (isActuallyLoading) {
+    return <div className="loading">Loading...</div>;
   }
 
   if (error) {
@@ -272,14 +349,12 @@ export function Photographs() {
       {currentView.type === "years" && (
         <div className="hierarchy-grid">
           {currentView.items.map((year) => {
-            let yearPhotos: Photograph[] = [];
-            if (year === "Unknown") {
-              yearPhotos = hierarchy["Unknown"]?.[""]?.[""] || [];
-            } else {
-              yearPhotos = Object.values(hierarchy[year] || {})
-                .flatMap(months => Object.values(months))
-                .flat();
-            }
+            const count = currentView.counts?.[year] ??
+              (year === "Unknown"
+                ? (hierarchy["Unknown"]?.[""]?.[""] || []).length
+                : Object.values(hierarchy[year] || {})
+                    .flatMap(months => Object.values(months))
+                    .flat().length);
             return (
               <div
                 key={year}
@@ -287,7 +362,7 @@ export function Photographs() {
                 onClick={() => year === "Unknown" ? navigateToUnknown() : navigateTo("year", year, year)}
               >
                 <div className="hierarchy-item-name">{year}</div>
-                <div className="hierarchy-item-count">{yearPhotos.length} photos</div>
+                <div className="hierarchy-item-count">{count} photos</div>
               </div>
             );
           })}
@@ -297,8 +372,8 @@ export function Photographs() {
       {currentView.type === "months" && (
         <div className="hierarchy-grid">
           {currentView.items.map((month) => {
-            const monthPhotos = Object.values(hierarchy[currentView.year!]?.[month] || {})
-              .flat();
+            const count = currentView.counts?.[month] ??
+              Object.values(hierarchy[currentView.year!]?.[month] || {}).flat().length;
             return (
               <div
                 key={month}
@@ -306,7 +381,7 @@ export function Photographs() {
                 onClick={() => navigateTo("month", month, getMonthName(month))}
               >
                 <div className="hierarchy-item-name">{getMonthName(month)}</div>
-                <div className="hierarchy-item-count">{monthPhotos.length} photos</div>
+                <div className="hierarchy-item-count">{count} photos</div>
               </div>
             );
           })}
@@ -316,7 +391,8 @@ export function Photographs() {
       {currentView.type === "days" && (
         <div className="hierarchy-grid">
           {currentView.items.map((day) => {
-            const dayPhotos = hierarchy[currentView.year!]?.[currentView.month!]?.[day] || [];
+            const count = currentView.counts?.[day] ??
+              (hierarchy[currentView.year!]?.[currentView.month!]?.[day] || []).length;
             return (
               <div
                 key={day}
@@ -324,7 +400,7 @@ export function Photographs() {
                 onClick={() => navigateTo("day", day, day)}
               >
                 <div className="hierarchy-item-name">Day {day}</div>
-                <div className="hierarchy-item-count">{dayPhotos.length} photos</div>
+                <div className="hierarchy-item-count">{count} photos</div>
               </div>
             );
           })}

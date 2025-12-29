@@ -23,16 +23,30 @@ export function PhotoPaths() {
     loadPaths();
   }, [navigationPath]);
 
+  useEffect(() => {
+    // Only fetch paths when directory structure indicates there are files at this level
+    // This prevents unnecessary pagination requests when only directories are present
+    const hasFiles = directoryStructure.some(item => !item.is_directory);
+    if (hasFiles) {
+      loadPaths();
+    } else if (directoryStructure.length > 0) {
+      // Only directories, no need to fetch paths yet
+      setPaths([]);
+    }
+  }, [navigationPath, directoryStructure]);
+
   const loadPaths = async () => {
     try {
       setLoading(true);
 
-      // Build path prefix from navigation path
       const pathPrefix = navigationPath.length > 0
         ? navigationPath.map(n => n.value).join("/")
         : undefined;
 
-      const allPaths = await api.getAllPhotoPaths(pathPrefix);
+      // Fetch paths for the current directory level
+      // Use only_direct=true to only get files at this level, not in subdirectories
+      // This prevents fetching thousands of paths when navigating directories
+      const allPaths = await api.getAllPhotoPaths(pathPrefix, true);
       setPaths(allPaths);
       setError(null);
     } catch (err) {
@@ -42,7 +56,30 @@ export function PhotoPaths() {
     }
   };
 
-  // Parse paths and build hierarchy
+  // Fetch directory structure summary
+  const [directoryStructure, setDirectoryStructure] = useState<Array<{
+    name: string;
+    is_directory: boolean;
+    count: number;
+  }>>([]);
+
+  useEffect(() => {
+    const loadDirectoryStructure = async () => {
+      try {
+        const pathPrefix = navigationPath.length > 0
+          ? navigationPath.map(n => n.value).join("/")
+          : undefined;
+        const directories = await api.getPhotoPathDirectories(pathPrefix);
+        setDirectoryStructure(directories);
+      } catch (err) {
+        console.error("Failed to load directory structure:", err);
+      }
+    };
+
+    loadDirectoryStructure();
+  }, [navigationPath]);
+
+  // Parse paths and build hierarchy (only used when we have actual path data)
   const pathHierarchy = useMemo(() => {
     const hierarchy: Record<string, { children: Record<string, any>; paths: PhotoPath[] }> = {};
 
@@ -67,6 +104,23 @@ export function PhotoPaths() {
 
   // Get current view based on navigation path
   const currentView = useMemo(() => {
+    // Use directory structure from API when available (for hierarchy levels)
+    if (directoryStructure.length > 0) {
+      const segments = directoryStructure
+        .filter(item => item.is_directory)
+        .map(item => item.name)
+        .sort();
+      const fileItems = directoryStructure.filter(item => !item.is_directory);
+
+      return {
+        type: "mixed" as const,
+        segments,
+        paths: [], // Files will be loaded when user navigates deeper or we have path data
+        directoryStructure,
+      };
+    }
+
+    // Fallback to path hierarchy when we have actual path data
     if (navigationPath.length === 0) {
       // Show root segments - only directories, not files
       const rootSegments = Object.keys(pathHierarchy).filter(key =>
@@ -112,7 +166,7 @@ export function PhotoPaths() {
         paths: pathsAtLevel,
       };
     }
-  }, [navigationPath, pathHierarchy]);
+  }, [navigationPath, pathHierarchy, directoryStructure, paths]);
 
   const navigateTo = (segment: string) => {
     const fullPath = navigationPath.length === 0
@@ -339,17 +393,26 @@ export function PhotoPaths() {
 
       {currentView.type === "mixed" && (
         <>
-          {currentView.segments.length > 0 && (
+          {(currentView.segments.length > 0 || (currentView as any).directoryStructure) && (
             <div className="hierarchy-section">
               <h3>Directories</h3>
               <div className="hierarchy-grid">
-                {currentView.segments.map((segment) => {
-                  let current = pathHierarchy;
-                  for (const nav of navigationPath) {
-                    current = current[nav.value].children;
+                {((currentView as any).directoryStructure?.filter((item: any) => item.is_directory) || currentView.segments.map(name => ({ name, is_directory: true, count: 0 }))).map((item: any) => {
+                  const segment = typeof item === 'string' ? item : item.name;
+                  let count = 0;
+                  if (typeof item === 'object' && item.count !== undefined) {
+                    count = item.count;
+                  } else {
+                    // Fallback to counting from hierarchy
+                    let current = pathHierarchy;
+                    for (const nav of navigationPath) {
+                      current = current[nav.value]?.children || {};
+                    }
+                    const node = current[segment];
+                    if (node) {
+                      count = countPathsInNode(node);
+                    }
                   }
-                  const node = current[segment];
-                  const totalPaths = countPathsInNode(node);
                   return (
                     <div
                       key={segment}
@@ -357,7 +420,7 @@ export function PhotoPaths() {
                       onClick={() => navigateTo(segment)}
                     >
                       <div className="hierarchy-item-name">{segment}</div>
-                      <div className="hierarchy-item-count">{totalPaths} path{totalPaths !== 1 ? "s" : ""}</div>
+                      <div className="hierarchy-item-count">{count} path{count !== 1 ? "s" : ""}</div>
                     </div>
                   );
                 })}
