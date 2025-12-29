@@ -50,6 +50,10 @@ class Photograph(models.Model):
         blank=True,
         help_text="Photograph time extracted from EXIF metadata (when the photo was taken)",
     )
+    has_errors = models.BooleanField(
+        default=False,
+        help_text="True if any error occurred during image creation or data reading",
+    )
 
     class Meta:
         verbose_name = "Photograph"
@@ -120,7 +124,9 @@ class Photograph(models.Model):
                             return None
 
         except Exception:
-            # If EXIF extraction fails for any reason, return None
+            # If EXIF extraction fails for any reason, mark as error and return None
+            self.has_errors = True
+            self.save(update_fields=["has_errors"])
             return None
 
     def compute_hash_from_image(self):
@@ -131,15 +137,26 @@ class Photograph(models.Model):
         Returns:
             The computed hash string, or None if computation fails
         """
-        if self.image and self.image.path:
-            from photofinder.protocols import calculate_hash
+        try:
+            if self.image and self.image.path:
+                from photofinder.protocols import calculate_hash
 
-            hash_value = calculate_hash(self.image.path)
-            if hash_value:
-                self.hash = hash_value
-                self.save(update_fields=["hash"])
-            return hash_value
-        return None
+                hash_value = calculate_hash(self.image.path)
+                if hash_value:
+                    self.hash = hash_value
+                    self.save(update_fields=["hash"])
+                else:
+                    # Hash computation failed (returned None)
+                    self.has_errors = True
+                    self.save(update_fields=["has_errors"])
+                return hash_value
+            # No image or path available - not an error, just can't compute
+            return None
+        except Exception:
+            # Any exception during hash computation
+            self.has_errors = True
+            self.save(update_fields=["has_errors"])
+            return None
 
     def compute_hash_from_file(self, file_path):
         """Compute and set the hash from an external file path.
@@ -152,16 +169,28 @@ class Photograph(models.Model):
         Returns:
             The computed hash string, or None if computation fails
         """
-        if not file_path or not os.path.exists(file_path):
+        try:
+            if not file_path or not os.path.exists(file_path):
+                self.has_errors = True
+                self.save(update_fields=["has_errors"])
+                return None
+
+            from photofinder.protocols import calculate_hash
+
+            hash_value = calculate_hash(file_path)
+            if hash_value:
+                self.hash = hash_value
+                self.save(update_fields=["hash"])
+            else:
+                # Hash computation failed
+                self.has_errors = True
+                self.save(update_fields=["has_errors"])
+            return hash_value
+        except Exception:
+            # Any exception during hash computation
+            self.has_errors = True
+            self.save(update_fields=["has_errors"])
             return None
-
-        from photofinder.protocols import calculate_hash
-
-        hash_value = calculate_hash(file_path)
-        if hash_value:
-            self.hash = hash_value
-            self.save(update_fields=["hash"])
-        return hash_value
 
     def _generate_timestamp_filename(self, original_file_path, extension=None):
         """Generate a timestamp-based filename to avoid clashes.
@@ -335,6 +364,9 @@ class Photograph(models.Model):
 
             return True
         except Exception as e:
+            # Mark as error and return False
+            self.has_errors = True
+            self.save(update_fields=["has_errors"])
             # Log error if needed (you might want to add logging here)
             return False
 
@@ -436,35 +468,58 @@ class PhotoPath(models.Model):
 
         # Process photograph creation/linking if not already set and file exists
         if not self.photograph and self.path and os.path.exists(self.path):
-            from photofinder.protocols import calculate_hash
+            try:
+                from photofinder.protocols import calculate_hash
 
-            # Compute hash from the file
-            hash_value = calculate_hash(self.path)
+                # Compute hash from the file
+                hash_value = calculate_hash(self.path)
 
-            if hash_value:
-                # Find or create a Photograph with this hash
-                photograph, created = Photograph.objects.get_or_create(
-                    hash=hash_value, defaults={}
-                )
+                if hash_value:
+                    # Find or create a Photograph with this hash
+                    photograph, created = Photograph.objects.get_or_create(
+                        hash=hash_value, defaults={}
+                    )
 
-                # Link this PhotoPath to the Photograph
+                    # Link this PhotoPath to the Photograph
+                    self.photograph = photograph
+                else:
+                    # Hash computation failed - create photograph without hash and mark error
+                    photograph = Photograph.objects.create()
+                    photograph.has_errors = True
+                    photograph.save(update_fields=["has_errors"])
+                    self.photograph = photograph
+            except Exception:
+                # Any error during hash computation or photograph creation
+                photograph = Photograph.objects.create()
+                photograph.has_errors = True
+                photograph.save(update_fields=["has_errors"])
                 self.photograph = photograph
 
         # Store image if requested (regardless of whether photograph was just created or already existed)
         if store_image and self.photograph and self.path and os.path.exists(self.path):
-            if not self.photograph.image:
-                self.photograph.get_image_from_file(self.path, resolution=resolution)
-
-            # Extract and set photograph time from EXIF if not already set
-            if not self.photograph.time:
-                exif_time = self.photograph._extract_exif_datetime(self.path)
-                if exif_time:
-                    self.photograph.time = (
-                        timezone.make_aware(exif_time)
-                        if timezone.is_naive(exif_time)
-                        else exif_time
+            try:
+                if not self.photograph.image:
+                    success = self.photograph.get_image_from_file(
+                        self.path, resolution=resolution
                     )
-                    self.photograph.save(update_fields=["time"])
+                    if not success:
+                        # Image loading failed - error already set in get_image_from_file
+                        pass
+
+                # Extract and set photograph time from EXIF if not already set
+                if not self.photograph.time:
+                    exif_time = self.photograph._extract_exif_datetime(self.path)
+                    if exif_time:
+                        self.photograph.time = (
+                            timezone.make_aware(exif_time)
+                            if timezone.is_naive(exif_time)
+                            else exif_time
+                        )
+                        self.photograph.save(update_fields=["time"])
+            except Exception:
+                # Any error during image storage or EXIF extraction
+                self.photograph.has_errors = True
+                self.photograph.save(update_fields=["has_errors"])
 
         # Call the parent save method
         super().save(*args, **kwargs)
