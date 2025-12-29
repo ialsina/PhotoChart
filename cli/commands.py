@@ -38,7 +38,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         resolution=getattr(args, "resolution", None),
         calculate_hash=getattr(args, "hash", False),
         recursive=not getattr(args, "no_recursive", False),
-        store_images=getattr(args, "store_images", False),
+        store_images=getattr(args, "store_images", True),
     )
 
     if not result["success"]:

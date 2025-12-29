@@ -126,9 +126,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Do not recursively search subdirectories",
     )
     p_ing.add_argument(
-        "--store-images",
-        action="store_true",
-        help="Store image files in the database media directory. If --resolution is specified, images will be resized accordingly.",
+        "--no-store-images",
+        action="store_false",
+        dest="store_images",
+        default=True,
+        help="Do not store image files in the database media directory. By default, images are stored. If --resolution is specified, images will be resized accordingly.",
     )
     p_ing.set_defaults(func=cmd_ingest)
 

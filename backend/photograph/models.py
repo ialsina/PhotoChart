@@ -13,6 +13,71 @@ from django.core.validators import RegexValidator
 from django.utils import timezone
 
 
+def photograph_upload_path(instance, filename):
+    """Generate a dynamic directory structure for photograph storage.
+
+    Creates a tree structure based on hash (if available) or ID to prevent
+    directory bloat. Structure examples:
+    - With hash: photographs/ab/cd/ef/abcdef1234567890...jpg
+    - Without hash: photographs/00/01/23/photo_12345.jpg
+
+    Args:
+        instance: The Photograph instance being saved
+        filename: The original filename
+
+    Returns:
+        A path string for the file upload
+    """
+    # Extract extension from filename, default to .jpg if missing
+    _, ext = os.path.splitext(filename)
+    if not ext or ext.lower() not in [
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".gif",
+        ".bmp",
+        ".tiff",
+        ".tif",
+        ".webp",
+    ]:
+        ext = ".jpg"
+
+    # Use hash-based structure if hash is available
+    if instance.hash and len(instance.hash) >= 6:
+        # Split first 6 characters into 3 directory levels (2 chars each)
+        # e.g., "abcdef" -> ["ab", "cd", "ef"]
+        hash_prefix = instance.hash[:6]
+        dir1 = hash_prefix[0:2]
+        dir2 = hash_prefix[2:4]
+        dir3 = hash_prefix[4:6]
+
+        # Use full hash as filename (or first 16 chars for shorter paths)
+        file_hash = instance.hash[:16] if len(instance.hash) >= 16 else instance.hash
+        return f"photographs/{dir1}/{dir2}/{dir3}/{file_hash}{ext}"
+
+    # Fallback to ID-based structure if no hash
+    if instance.pk:
+        # Convert ID to string and pad with zeros
+        id_str = str(instance.pk).zfill(8)
+        # Split into 3 directory levels: 00/01/23
+        dir1 = id_str[0:2]
+        dir2 = id_str[2:4]
+        dir3 = id_str[4:6]
+        return f"photographs/{dir1}/{dir2}/{dir3}/photo_{instance.pk}{ext}"
+
+    # Last resort: use timestamp-based structure
+    # This should rarely happen, but provides a fallback
+    timestamp = instance.created_at if instance.created_at else timezone.now()
+    timestamp_str = timestamp.strftime("%Y%m%d")
+    # Use first 6 chars of timestamp for directory structure
+    dir1 = timestamp_str[0:2]
+    dir2 = timestamp_str[2:4]
+    dir3 = timestamp_str[4:6]
+    # Generate a unique filename using microseconds
+    unique_id = timestamp.strftime("%H%M%S_%f")
+    return f"photographs/{dir1}/{dir2}/{dir3}/photo_{unique_id}{ext}"
+
+
 class Photograph(models.Model):
     """Photograph model storing photo metadata.
 
@@ -34,7 +99,7 @@ class Photograph(models.Model):
         ],
     )
     image = models.ImageField(
-        upload_to="photographs/",
+        upload_to=photograph_upload_path,
         null=True,
         blank=True,
         help_text="Image file for the photograph",
