@@ -24,13 +24,13 @@ except Exception:  # pragma: no cover
 
 # Django models - these will be imported after django.setup() in main.py
 from photograph.models import PhotoPath
-from photofinder.resolution import get_resolution_presets
-from photofinder.metadata import extract_metadata
+from photochart.resolution import get_resolution_presets
+from photochart.metadata import extract_metadata
 
 
 def cmd_ingest(args: argparse.Namespace) -> int:
     """Ingest photos from a directory and persist to database."""
-    from photofinder.ingest import ingest_photos
+    from photochart.ingest import ingest_photos
 
     # Call the ingestion function
     result = ingest_photos(
@@ -57,7 +57,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
 
 def cmd_convert(args: argparse.Namespace) -> int:
     """Convert an image file to a standard format."""
-    from photofinder.convert import convert_image
+    from photochart.convert import convert_image
 
     src = args.source
     output_format = getattr(args, "format", "JPEG").upper()

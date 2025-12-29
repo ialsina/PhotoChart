@@ -12,7 +12,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>PhotoFinder</h1>
+        <h1>PhotoChart</h1>
         <nav className="app-nav">
           <button
             className={currentView === "photographs" ? "active" : ""}

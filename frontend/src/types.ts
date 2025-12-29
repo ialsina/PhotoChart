@@ -1,4 +1,4 @@
-/** TypeScript types for the PhotoFinder API */
+/** TypeScript types for the PhotoChart API */
 
 export interface Photograph {
   id: number;

@@ -1,4 +1,4 @@
-from photofinder.protocols import (
+from photochart.protocols import (
     calculate_hash,
     check_disk_space,
     cp,

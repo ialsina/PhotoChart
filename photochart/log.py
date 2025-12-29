@@ -1,4 +1,4 @@
-"""Logging utilities for photofinder."""
+"""Logging utilities for photochart."""
 
 import logging
 

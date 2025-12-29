@@ -13,8 +13,8 @@ from django.db import transaction
 from tqdm import tqdm
 
 from photograph.models import PhotoPath, Photograph
-from photofinder.protocols import calculate_hash as calculate_file_hash
-from photofinder.resolution import parse_resolution
+from photochart.protocols import calculate_hash as calculate_file_hash
+from photochart.resolution import parse_resolution
 
 
 # Common image file extensions

@@ -89,7 +89,7 @@ def build_parser() -> argparse.ArgumentParser:
     """Build the argument parser with all subcommands."""
     p = argparse.ArgumentParser(
         prog="pf",
-        description="PhotoFinder CLI - manage and organize photo collections",
+        description="PhotoChart CLI - manage and organize photo collections",
     )
     sub = p.add_subparsers(dest="command")
     try:

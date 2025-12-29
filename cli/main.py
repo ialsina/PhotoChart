@@ -10,7 +10,7 @@ from typing import Optional
 
 # Setup Django environment before importing Django models
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-# Add project root to path first (so photofinder can be found)
+# Add project root to path first (so photochart can be found)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 # Also add backend directory to path so Django apps can be found

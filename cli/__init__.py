@@ -1,5 +1,5 @@
 """
-CLI module for PhotoFinder Django backend.
+CLI module for PhotoChart Django backend.
 
 This module provides command-line interface for managing photo collections.
 """

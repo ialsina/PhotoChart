@@ -1,4 +1,4 @@
-/** API client for PhotoFinder backend */
+/** API client for PhotoChart backend */
 
 import type {
   Photograph,
