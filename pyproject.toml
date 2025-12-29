@@ -13,6 +13,7 @@ authors = [
   { name = "" }
 ]
 dependencies = [
+  "python-decouple>=3.8",
   "fuzzywuzzy",
   "pandas",
   "tabulate",
