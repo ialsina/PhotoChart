@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "album",
     "catalog",
     "photograph",
+    "planner",
 ]
 
 MIDDLEWARE = [
