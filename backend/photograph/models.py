@@ -81,7 +81,7 @@ def photograph_upload_path(instance, filename):
 class Photograph(models.Model):
     """Photograph model storing photo metadata.
 
-    Represents a photograph with optional hash and image file.
+    Represents a photograph with optional hash and thumbnail file.
     The hash can be computed using the calculate_hash function from
     photochart.protocols.
     """
@@ -98,11 +98,11 @@ class Photograph(models.Model):
             )
         ],
     )
-    image = models.ImageField(
+    thumbnail = models.ImageField(
         upload_to=photograph_upload_path,
         null=True,
         blank=True,
-        help_text="Image file for the photograph",
+        help_text="Thumbnail file for the photograph",
     )
     created_at = models.DateTimeField(
         auto_now_add=True, help_text="Timestamp when the photograph record was created"
@@ -137,8 +137,8 @@ class Photograph(models.Model):
     def __str__(self):
         if self.hash:
             return f"Photograph ({self.hash[:8]}...)"
-        elif self.image:
-            return f"Photograph ({self.image.name})"
+        elif self.thumbnail:
+            return f"Photograph ({self.thumbnail.name})"
         else:
             return f"Photograph (id: {self.id})"
 
@@ -174,10 +174,10 @@ class Photograph(models.Model):
             The computed hash string, or None if computation fails
         """
         try:
-            if self.image and self.image.path:
+            if self.thumbnail and self.thumbnail.path:
                 from photochart.protocols import calculate_hash
 
-                hash_value = calculate_hash(self.image.path)
+                hash_value = calculate_hash(self.thumbnail.path)
                 if hash_value:
                     self.hash = hash_value
                     self.save(update_fields=["hash"])
@@ -272,9 +272,9 @@ class Photograph(models.Model):
         return f"{timestamp_str}{extension}"
 
     def get_image_from_file(self, file_path, resolution=None):
-        """Load an image from an external file path into the image field.
+        """Load an image from an external file path into the thumbnail field.
 
-        Opens the file at the given path and saves it to the model's image field.
+        Opens the file at the given path and saves it to the model's thumbnail field.
         The file will be saved with a timestamp-based filename to avoid clashes.
         If the file requires special processing (e.g., NEF files), it will be
         processed through the appropriate backend.
@@ -315,7 +315,7 @@ class Photograph(models.Model):
                     file_path, extension=".jpg"
                 )
 
-                self.image.save(filename, File(processed_image), save=True)
+                self.thumbnail.save(filename, File(processed_image), save=True)
 
                 # Extract and set EXIF data (datetime and model) if not already set
                 exif_data = self._extract_exif_data(file_path)
@@ -391,13 +391,13 @@ class Photograph(models.Model):
                     file_path, extension=".jpg"
                 )
 
-                self.image.save(filename, File(output_buffer), save=True)
+                self.thumbnail.save(filename, File(output_buffer), save=True)
             else:
                 # No resolution specified, just copy the file directly
                 # Generate timestamp-based filename preserving original extension
                 filename = self._generate_timestamp_filename(file_path, extension=None)
                 with open(file_path, "rb") as f:
-                    self.image.save(filename, File(f), save=True)
+                    self.thumbnail.save(filename, File(f), save=True)
 
             # Extract and set EXIF data (datetime and model) if not already set
             exif_data = self._extract_exif_data(file_path)
@@ -495,7 +495,7 @@ class PhotoPath(models.Model):
         Otherwise, a new Photograph will be created with the computed hash.
 
         Keyword Args:
-            store_image: If True, store the image file in the Photograph's image field
+            store_image: If True, store the image file in the Photograph's thumbnail field
             resolution: Optional resolution for image storage (only used if store_image=True)
         """
         # Extract custom kwargs
@@ -558,7 +558,7 @@ class PhotoPath(models.Model):
         # Store image if requested (regardless of whether photograph was just created or already existed)
         if store_image and self.photograph and self.path and os.path.exists(self.path):
             try:
-                if not self.photograph.image:
+                if not self.photograph.thumbnail:
                     success = self.photograph.get_image_from_file(
                         self.path, resolution=resolution
                     )

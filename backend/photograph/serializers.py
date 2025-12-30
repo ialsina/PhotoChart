@@ -28,11 +28,11 @@ class PhotoPathSerializer(serializers.ModelSerializer):
 
     def get_photograph_image_url(self, obj):
         """Get the image URL for the linked photograph if it exists."""
-        if obj.photograph and obj.photograph.image:
+        if obj.photograph and obj.photograph.thumbnail:
             request = self.context.get("request")
             if request:
-                return request.build_absolute_uri(obj.photograph.image.url)
-            return obj.photograph.image.url
+                return request.build_absolute_uri(obj.photograph.thumbnail.url)
+            return obj.photograph.thumbnail.url
         return None
 
     def get_photograph_paths_count(self, obj):
@@ -88,7 +88,7 @@ class PhotographSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "hash",
-            "image",
+            "thumbnail",
             "image_url",
             "time",
             "paths",
@@ -99,9 +99,9 @@ class PhotographSerializer(serializers.ModelSerializer):
 
     def get_image_url(self, obj):
         """Get the URL for the image if it exists."""
-        if obj.image and hasattr(obj.image, "url"):
+        if obj.thumbnail and hasattr(obj.thumbnail, "url"):
             request = self.context.get("request")
             if request:
-                return request.build_absolute_uri(obj.image.url)
-            return obj.image.url
+                return request.build_absolute_uri(obj.thumbnail.url)
+            return obj.thumbnail.url
         return None

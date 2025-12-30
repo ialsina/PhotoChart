@@ -417,7 +417,7 @@ def ingest_photos(
                         if (
                             store_images
                             and photo_path.photograph
-                            and photo_path.photograph.image
+                            and photo_path.photograph.thumbnail
                         ):
                             result["images_stored"] += 1
 
