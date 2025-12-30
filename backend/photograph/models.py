@@ -7,6 +7,8 @@ photo paths across different devices.
 
 import os
 from datetime import datetime
+from pathlib import Path
+from django.conf import settings
 from django.db import models
 from django.core.files import File
 from django.core.validators import RegexValidator
@@ -501,6 +503,32 @@ class PhotoPath(models.Model):
         # Extract custom kwargs
         store_image = kwargs.pop("store_image", False)
         resolution = kwargs.pop("resolution", None)
+
+        # Safety check: Never allow PhotoPath to point to files in MEDIA_ROOT
+        # This prevents loops where thumbnails stored in MEDIA_ROOT would be re-ingested
+        if self.path:
+            try:
+                media_root = Path(settings.MEDIA_ROOT).resolve()
+                path_resolved = Path(self.path).resolve()
+                # Check if the path is within MEDIA_ROOT
+                try:
+                    if path_resolved.is_relative_to(media_root):
+                        raise ValueError(
+                            f"Cannot create PhotoPath for file in MEDIA_ROOT: {self.path}. "
+                            "This would create an ingestion loop."
+                        )
+                except AttributeError:
+                    # Python < 3.9: use string comparison
+                    path_str = str(path_resolved)
+                    media_str = str(media_root)
+                    if path_str.startswith(media_str + os.sep) or path_str == media_str:
+                        raise ValueError(
+                            f"Cannot create PhotoPath for file in MEDIA_ROOT: {self.path}. "
+                            "This would create an ingestion loop."
+                        )
+            except Exception as e:
+                # If path checking fails, raise the error to prevent saving
+                raise ValueError(f"Cannot create PhotoPath: {str(e)}") from e
 
         # Update file timestamps if path exists
         if self.path and os.path.exists(self.path):

@@ -9,12 +9,46 @@ import socket
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 
+from django.conf import settings
 from django.db import transaction
 from tqdm import tqdm
 
 from photograph.models import PhotoPath, Photograph
 from photochart.protocols import calculate_hash as calculate_file_hash
 from photochart.resolution import parse_resolution
+
+
+def is_path_in_media_root(file_path: Path) -> bool:
+    """Check if a file path is within the Django MEDIA_ROOT directory.
+
+    This prevents ingesting files that are stored in the media directory,
+    which would create a loop where:
+    - A photo is ingested and its thumbnail is saved to MEDIA_ROOT
+    - That thumbnail file gets ingested as a new Photograph
+    - Which creates another thumbnail, etc.
+
+    Args:
+        file_path: Path to check
+
+    Returns:
+        True if the path is within MEDIA_ROOT, False otherwise
+    """
+    try:
+        media_root = Path(settings.MEDIA_ROOT).resolve()
+        file_path_resolved = file_path.resolve()
+        # Check if the file path is within MEDIA_ROOT
+        # Use is_relative_to for Python 3.9+, fallback for older versions
+        try:
+            return file_path_resolved.is_relative_to(media_root)
+        except AttributeError:
+            # Python < 3.9: use string comparison
+            file_str = str(file_path_resolved)
+            media_str = str(media_root)
+            return file_str.startswith(media_str + os.sep) or file_str == media_str
+    except Exception:
+        # If we can't determine, err on the side of caution and exclude it
+        # This could happen if MEDIA_ROOT is not set or path resolution fails
+        return True
 
 
 # Common image file extensions
@@ -251,33 +285,49 @@ def get_device_name(file_path: Optional[str] = None) -> str:
 def get_image_files(path: str, recursive: bool = True) -> List[Path]:
     """Get all image files from a directory.
 
+    Excludes files that are within the Django MEDIA_ROOT directory to prevent
+    ingestion loops where thumbnails stored in MEDIA_ROOT would be re-ingested.
+
     Args:
         path: Path to directory or file
         recursive: Whether to search recursively
 
     Returns:
-        List of Path objects for image files
+        List of Path objects for image files (excluding those in MEDIA_ROOT)
     """
     path_obj = Path(path)
     image_files = []
 
     if path_obj.is_file():
         # Single file
-        if is_image_file(path_obj):
+        if is_image_file(path_obj) and not is_path_in_media_root(path_obj):
             image_files.append(path_obj)
     elif path_obj.is_dir():
         # Directory
         if recursive:
             # Recursive search
             for root, dirs, files in os.walk(path):
+                # Skip directories that are within MEDIA_ROOT
+                root_path = Path(root)
+                if is_path_in_media_root(root_path):
+                    # Skip this directory and all subdirectories
+                    dirs[:] = []
+                    continue
+
                 for file in files:
                     file_path = Path(root) / file
-                    if is_image_file(file_path):
+                    if is_image_file(file_path) and not is_path_in_media_root(
+                        file_path
+                    ):
                         image_files.append(file_path)
         else:
             # Non-recursive search
             for file in path_obj.iterdir():
-                if file.is_file() and is_image_file(file):
+                if (
+                    file.is_file()
+                    and is_image_file(file)
+                    and not is_path_in_media_root(file)
+                ):
                     image_files.append(file)
     else:
         raise ValueError(f"Path does not exist or is not a file/directory: {path}")
@@ -374,6 +424,14 @@ def ingest_photos(
                 try:
                     with transaction.atomic():
                         file_path_str = str(file_path.resolve())
+
+                        # Safety check: Never ingest files from MEDIA_ROOT
+                        # This prevents loops where thumbnails stored in MEDIA_ROOT would be re-ingested
+                        if is_path_in_media_root(file_path):
+                            # Skip this file silently - it's in the media directory
+                            pbar.update(1)
+                            continue
+
                         # Update progress bar description with current file name
                         pbar.set_postfix_str(
                             os.path.basename(file_path_str)[:50], refresh=False
