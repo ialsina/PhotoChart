@@ -330,7 +330,9 @@ export function PhotoPaths() {
                     )}
                     <div className="path-content">
                       <div className="path-header">
-                        <span className="path-id">ID: {path.id}</span>
+                        <span className={`path-id ${path.photograph_has_errors ? 'has-errors' : ''}`}>
+                          ID: {path.id}
+                        </span>
                         <span className="path-device">
                           <span className="field-label">Device:</span> {path.device}
                         </span>
@@ -342,8 +344,29 @@ export function PhotoPaths() {
                         {path.photograph ? (
                           <div>
                             <span className="path-photograph">
-                              <span className="field-label">Linked to Photograph:</span> #{path.photograph}
+                              <span className="field-label">Linked to Photograph:</span>{" "}
+                              <span className={path.photograph_has_errors ? 'has-errors' : ''}>
+                                #{path.photograph}
+                              </span>
                             </span>
+                            {path.photograph_model && (
+                              <div className="path-photograph-model">
+                                <span className="field-label">Camera Model:</span>{" "}
+                                <span className="model-value">{path.photograph_model}</span>
+                              </div>
+                            )}
+                            {path.photograph_albums && path.photograph_albums.length > 0 && (
+                              <div className="path-photograph-albums">
+                                <span className="field-label">Albums:</span>{" "}
+                                <div className="albums-list">
+                                  {path.photograph_albums.map((album) => (
+                                    <span key={album.id} className="album-tag">
+                                      {album.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                             {path.photograph_paths_count > 1 && (
                               <div className="path-other-paths">
                                 <span className="field-label">Other paths ({path.photograph_paths_count - 1}):</span>
@@ -442,7 +465,9 @@ export function PhotoPaths() {
                     )}
                     <div className="path-content">
                       <div className="path-header">
-                        <span className="path-id">ID: {path.id}</span>
+                        <span className={`path-id ${path.photograph_has_errors ? 'has-errors' : ''}`}>
+                          ID: {path.id}
+                        </span>
                         <span className="path-device">
                           <span className="field-label">Device:</span> {path.device}
                         </span>
@@ -454,8 +479,29 @@ export function PhotoPaths() {
                         {path.photograph ? (
                           <div>
                             <span className="path-photograph">
-                              <span className="field-label">Linked to Photograph:</span> #{path.photograph}
+                              <span className="field-label">Linked to Photograph:</span>{" "}
+                              <span className={path.photograph_has_errors ? 'has-errors' : ''}>
+                                #{path.photograph}
+                              </span>
                             </span>
+                            {path.photograph_model && (
+                              <div className="path-photograph-model">
+                                <span className="field-label">Camera Model:</span>{" "}
+                                <span className="model-value">{path.photograph_model}</span>
+                              </div>
+                            )}
+                            {path.photograph_albums && path.photograph_albums.length > 0 && (
+                              <div className="path-photograph-albums">
+                                <span className="field-label">Albums:</span>{" "}
+                                <div className="albums-list">
+                                  {path.photograph_albums.map((album) => (
+                                    <span key={album.id} className="album-tag">
+                                      {album.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                             {path.photograph_paths_count > 1 && (
                               <div className="path-other-paths">
                                 <span className="field-label">Other paths ({path.photograph_paths_count - 1}):</span>

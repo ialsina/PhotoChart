@@ -132,6 +132,10 @@ def build_parser() -> argparse.ArgumentParser:
         default=True,
         help="Do not store image files in the database media directory. By default, images are stored. If --resolution is specified, images will be resized accordingly.",
     )
+    p_ing.add_argument(
+        "--log",
+        help="Path to log file where detailed error information will be written",
+    )
     p_ing.set_defaults(func=cmd_ingest)
 
     # convert

@@ -10,6 +10,9 @@ class PhotoPathSerializer(serializers.ModelSerializer):
     photograph_image_url = serializers.SerializerMethodField()
     photograph_paths_count = serializers.SerializerMethodField()
     other_paths = serializers.SerializerMethodField()
+    photograph_has_errors = serializers.SerializerMethodField()
+    photograph_model = serializers.SerializerMethodField()
+    photograph_albums = serializers.SerializerMethodField()
 
     class Meta:
         model = PhotoPath
@@ -20,6 +23,9 @@ class PhotoPathSerializer(serializers.ModelSerializer):
             "photograph",
             "photograph_image_url",
             "photograph_paths_count",
+            "photograph_has_errors",
+            "photograph_model",
+            "photograph_albums",
             "other_paths",
             "created_at",
             "updated_at",
@@ -76,12 +82,45 @@ class PhotoPathSerializer(serializers.ModelSerializer):
             ]
         return []
 
+    def get_photograph_has_errors(self, obj):
+        """Get has_errors from the linked photograph if it exists."""
+        if obj.photograph:
+            return obj.photograph.has_errors
+        return None
+
+    def get_photograph_model(self, obj):
+        """Get model from the linked photograph if it exists."""
+        if obj.photograph:
+            return obj.photograph.model
+        return None
+
+    def get_photograph_albums(self, obj):
+        """Get albums from the linked photograph if it exists."""
+        if obj.photograph:
+            # Use prefetched albums if available
+            if (
+                hasattr(obj.photograph, "_prefetched_objects_cache")
+                and "albums" in obj.photograph._prefetched_objects_cache
+            ):
+                albums = obj.photograph._prefetched_objects_cache["albums"]
+            else:
+                albums = obj.photograph.albums.all()
+            return [
+                {
+                    "id": album.id,
+                    "name": album.name,
+                }
+                for album in albums
+            ]
+        return []
+
 
 class PhotographSerializer(serializers.ModelSerializer):
     """Serializer for Photograph model."""
 
     paths = PhotoPathSerializer(many=True, read_only=True)
     image_url = serializers.SerializerMethodField()
+    albums = serializers.SerializerMethodField()
 
     class Meta:
         model = Photograph
@@ -91,7 +130,10 @@ class PhotographSerializer(serializers.ModelSerializer):
             "thumbnail",
             "image_url",
             "time",
+            "model",
+            "has_errors",
             "paths",
+            "albums",
             "created_at",
             "updated_at",
         ]
@@ -105,3 +147,21 @@ class PhotographSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.thumbnail.url)
             return obj.thumbnail.url
         return None
+
+    def get_albums(self, obj):
+        """Get list of albums this photograph belongs to."""
+        # Use prefetched albums if available
+        if (
+            hasattr(obj, "_prefetched_objects_cache")
+            and "albums" in obj._prefetched_objects_cache
+        ):
+            albums = obj._prefetched_objects_cache["albums"]
+        else:
+            albums = obj.albums.all()
+        return [
+            {
+                "id": album.id,
+                "name": album.name,
+            }
+            for album in albums
+        ]

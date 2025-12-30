@@ -1,5 +1,6 @@
 """API views for the photograph app."""
 
+import re
 from datetime import datetime
 from django.utils import timezone
 from rest_framework import viewsets
@@ -13,7 +14,7 @@ from .serializers import PhotographSerializer, PhotoPathSerializer
 class PhotographViewSet(viewsets.ModelViewSet):
     """ViewSet for viewing and editing Photograph instances."""
 
-    queryset = Photograph.objects.all().prefetch_related("paths")
+    queryset = Photograph.objects.all().prefetch_related("paths", "albums")
     serializer_class = PhotographSerializer
 
     def get_queryset(self):
@@ -192,7 +193,7 @@ class PhotoPathViewSet(viewsets.ModelViewSet):
     queryset = (
         PhotoPath.objects.all()
         .select_related("photograph", "photograph__image")
-        .prefetch_related("photograph__paths")
+        .prefetch_related("photograph__paths", "photograph__albums")
     )
     serializer_class = PhotoPathSerializer
 

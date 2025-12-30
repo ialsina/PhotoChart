@@ -300,6 +300,10 @@
   font-size: 0.9rem;
 }
 
+.photograph-id.has-errors {
+  color: #ff4444;
+}
+
 .photograph-hash {
   margin-bottom: 0.75rem;
   font-size: 0.85rem;
@@ -314,6 +318,10 @@
   word-break: break-all;
   display: inline-block;
   margin-top: 0.25rem;
+}
+
+.photograph-hash code.has-errors {
+  color: #ff4444;
 }
 
 .photograph-hash .no-hash {
@@ -335,6 +343,38 @@
 .photograph-time.no-time .no-time-value {
   color: rgba(255, 255, 255, 0.4);
   font-style: italic;
+}
+
+
+.photograph-model {
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.model-value {
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+}
+
+.photograph-albums {
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.albums-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.album-tag {
+  background-color: #3a3a3a;
+  color: rgba(255, 255, 255, 0.9);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
 }
 
 .photograph-paths {
@@ -458,6 +498,19 @@
   margin-bottom: 0.75rem;
   padding-bottom: 0.75rem;
   border-bottom: 1px solid #3a3a3a;
+  font-size: 0.85rem;
+}
+
+
+.path-photograph-model {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.path-photograph-albums {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
   font-size: 0.85rem;
 }
 
@@ -765,6 +818,21 @@
   .hash-value code {
     background-color: #ffffff;
     color: #646cff;
+  }
+
+  .photograph-hash code.has-errors {
+    color: #d32f2f;
+  }
+
+  .photograph-id.has-errors,
+  .path-id.has-errors,
+  .path-photograph .has-errors {
+    color: #d32f2f;
+  }
+
+  .album-tag {
+    background-color: #e0e0e0;
+    color: rgba(33, 53, 71, 0.9);
   }
 
   .path-device,

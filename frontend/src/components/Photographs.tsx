@@ -426,7 +426,9 @@ export function Photographs() {
                   </div>
                 )}
                 <div className="photograph-info">
-                  <div className="photograph-id">ID: {photo.id}</div>
+                  <div className={`photograph-id ${photo.has_errors ? 'has-errors' : ''}`}>
+                    ID: {photo.id}
+                  </div>
                   {(() => {
                     if (photo.time != null && photo.time !== "") {
                       const formattedTime = formatTime(photo.time);
@@ -446,11 +448,19 @@ export function Photographs() {
                       </div>
                     );
                   })()}
+                  {photo.model && (
+                    <div className="photograph-model">
+                      <span className="field-label">Camera Model:</span>{" "}
+                      <span className="model-value">{photo.model}</span>
+                    </div>
+                  )}
                   <div className="photograph-hash">
                     {photo.hash ? (
                       <div>
                         <span className="field-label">Hash:</span>{" "}
-                        <code>{photo.hash.substring(0, 16)}...</code>
+                        <code className={photo.has_errors ? 'has-errors' : ''}>
+                          {photo.hash.substring(0, 16)}...
+                        </code>
                       </div>
                     ) : (
                       <div>
@@ -469,6 +479,18 @@ export function Photographs() {
                       <span className="no-paths">No paths</span>
                     )}
                   </div>
+                  {photo.albums && photo.albums.length > 0 && (
+                    <div className="photograph-albums">
+                      <span className="field-label">Albums:</span>{" "}
+                      <div className="albums-list">
+                        {photo.albums.map((album) => (
+                          <span key={album.id} className="album-tag">
+                            {album.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="photograph-dates">
                     <div className="photograph-date">
                       <span className="field-label">Created:</span>{" "}

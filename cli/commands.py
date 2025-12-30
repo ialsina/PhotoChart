@@ -32,6 +32,8 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     """Ingest photos from a directory and persist to database."""
     from photochart.ingest import ingest_photos
 
+    log_path = getattr(args, "log", None)
+
     # Call the ingestion function
     result = ingest_photos(
         path=args.path,
@@ -39,11 +41,14 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         calculate_hash=getattr(args, "hash", False),
         recursive=not getattr(args, "no_recursive", False),
         store_images=getattr(args, "store_images", True),
+        log_path=log_path,
     )
 
     if not result["success"]:
         for err in result.get("errors", []):
             print(f"Error during ingestion: {err}", file=sys.stderr)
+        if log_path:
+            print(f"Detailed error information logged to: {log_path}", file=sys.stderr)
         return 1
 
     print(f"Ingested {result['count']} photo(s) from '{args.path}'.")
@@ -51,6 +56,8 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         print(f"Calculated {result['hashes_calculated']} hash(es).")
     if result.get("images_stored", 0) > 0:
         print(f"Stored {result['images_stored']} image(s) in database.")
+    if log_path:
+        print(f"Log file written to: {log_path}")
 
     return 0
 
