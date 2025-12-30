@@ -6,6 +6,8 @@ calculating hashes, and storing them in the database.
 
 import os
 import socket
+import logging
+import traceback
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 
@@ -16,6 +18,51 @@ from tqdm import tqdm
 from photograph.models import PhotoPath, Photograph
 from photochart.protocols import calculate_hash as calculate_file_hash
 from photochart.resolution import parse_resolution
+
+
+def _setup_logger(log_path: Optional[str] = None) -> Optional[logging.Logger]:
+    """Set up a logger for ingestion operations.
+
+    Args:
+        log_path: Path to log file. If None, no logger is created.
+
+    Returns:
+        Logger instance if log_path is provided, None otherwise.
+    """
+    if not log_path:
+        return None
+
+    # Create logger
+    logger = logging.getLogger("photochart.ingest")
+    logger.setLevel(logging.DEBUG)
+
+    # Remove existing handlers to avoid duplicates
+    logger.handlers.clear()
+
+    # Create file handler
+    try:
+        log_file = Path(log_path)
+        # Create parent directories if they don't exist
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+
+        file_handler = logging.FileHandler(log_path, mode="w", encoding="utf-8")
+        file_handler.setLevel(logging.DEBUG)
+
+        # Create formatter with detailed information including file and line number
+        formatter = logging.Formatter(
+            fmt="%(asctime)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(funcName)s() - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+        file_handler.setFormatter(formatter)
+
+        logger.addHandler(file_handler)
+        logger.propagate = False  # Don't propagate to root logger
+
+        return logger
+    except Exception as e:
+        # If we can't create the logger, return None and continue without logging
+        # This prevents logging setup from breaking the ingestion process
+        return None
 
 
 def is_path_in_media_root(file_path: Path) -> bool:
@@ -342,6 +389,7 @@ def ingest_photos(
     recursive: bool = True,
     device: Optional[str] = None,
     store_images: bool = False,
+    log_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Ingest photos from a directory and store them in the database.
 
@@ -367,6 +415,8 @@ def ingest_photos(
         store_images: Whether to store image files in the Photograph's image field.
             If True, images will be copied to the media directory. If resolution is
             specified, images will be resized accordingly.
+        log_path: Optional path to log file where detailed error information will be written.
+            If provided, all errors will be logged with full traceback information.
 
     Returns:
         Dictionary with:
@@ -383,6 +433,15 @@ def ingest_photos(
         "images_stored": 0,
         "errors": [],
     }
+
+    # Set up logger if log path is provided
+    logger = _setup_logger(log_path)
+    if logger:
+        logger.info(f"Starting photo ingestion from: {path}")
+        logger.info(
+            f"Parameters: resolution={resolution}, calculate_hash={calculate_hash}, "
+            f"recursive={recursive}, store_images={store_images}"
+        )
 
     try:
         # Get device name from the path being ingested
@@ -471,6 +530,56 @@ def ingest_photos(
                         # Pass store_image and resolution to save() method
                         photo_path.save(store_image=store_images, resolution=resolution)
 
+                        # Refresh photograph from database to get latest has_errors value
+                        # (it may have been set in a transaction)
+                        if photo_path.photograph:
+                            photo_path.photograph.refresh_from_db()
+
+                        # Check for errors that were silently caught in model methods
+                        if photo_path.photograph and photo_path.photograph.has_errors:
+                            error_msg = (
+                                f"Error processing {file_path_str}: "
+                                "Photograph has_errors flag is set. "
+                                "This indicates an error occurred during image processing, "
+                                "EXIF extraction, or hash computation."
+                            )
+                            result["errors"].append(error_msg)
+
+                            # Log detailed error information if logger is available
+                            if logger:
+                                logger.error(
+                                    f"Error detected for file: {file_path_str} - "
+                                    f"Photograph ID: {photo_path.photograph.id}, "
+                                    f"has_errors=True. "
+                                    f"This error was caught silently in model methods. "
+                                    f"Possible causes: EXIF extraction failure, "
+                                    f"hash computation failure, or image processing error.",
+                                    extra={
+                                        "file_path": file_path_str,
+                                        "photograph_id": photo_path.photograph.id,
+                                        "has_errors": True,
+                                    },
+                                )
+
+                        # Check if image storage was requested but failed
+                        if store_images and photo_path.photograph:
+                            if not photo_path.photograph.thumbnail:
+                                error_msg = (
+                                    f"Failed to store thumbnail for {file_path_str}: "
+                                    "get_image_from_file() returned False or no thumbnail was created."
+                                )
+                                result["errors"].append(error_msg)
+
+                                # Log detailed error information if logger is available
+                                if logger:
+                                    logger.warning(
+                                        f"Thumbnail storage failed for file: {file_path_str}",
+                                        extra={
+                                            "file_path": file_path_str,
+                                            "photograph_id": photo_path.photograph.id,
+                                        },
+                                    )
+
                         # Count images stored if requested
                         if (
                             store_images
@@ -486,6 +595,15 @@ def ingest_photos(
                 except Exception as e:
                     error_msg = f"Error processing {file_path}: {str(e)}"
                     result["errors"].append(error_msg)
+
+                    # Log detailed error information if logger is available
+                    if logger:
+                        logger.error(
+                            f"Error processing file: {file_path}",
+                            exc_info=True,
+                            extra={"file_path": str(file_path)},
+                        )
+
                     pbar.update(1)
                     # Continue processing other files
 
@@ -496,6 +614,22 @@ def ingest_photos(
 
     except Exception as e:
         result["success"] = False
-        result["errors"].append(f"Error during ingestion: {str(e)}")
+        error_msg = f"Error during ingestion: {str(e)}"
+        result["errors"].append(error_msg)
+
+        # Log detailed error information if logger is available
+        if logger:
+            logger.critical(
+                f"Critical error during ingestion: {error_msg}",
+                exc_info=True,
+                extra={"ingestion_path": path},
+            )
+
+    # Log completion summary if logger is available
+    if logger:
+        logger.info(
+            f"Ingestion completed. Success: {result['success']}, "
+            f"Count: {result['count']}, Errors: {len(result['errors'])}"
+        )
 
     return result
