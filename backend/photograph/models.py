@@ -147,7 +147,7 @@ class Photograph(models.Model):
     def _extract_exif_data(self, file_path):
         """Extract EXIF metadata (datetime and model) from an image file.
 
-        Uses the photofinder.exif module to extract both datetime and model
+        Uses the photochart.exif module to extract both datetime and model
         in a single image read operation.
 
         Args:
@@ -157,7 +157,7 @@ class Photograph(models.Model):
             Dictionary with 'datetime' and 'model' keys, or None if extraction fails
         """
         try:
-            from photofinder.exif import extract_exif, ExifTagName
+            from photochart.exif import extract_exif, ExifTagName
 
             result = extract_exif(file_path, [ExifTagName.DATETIME, ExifTagName.MODEL])
             return result
@@ -583,18 +583,10 @@ class PhotoPath(models.Model):
                 photograph.save(update_fields=["has_errors"])
                 self.photograph = photograph
 
-        # Store image if requested (regardless of whether photograph was just created or already existed)
-        if store_image and self.photograph and self.path and os.path.exists(self.path):
+        # Extract and set EXIF data (datetime and model) if not already set
+        # This should happen regardless of whether we're storing the image
+        if self.photograph and self.path and os.path.exists(self.path):
             try:
-                if not self.photograph.thumbnail:
-                    success = self.photograph.get_image_from_file(
-                        self.path, resolution=resolution
-                    )
-                    if not success:
-                        # Image loading failed - error already set in get_image_from_file
-                        pass
-
-                # Extract and set EXIF data (datetime and model) if not already set
                 exif_data = self.photograph._extract_exif_data(self.path)
                 if exif_data:
                     update_fields = []
@@ -617,7 +609,22 @@ class PhotoPath(models.Model):
                     if update_fields:
                         self.photograph.save(update_fields=update_fields)
             except Exception:
-                # Any error during image storage or EXIF extraction
+                # Any error during EXIF extraction
+                self.photograph.has_errors = True
+                self.photograph.save(update_fields=["has_errors"])
+
+        # Store image if requested (regardless of whether photograph was just created or already existed)
+        if store_image and self.photograph and self.path and os.path.exists(self.path):
+            try:
+                if not self.photograph.thumbnail:
+                    success = self.photograph.get_image_from_file(
+                        self.path, resolution=resolution
+                    )
+                    if not success:
+                        # Image loading failed - error already set in get_image_from_file
+                        pass
+            except Exception:
+                # Any error during image storage
                 self.photograph.has_errors = True
                 self.photograph.save(update_fields=["has_errors"])
 

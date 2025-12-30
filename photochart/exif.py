@@ -124,16 +124,33 @@ def _extract_datetime_from_exif(exif_data: Any) -> Optional[datetime]:
     datetime_str = None
 
     # Priority 1: DateTimeOriginal
-    if ExifTag.DATETIME_ORIGINAL in exif_data:
-        datetime_str = exif_data[ExifTag.DATETIME_ORIGINAL]
+    # Use .get() method for safer access, as 'in' operator might not work with all PIL versions
+    datetime_str = exif_data.get(ExifTag.DATETIME_ORIGINAL)
     # Priority 2: DateTimeDigitized
-    elif ExifTag.DATETIME_DIGITIZED in exif_data:
-        datetime_str = exif_data[ExifTag.DATETIME_DIGITIZED]
+    if not datetime_str:
+        datetime_str = exif_data.get(ExifTag.DATETIME_DIGITIZED)
     # Priority 3: DateTime
-    elif ExifTag.DATETIME in exif_data:
-        datetime_str = exif_data[ExifTag.DATETIME]
+    if not datetime_str:
+        datetime_str = exif_data.get(ExifTag.DATETIME)
 
     if datetime_str:
+        # Convert bytes to string if necessary
+        if isinstance(datetime_str, bytes):
+            try:
+                datetime_str = datetime_str.decode("utf-8", errors="ignore")
+            except Exception:
+                return None
+
+        # Ensure it's a string
+        if not isinstance(datetime_str, str):
+            datetime_str = str(datetime_str)
+
+        # Strip whitespace
+        datetime_str = datetime_str.strip()
+
+        if not datetime_str:
+            return None
+
         # Parse EXIF datetime format: "YYYY:MM:DD HH:MM:SS"
         try:
             return datetime.strptime(datetime_str, "%Y:%m:%d %H:%M:%S")
