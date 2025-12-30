@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { api } from "../api";
-import type { Photograph } from "../types";
+import type { Photograph, Album } from "../types";
 
 type SortMode = "id" | "date";
 type NavigationPath = {
@@ -16,6 +16,39 @@ export function Photographs() {
   const [sortMode, setSortMode] = useState<SortMode>("id");
   const [ascending, setAscending] = useState<boolean>(true);
   const [navigationPath, setNavigationPath] = useState<NavigationPath[]>([]);
+  const [selectedPhotos, setSelectedPhotos] = useState<Set<number>>(new Set());
+  const [albums, setAlbums] = useState<Album[]>([]);
+  const [showAddToAlbumDropdown, setShowAddToAlbumDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowAddToAlbumDropdown(false);
+      }
+    };
+
+    if (showAddToAlbumDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+      };
+    }
+  }, [showAddToAlbumDropdown]);
+
+  // Load albums on mount
+  useEffect(() => {
+    const loadAlbums = async () => {
+      try {
+        const allAlbums = await api.getAllAlbums();
+        setAlbums(allAlbums);
+      } catch (err) {
+        console.error("Failed to load albums:", err);
+      }
+    };
+    loadAlbums();
+  }, []);
 
   // Only fetch photographs when at leaf level (day or Unknown)
   // For hierarchy navigation (year/month), use summary endpoints instead
@@ -29,6 +62,7 @@ export function Photographs() {
     } else {
       // Clear photos when not at leaf level to save memory
       setPhotographs([]);
+      setSelectedPhotos(new Set()); // Clear selection when navigating away
     }
   }, [navigationPath]);
 
@@ -86,6 +120,105 @@ export function Photographs() {
 
   const toggleOrder = () => {
     setAscending((prev) => !prev);
+  };
+
+  // Selection management
+  const togglePhotoSelection = (photoId: number) => {
+    setSelectedPhotos((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(photoId)) {
+        newSet.delete(photoId);
+      } else {
+        newSet.add(photoId);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAll = () => {
+    if (currentView.type === "photographs") {
+      const allIds = new Set(sortedPhotographs.map((p) => p.id));
+      setSelectedPhotos(allIds);
+    }
+  };
+
+  const unselectAll = () => {
+    setSelectedPhotos(new Set());
+  };
+
+  const isAllSelected = () => {
+    if (currentView.type !== "photographs") return false;
+    return sortedPhotographs.length > 0 && selectedPhotos.size === sortedPhotographs.length;
+  };
+
+  // Action handlers
+  const handleDelete = async () => {
+    if (selectedPhotos.size === 0) return;
+
+    try {
+      const photoIds = Array.from(selectedPhotos);
+      for (const photoId of photoIds) {
+        await api.createPlannedAction({
+          action_type: "DELETE",
+          photograph: photoId,
+        });
+      }
+      setSelectedPhotos(new Set());
+      setError(null);
+      // Optionally reload photos to show updated state
+      // loadPhotographs();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to schedule deletion");
+    }
+  };
+
+  const handleAddToAlbum = async (albumId: number) => {
+    if (selectedPhotos.size === 0) return;
+
+    try {
+      const photoIds = Array.from(selectedPhotos);
+      await api.addPhotosToAlbum(albumId, photoIds);
+      setShowAddToAlbumDropdown(false);
+      setSelectedPhotos(new Set());
+      // Reload photos to get updated album information
+      await loadPhotographs();
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add photos to album");
+    }
+  };
+
+  const handleRemoveFromAlbum = async (albumId: number) => {
+    if (selectedPhotos.size === 0) return;
+
+    try {
+      const photoIds = Array.from(selectedPhotos);
+      await api.removePhotosFromAlbum(albumId, photoIds);
+      setSelectedPhotos(new Set());
+      // Reload photos to get updated album information
+      await loadPhotographs();
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove photos from album");
+    }
+  };
+
+  // Get common albums for selected photos
+  const getCommonAlbums = (): Album[] => {
+    if (selectedPhotos.size === 0) return [];
+
+    const selectedPhotoObjects = photographs.filter((p) => selectedPhotos.has(p.id));
+    if (selectedPhotoObjects.length === 0) return [];
+
+    // Get albums that ALL selected photos belong to
+    const albumIds = selectedPhotoObjects[0].albums.map((a) => a.id);
+    const commonAlbums = albumIds.filter((albumId) =>
+      selectedPhotoObjects.every((photo) =>
+        photo.albums.some((a) => a.id === albumId)
+      )
+    );
+
+    return albums.filter((album) => commonAlbums.includes(album.id));
   };
 
   // Build hierarchical structure: Year > Month > Day, with "Unknown" for photos without time
@@ -408,12 +541,79 @@ export function Photographs() {
       )}
 
       {currentView.type === "photographs" && (
-        sortedPhotographs.length === 0 ? (
-          <p className="empty-state">No photographs found.</p>
-        ) : (
-          <div className="photographs-grid">
-            {sortedPhotographs.map((photo) => (
-              <div key={photo.id} className="photograph-card">
+        <>
+          {/* Action Bar */}
+          {sortedPhotographs.length > 0 && (
+            <div className="action-bar">
+              <div className="action-bar-left">
+                <button
+                  className="action-button"
+                  onClick={isAllSelected() ? unselectAll : selectAll}
+                >
+                  {isAllSelected() ? "Unselect All" : "Select All"}
+                </button>
+                {selectedPhotos.size > 0 && (
+                  <span className="selection-count">
+                    {selectedPhotos.size} selected
+                  </span>
+                )}
+              </div>
+              {selectedPhotos.size > 0 && (
+                <div className="action-bar-right">
+                  <button
+                    className="action-button delete-button"
+                    onClick={handleDelete}
+                  >
+                    Delete
+                  </button>
+                  <div className="dropdown-container" ref={dropdownRef}>
+                    <button
+                      className="action-button"
+                      onClick={() => setShowAddToAlbumDropdown(!showAddToAlbumDropdown)}
+                    >
+                      Add to Album ▼
+                    </button>
+                    {showAddToAlbumDropdown && (
+                      <div className="dropdown-menu">
+                        {albums.length === 0 ? (
+                          <div className="dropdown-item disabled">No albums available</div>
+                        ) : (
+                          albums.map((album) => (
+                            <div
+                              key={album.id}
+                              className="dropdown-item"
+                              onClick={() => handleAddToAlbum(album.id)}
+                            >
+                              {album.name}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {getCommonAlbums().map((album) => (
+                    <button
+                      key={album.id}
+                      className="action-button remove-button"
+                      onClick={() => handleRemoveFromAlbum(album.id)}
+                    >
+                      Remove from {album.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {sortedPhotographs.length === 0 ? (
+            <p className="empty-state">No photographs found.</p>
+          ) : (
+            <div className="photographs-grid">
+              {sortedPhotographs.map((photo) => (
+                <div
+                  key={photo.id}
+                  className={`photograph-card ${selectedPhotos.has(photo.id) ? "selected" : ""}`}
+                  onClick={() => togglePhotoSelection(photo.id)}
+                >
                 {photo.image_url ? (
                   <img
                     src={photo.image_url}
@@ -482,9 +682,9 @@ export function Photographs() {
                   {photo.albums && photo.albums.length > 0 && (
                     <div className="photograph-albums">
                       <span className="field-label">Albums:</span>{" "}
-                      <div className="albums-list">
+                      <div className="albums-tags">
                         {photo.albums.map((album) => (
-                          <span key={album.id} className="album-tag">
+                          <span key={album.id} className="album-tag-bubble">
                             {album.name}
                           </span>
                         ))}
@@ -503,9 +703,10 @@ export function Photographs() {
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
-        )
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

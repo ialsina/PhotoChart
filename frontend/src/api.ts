@@ -9,6 +9,7 @@ import type {
   Location,
   TimeLoc,
   Album,
+  PlannedAction,
   PaginatedResponse,
 } from "./types";
 
@@ -182,4 +183,15 @@ export const api = {
 
   deleteAlbum: (id: number): Promise<void> =>
     fetchAPIMethod<void>(`/albums/${id}/`, "DELETE"),
+
+  // Album photo management
+  addPhotosToAlbum: (albumId: number, photoIds: number[]): Promise<{ status: string; added_count: number }> =>
+    fetchAPIMethod<{ status: string; added_count: number }>(`/albums/${albumId}/add_photos/`, "POST", { photo_ids: photoIds }),
+
+  removePhotosFromAlbum: (albumId: number, photoIds: number[]): Promise<{ status: string; removed_count: number }> =>
+    fetchAPIMethod<{ status: string; removed_count: number }>(`/albums/${albumId}/remove_photos/`, "POST", { photo_ids: photoIds }),
+
+  // Planned Actions
+  createPlannedAction: (data: { action_type: string; photograph: number }): Promise<PlannedAction> =>
+    fetchAPIMethod<PlannedAction>("/planned-actions/", "POST", data),
 };

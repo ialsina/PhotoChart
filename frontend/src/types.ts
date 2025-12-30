@@ -76,6 +76,14 @@ export interface TimeLoc {
   location_name: string;
 }
 
+export interface PlannedAction {
+  id: number;
+  action_type: string;
+  photograph: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface PaginatedResponse<T> {
   count: number;
   next: string | null;

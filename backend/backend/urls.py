@@ -29,6 +29,7 @@ from catalog.views import (
     TimeLocViewSet,
 )
 from album.views import AlbumViewSet
+from planner.views import PlannedActionViewSet
 
 # Create a router and register viewsets
 router = DefaultRouter()
@@ -40,6 +41,7 @@ router.register(r"dir-kinds", DirKindViewSet, basename="dirkind")
 router.register(r"locations", LocationViewSet, basename="location")
 router.register(r"time-locs", TimeLocViewSet, basename="timeloc")
 router.register(r"albums", AlbumViewSet, basename="album")
+router.register(r"planned-actions", PlannedActionViewSet, basename="plannedaction")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
