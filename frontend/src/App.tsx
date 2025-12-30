@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Photographs } from "./components/Photographs";
 import { PhotoPaths } from "./components/PhotoPaths";
-import { Catalog } from "./components/Catalog";
+import { Album } from "./components/Album";
 import "./App.css";
 
-type View = "photographs" | "paths" | "catalog";
+type View = "photographs" | "paths" | "album";
 
 function App() {
   const [currentView, setCurrentView] = useState<View>("photographs");
@@ -27,17 +27,17 @@ function App() {
             Photo Paths
           </button>
           <button
-            className={currentView === "catalog" ? "active" : ""}
-            onClick={() => setCurrentView("catalog")}
+            className={currentView === "album" ? "active" : ""}
+            onClick={() => setCurrentView("album")}
           >
-            Catalog
+            Album
           </button>
         </nav>
       </header>
       <main className="app-main">
         {currentView === "photographs" && <Photographs />}
         {currentView === "paths" && <PhotoPaths />}
-        {currentView === "catalog" && <Catalog />}
+        {currentView === "album" && <Album />}
       </main>
     </div>
   );

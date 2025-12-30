@@ -8,6 +8,7 @@ import type {
   DirKind,
   Location,
   TimeLoc,
+  Album,
   PaginatedResponse,
 } from "./types";
 
@@ -18,6 +19,28 @@ async function fetchAPI<T>(endpoint: string): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${endpoint}`);
   if (!response.ok) {
     throw new Error(`API error: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+async function fetchAPIMethod<T>(
+  endpoint: string,
+  method: string,
+  body?: unknown
+): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!response.ok) {
+    throw new Error(`API error: ${response.statusText}`);
+  }
+  // Handle 204 No Content responses
+  if (response.status === 204) {
+    return undefined as T;
   }
   return response.json();
 }
@@ -137,4 +160,26 @@ export const api = {
 
   getAllTimeLocs: (): Promise<TimeLoc[]> =>
     fetchAllPages<TimeLoc>("/time-locs/"),
+
+  // Albums
+  getAlbums: (): Promise<PaginatedResponse<Album>> =>
+    fetchAPI("/albums/"),
+
+  getAllAlbums: (): Promise<Album[]> =>
+    fetchAllPages<Album>("/albums/"),
+
+  getAlbum: (id: number): Promise<Album> =>
+    fetchAPI(`/albums/${id}/`),
+
+  createAlbum: (data: { name: string; description?: string }): Promise<Album> =>
+    fetchAPIMethod<Album>("/albums/", "POST", data),
+
+  updateAlbum: (
+    id: number,
+    data: { name?: string; description?: string }
+  ): Promise<Album> =>
+    fetchAPIMethod<Album>(`/albums/${id}/`, "PATCH", data),
+
+  deleteAlbum: (id: number): Promise<void> =>
+    fetchAPIMethod<void>(`/albums/${id}/`, "DELETE"),
 };

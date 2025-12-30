@@ -903,6 +903,293 @@
   }
 }
 
+/* Album Styles */
+.album {
+  width: 100%;
+}
+
+.album-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.album-header h2 {
+  margin: 0;
+  font-size: 1.75rem;
+  color: rgba(255, 255, 255, 0.87);
+}
+
+.create-button {
+  padding: 0.75rem 1.5rem;
+  border: 1px solid #646cff;
+  background-color: #646cff;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.create-button:hover {
+  background-color: #535bf2;
+  border-color: #535bf2;
+  transform: translateY(-1px);
+}
+
+.create-button:active {
+  transform: translateY(0);
+}
+
+.albums-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.5rem;
+}
+
+.album-card {
+  background-color: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  padding: 1.5rem;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.album-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border-color: #646cff;
+}
+
+.album-header-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.album-name {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #646cff;
+  flex: 1;
+}
+
+.album-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.edit-button,
+.delete-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.2rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.edit-button:hover,
+.delete-button:hover {
+  background-color: #3a3a3a;
+}
+
+.album-description {
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0 0 1rem 0;
+  line-height: 1.5;
+}
+
+.album-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 1rem;
+  border-top: 1px solid #3a3a3a;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.album-photos-count {
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.album-date {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.modal-content {
+  background-color: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid #3a3a3a;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: rgba(255, 255, 255, 0.87);
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 2rem;
+  cursor: pointer;
+  padding: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.modal-close:hover {
+  background-color: #3a3a3a;
+  color: rgba(255, 255, 255, 0.87);
+}
+
+.album-form {
+  padding: 1.5rem;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.87);
+}
+
+.form-group input,
+.form-group textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #3a3a3a;
+  background-color: #1a1a1a;
+  color: rgba(255, 255, 255, 0.87);
+  border-radius: 6px;
+  font-size: 1rem;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #646cff;
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.cancel-button,
+.submit-button,
+.delete-confirm-button {
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: all 0.2s;
+  border: 1px solid;
+}
+
+.cancel-button {
+  background-color: transparent;
+  border-color: #3a3a3a;
+  color: rgba(255, 255, 255, 0.87);
+}
+
+.cancel-button:hover {
+  background-color: #3a3a3a;
+  border-color: #3a3a3a;
+}
+
+.submit-button {
+  background-color: #646cff;
+  border-color: #646cff;
+  color: white;
+}
+
+.submit-button:hover {
+  background-color: #535bf2;
+  border-color: #535bf2;
+}
+
+.delete-confirm-button {
+  background-color: #ff6b6b;
+  border-color: #ff6b6b;
+  color: white;
+}
+
+.delete-confirm-button:hover {
+  background-color: #ff5252;
+  border-color: #ff5252;
+}
+
+.delete-confirmation {
+  padding: 1.5rem;
+}
+
+.delete-confirmation p {
+  margin: 0 0 1rem 0;
+  color: rgba(255, 255, 255, 0.87);
+}
+
+.delete-warning {
+  color: #ff6b6b;
+  font-weight: 500;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .app-header {
@@ -925,5 +1212,19 @@
 
   .tabs {
     flex-wrap: wrap;
+  }
+
+  .album-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .albums-list {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-content {
+    max-width: 100%;
   }
 }

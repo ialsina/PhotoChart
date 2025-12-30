@@ -28,6 +28,7 @@ from catalog.views import (
     LocationViewSet,
     TimeLocViewSet,
 )
+from album.views import AlbumViewSet
 
 # Create a router and register viewsets
 router = DefaultRouter()
@@ -38,6 +39,7 @@ router.register(r"directories", DirectoryViewSet, basename="directory")
 router.register(r"dir-kinds", DirKindViewSet, basename="dirkind")
 router.register(r"locations", LocationViewSet, basename="location")
 router.register(r"time-locs", TimeLocViewSet, basename="timeloc")
+router.register(r"albums", AlbumViewSet, basename="album")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
