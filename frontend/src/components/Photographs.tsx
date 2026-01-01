@@ -285,8 +285,20 @@ export function Photographs() {
           // Load days for selected year/month
           const days = await api.getPhotographDays(navigationPath[0].value, navigationPath[1].value);
           setHierarchyData({ days });
-        } else {
-          setHierarchyData({});
+        } else if (navigationPath.length === 3) {
+          // At day level - preserve days data for navigation
+          // Only reload if year/month changed
+          setHierarchyData((prev) => {
+            // If we already have days for this year/month, keep them
+            if (prev.days && prev.days.length > 0) {
+              return prev;
+            }
+            // Otherwise load days
+            api.getPhotographDays(navigationPath[0].value, navigationPath[1].value)
+              .then((days) => setHierarchyData((p) => ({ ...p, days })))
+              .catch((err) => console.error("Failed to load days:", err));
+            return prev;
+          });
         }
       } catch (err) {
         console.error("Failed to load hierarchy data:", err);
@@ -384,6 +396,57 @@ export function Photographs() {
     setNavigationPath(navigationPath.slice(0, level));
   };
 
+  // Get previous/next day navigation
+  const getDayNavigation = useMemo(() => {
+    if (navigationPath.length !== 3) {
+      return { hasPrev: false, hasNext: false, prevDay: null, nextDay: null };
+    }
+
+    const year = navigationPath[0].value;
+    const month = navigationPath[1].value;
+    const currentDay = navigationPath[2].value;
+
+    // Get days for current month
+    const days = hierarchyData.days || [];
+    const sortedDays = days
+      .map(d => d.day)
+      .sort((a, b) => parseInt(a) - parseInt(b));
+
+    const currentIndex = sortedDays.findIndex(d => d === currentDay);
+
+    if (currentIndex === -1) {
+      return { hasPrev: false, hasNext: false, prevDay: null, nextDay: null };
+    }
+
+    const prevDay = currentIndex > 0 ? sortedDays[currentIndex - 1] : null;
+    const nextDay = currentIndex < sortedDays.length - 1 ? sortedDays[currentIndex + 1] : null;
+
+    return {
+      hasPrev: prevDay !== null,
+      hasNext: nextDay !== null,
+      prevDay,
+      nextDay,
+    };
+  }, [navigationPath, hierarchyData.days]);
+
+  const navigateToPrevDay = () => {
+    if (!getDayNavigation.hasPrev || !getDayNavigation.prevDay || navigationPath.length !== 3) return;
+    setNavigationPath([
+      { type: "year", value: navigationPath[0].value, label: navigationPath[0].label },
+      { type: "month", value: navigationPath[1].value, label: navigationPath[1].label },
+      { type: "day", value: getDayNavigation.prevDay, label: getDayNavigation.prevDay },
+    ]);
+  };
+
+  const navigateToNextDay = () => {
+    if (!getDayNavigation.hasNext || !getDayNavigation.nextDay || navigationPath.length !== 3) return;
+    setNavigationPath([
+      { type: "year", value: navigationPath[0].value, label: navigationPath[0].label },
+      { type: "month", value: navigationPath[1].value, label: navigationPath[1].label },
+      { type: "day", value: getDayNavigation.nextDay, label: getDayNavigation.nextDay },
+    ]);
+  };
+
   const getMonthName = (month: string) => {
     const monthNames = [
       "January", "February", "March", "April", "May", "June",
@@ -459,23 +522,45 @@ export function Photographs() {
 
       {/* Breadcrumb Navigation */}
       <div className="breadcrumb">
-        <button
-          className="breadcrumb-item"
-          onClick={() => setNavigationPath([])}
-        >
-          All Photographs
-        </button>
-        {navigationPath.map((item, index) => (
-          <span key={index}>
-            <span className="breadcrumb-separator">›</span>
+        <div className="breadcrumb-left">
+          <button
+            className="breadcrumb-item"
+            onClick={() => setNavigationPath([])}
+          >
+            All Photographs
+          </button>
+          {navigationPath.map((item, index) => (
+            <span key={index}>
+              <span className="breadcrumb-separator">›</span>
+              <button
+                className="breadcrumb-item"
+                onClick={() => navigateUp(index + 1)}
+              >
+                {item.label}
+              </button>
+            </span>
+          ))}
+        </div>
+        {navigationPath.length === 3 && (
+          <div className="breadcrumb-nav-arrows">
             <button
-              className="breadcrumb-item"
-              onClick={() => navigateUp(index + 1)}
+              className="breadcrumb-arrow"
+              onClick={navigateToPrevDay}
+              disabled={!getDayNavigation.hasPrev}
+              title="Previous day"
             >
-              {item.label}
+              ←
             </button>
-          </span>
-        ))}
+            <button
+              className="breadcrumb-arrow"
+              onClick={navigateToNextDay}
+              disabled={!getDayNavigation.hasNext}
+              title="Next day"
+            >
+              →
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Current View */}
