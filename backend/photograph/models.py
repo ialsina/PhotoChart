@@ -8,6 +8,7 @@ photo paths across different devices.
 import os
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 from django.conf import settings
 from django.db import models
 from django.core.files import File
@@ -440,7 +441,10 @@ class PhotoPath(models.Model):
     a device and optionally linked to a Photograph instance.
     """
 
-    path = models.CharField(max_length=2048, help_text="Full path to the photo file")
+    path = models.CharField(
+        max_length=2048,
+        help_text="Path to the photo file. For mounted devices, this is relative to the mount point. For root filesystem, this is an absolute path.",
+    )
     device = models.CharField(
         max_length=255, help_text="Device identifier where the photo is located"
     )
@@ -483,6 +487,67 @@ class PhotoPath(models.Model):
     def __str__(self):
         return f"{self.path} on {self.device}"
 
+    def get_full_path(self) -> Optional[str]:
+        """Get the full absolute path for this PhotoPath.
+
+        If the path is already absolute, returns it as-is.
+        If the path is relative (for mounted devices), attempts to reconstruct
+        the full path by finding the mount point from the device identifier.
+
+        Returns:
+            Full absolute path if it can be determined, None otherwise
+        """
+        # If path is already absolute, return it
+        if self.path and os.path.isabs(self.path):
+            return self.path
+
+        # If path is relative, try to find the mount point from device
+        # Device format might be: "label (/mnt/external)" or "mount_name [uuid]"
+        # Try to extract mount point from device string
+        mount_point = None
+
+        # Check if device contains mount point in parentheses: "label (/mnt/external)"
+        if "(" in self.device and ")" in self.device:
+            try:
+                mount_point = self.device.split("(")[1].split(")")[0].strip()
+                if mount_point and os.path.exists(mount_point):
+                    return str(Path(mount_point) / self.path)
+            except (IndexError, ValueError):
+                pass
+
+        # Try to find mount point by reading /proc/mounts
+        # Look for mount points that match device patterns
+        try:
+            with open("/proc/mounts", "r") as f:
+                mounts = []
+                for line in f:
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        device = parts[0]
+                        mount = parts[1]
+                        mounts.append((device, mount))
+
+                # Sort by mount path length (longest first)
+                mounts.sort(key=lambda x: len(x[1]), reverse=True)
+
+                # Try to match device identifier with mount point
+                # Check if any mount point name matches device
+                for device, mount in mounts:
+                    if mount == "/":
+                        continue
+                    mount_name = Path(mount).name
+                    # Check if device string contains mount name or mount path
+                    if mount_name in self.device or mount in self.device:
+                        if os.path.exists(mount):
+                            full_path = str(Path(mount) / self.path)
+                            if os.path.exists(full_path):
+                                return full_path
+        except (OSError, IOError):
+            pass
+
+        # If we can't reconstruct, return None
+        return None
+
     def save(self, *args, **kwargs):
         """Override save to automatically create or link Photograph.
 
@@ -499,22 +564,34 @@ class PhotoPath(models.Model):
         Keyword Args:
             store_image: If True, store the image file in the Photograph's thumbnail field
             resolution: Optional resolution for image storage (only used if store_image=True)
+            full_path: Optional full path to use for file access (if path is relative to mount point)
         """
         # Extract custom kwargs
         store_image = kwargs.pop("store_image", False)
         resolution = kwargs.pop("resolution", None)
+        full_path = kwargs.pop("full_path", None)
+
+        # Use full_path for file access if provided, otherwise try to get full path
+        # This allows storing relative paths while still accessing files
+        if full_path:
+            file_access_path = full_path
+        elif self.path and not os.path.isabs(self.path):
+            # Path is relative, try to reconstruct full path
+            file_access_path = self.get_full_path() or self.path
+        else:
+            file_access_path = self.path
 
         # Safety check: Never allow PhotoPath to point to files in MEDIA_ROOT
         # This prevents loops where thumbnails stored in MEDIA_ROOT would be re-ingested
-        if self.path:
+        if file_access_path:
             try:
                 media_root = Path(settings.MEDIA_ROOT).resolve()
-                path_resolved = Path(self.path).resolve()
+                path_resolved = Path(file_access_path).resolve()
                 # Check if the path is within MEDIA_ROOT
                 try:
                     if path_resolved.is_relative_to(media_root):
                         raise ValueError(
-                            f"Cannot create PhotoPath for file in MEDIA_ROOT: {self.path}. "
+                            f"Cannot create PhotoPath for file in MEDIA_ROOT: {file_access_path}. "
                             "This would create an ingestion loop."
                         )
                 except AttributeError:
@@ -523,7 +600,7 @@ class PhotoPath(models.Model):
                     media_str = str(media_root)
                     if path_str.startswith(media_str + os.sep) or path_str == media_str:
                         raise ValueError(
-                            f"Cannot create PhotoPath for file in MEDIA_ROOT: {self.path}. "
+                            f"Cannot create PhotoPath for file in MEDIA_ROOT: {file_access_path}. "
                             "This would create an ingestion loop."
                         )
             except Exception as e:
@@ -531,11 +608,11 @@ class PhotoPath(models.Model):
                 raise ValueError(f"Cannot create PhotoPath: {str(e)}") from e
 
         # Update file timestamps if path exists
-        if self.path and os.path.exists(self.path):
+        if file_access_path and os.path.exists(file_access_path):
             try:
                 # Get file creation and modification times
-                file_created = os.path.getctime(self.path)
-                file_updated = os.path.getmtime(self.path)
+                file_created = os.path.getctime(file_access_path)
+                file_updated = os.path.getmtime(file_access_path)
 
                 # Convert to datetime objects (fromtimestamp returns naive datetime in local timezone)
                 file_created_dt = datetime.fromtimestamp(file_created)
@@ -555,12 +632,16 @@ class PhotoPath(models.Model):
                 pass
 
         # Process photograph creation/linking if not already set and file exists
-        if not self.photograph and self.path and os.path.exists(self.path):
+        if (
+            not self.photograph
+            and file_access_path
+            and os.path.exists(file_access_path)
+        ):
             try:
                 from photochart.protocols import calculate_hash
 
                 # Compute hash from the file
-                hash_value = calculate_hash(self.path)
+                hash_value = calculate_hash(file_access_path)
 
                 if hash_value:
                     # Find or create a Photograph with this hash
@@ -585,9 +666,9 @@ class PhotoPath(models.Model):
 
         # Extract and set EXIF data (datetime and model) if not already set
         # This should happen regardless of whether we're storing the image
-        if self.photograph and self.path and os.path.exists(self.path):
+        if self.photograph and file_access_path and os.path.exists(file_access_path):
             try:
-                exif_data = self.photograph._extract_exif_data(self.path)
+                exif_data = self.photograph._extract_exif_data(file_access_path)
                 if exif_data:
                     update_fields = []
 
@@ -614,11 +695,16 @@ class PhotoPath(models.Model):
                 self.photograph.save(update_fields=["has_errors"])
 
         # Store image if requested (regardless of whether photograph was just created or already existed)
-        if store_image and self.photograph and self.path and os.path.exists(self.path):
+        if (
+            store_image
+            and self.photograph
+            and file_access_path
+            and os.path.exists(file_access_path)
+        ):
             try:
                 if not self.photograph.thumbnail:
                     success = self.photograph.get_image_from_file(
-                        self.path, resolution=resolution
+                        file_access_path, resolution=resolution
                     )
                     if not success:
                         # Image loading failed - error already set in get_image_from_file

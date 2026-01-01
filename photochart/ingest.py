@@ -166,6 +166,64 @@ def is_image_file(file_path: Path) -> bool:
     return file_path.suffix.lower() in IMAGE_EXTENSIONS
 
 
+def get_mount_point(file_path: str) -> Optional[str]:
+    """Get the mount point for a file path.
+
+    Args:
+        file_path: Path to a file
+
+    Returns:
+        Mount point path if found, None if on root filesystem or not found
+    """
+    try:
+        path_obj = Path(file_path)
+        if not path_obj.exists():
+            # Path doesn't exist, try to get mount point from parent directory
+            path_obj = path_obj.parent
+            while path_obj != path_obj.parent and not path_obj.exists():
+                path_obj = path_obj.parent
+            if not path_obj.exists():
+                return None
+
+        # Resolve to absolute path
+        abs_path = path_obj.resolve()
+
+        # Read /proc/mounts to find mount points (Linux)
+        try:
+            with open("/proc/mounts", "r") as f:
+                mounts = []
+                for line in f:
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        device = parts[0]
+                        mount = parts[1]
+                        fstype = parts[2] if len(parts) > 2 else ""
+                        mounts.append((device, mount, fstype))
+
+                # Sort by mount path length (longest first) to match most specific mount
+                mounts.sort(key=lambda x: len(x[1]), reverse=True)
+
+                # Find the mount point that contains our path
+                for device, mount, fstype in mounts:
+                    try:
+                        mount_path = Path(mount)
+                        if mount_path.exists() and abs_path.is_relative_to(mount_path):
+                            # Return mount point if it's not the root filesystem
+                            if mount != "/":
+                                return mount
+                            return None
+                    except (ValueError, OSError):
+                        # Path comparison failed, skip
+                        continue
+        except (OSError, IOError):
+            # /proc/mounts not available (not Linux or permission issue)
+            pass
+
+        return None
+    except Exception:
+        return None
+
+
 def get_device_name(file_path: Optional[str] = None) -> str:
     """Get the device/filesystem identifier for a file path.
 
@@ -496,9 +554,27 @@ def ingest_photos(
                             os.path.basename(file_path_str)[:50], refresh=False
                         )
 
+                        # For files on mounted devices, store path relative to mount point
+                        # For files on root filesystem, store absolute path
+                        mount_point = get_mount_point(file_path_str)
+                        if mount_point:
+                            # Calculate relative path from mount point
+                            mount_path = Path(mount_point)
+                            file_path_obj = Path(file_path_str)
+                            try:
+                                path_to_store = str(
+                                    file_path_obj.relative_to(mount_path)
+                                )
+                            except ValueError:
+                                # If relative_to fails, fall back to absolute path
+                                path_to_store = file_path_str
+                        else:
+                            # On root filesystem, store absolute path
+                            path_to_store = file_path_str
+
                         # Check if PhotoPath already exists for this path and device
                         existing_path = PhotoPath.objects.filter(
-                            path=file_path_str, device=device
+                            path=path_to_store, device=device
                         ).first()
 
                         if existing_path:
@@ -522,13 +598,19 @@ def ingest_photos(
                         # Note: The save() method will automatically create/link Photograph
                         # if the file exists and no photograph is set. If we already have
                         # a photograph (from hash calculation), it will be used.
+                        # We store the relative path (or absolute for root filesystem)
+                        # but need to pass the full path to save() for file access
                         photo_path = PhotoPath(
-                            path=file_path_str,
+                            path=path_to_store,
                             device=device,
                             photograph=photograph,
                         )
-                        # Pass store_image and resolution to save() method
-                        photo_path.save(store_image=store_images, resolution=resolution)
+                        # Pass the full path for file access, but store the relative path
+                        photo_path.save(
+                            store_image=store_images,
+                            resolution=resolution,
+                            full_path=file_path_str if mount_point else None,
+                        )
 
                         # Refresh photograph from database to get latest has_errors value
                         # (it may have been set in a transaction)
