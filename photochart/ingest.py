@@ -605,6 +605,15 @@ def ingest_photos(
                             device=device,
                             photograph=photograph,
                         )
+
+                        # Set file size if file exists
+                        if os.path.exists(file_path_str):
+                            try:
+                                photo_path.size = os.path.getsize(file_path_str)
+                            except (OSError, ValueError):
+                                # If we can't get file size, leave it as None
+                                pass
+
                         # Pass the full path for file access, but store the relative path
                         photo_path.save(
                             store_image=store_images,

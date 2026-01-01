@@ -472,6 +472,11 @@ class PhotoPath(models.Model):
         blank=True,
         help_text="File modification timestamp from the filesystem",
     )
+    size = models.BigIntegerField(
+        null=True,
+        blank=True,
+        help_text="File size in bytes",
+    )
 
     class Meta:
         verbose_name = "Photo Path"
@@ -627,6 +632,14 @@ class PhotoPath(models.Model):
                 # Always update file timestamps to reflect current file state
                 self.file_created_at = file_created_dt
                 self.file_updated_at = file_updated_dt
+
+                # Get file size
+                try:
+                    file_size = os.path.getsize(file_access_path)
+                    self.size = file_size
+                except (OSError, ValueError):
+                    # If we can't get file size, leave field as None
+                    pass
             except (OSError, ValueError):
                 # If we can't get file timestamps, leave fields as None
                 pass

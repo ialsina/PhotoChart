@@ -21,6 +21,7 @@ class PhotoPathSerializer(serializers.ModelSerializer):
             "path",
             "device",
             "photograph",
+            "size",
             "photograph_image_url",
             "photograph_paths_count",
             "photograph_has_errors",
