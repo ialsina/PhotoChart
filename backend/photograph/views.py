@@ -192,7 +192,7 @@ class PhotoPathViewSet(viewsets.ModelViewSet):
 
     queryset = (
         PhotoPath.objects.all()
-        .select_related("photograph", "photograph__image")
+        .select_related("photograph")
         .prefetch_related("photograph__paths", "photograph__albums")
     )
     serializer_class = PhotoPathSerializer
