@@ -15,9 +15,17 @@ from django.conf import settings
 from django.db import transaction
 from tqdm import tqdm
 
-from photograph.models import PhotoPath, Photograph
 from photochart.protocols import calculate_hash as calculate_file_hash
 from photochart.resolution import parse_resolution
+
+try:
+    from photograph.models import PhotoPath, Photograph
+
+    HAS_DJANGO_BACKEND = True
+except (ImportError, ModuleNotFoundError, Exception):
+    PhotoPath = None
+    Photograph = None
+    HAS_DJANGO_BACKEND = False
 
 
 def _setup_logger(log_path: Optional[str] = None) -> Optional[logging.Logger]:
@@ -491,6 +499,13 @@ def ingest_photos(
         "images_stored": 0,
         "errors": [],
     }
+
+    if not HAS_DJANGO_BACKEND:
+        raise ImportError(
+            "Django backend models not available.\n "
+            "Please, run using the Django shell:\n"
+            "`python manage.py shell [-i ipython]`"
+        )
 
     # Set up logger if log path is provided
     logger = _setup_logger(log_path)
