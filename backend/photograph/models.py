@@ -445,6 +445,12 @@ class PhotoPath(models.Model):
         max_length=2048,
         help_text="Path to the photo file. For mounted devices, this is relative to the mount point. For root filesystem, this is an absolute path.",
     )
+    filename = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Filename extracted from the path (the last component of the path)",
+    )
     device = models.CharField(
         max_length=255, help_text="Device identifier where the photo is located"
     )

@@ -395,8 +395,13 @@ def ingest_photos(
                         # a photograph (from hash calculation), it will be used.
                         # We store the relative path (or absolute for root filesystem)
                         # but need to pass the full path to save() for file access
+                        # Extract filename from the path (last component)
+                        filename = (
+                            os.path.basename(path_to_store) if path_to_store else None
+                        )
                         photo_path = PhotoPath(
                             path=path_to_store,
+                            filename=filename,
                             device=device,
                             photograph=photograph,
                         )
