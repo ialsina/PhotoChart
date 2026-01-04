@@ -3,7 +3,7 @@ import { api } from "../api";
 import type { PhotoPath } from "../types";
 
 type NavigationPath = {
-  type: "segment";
+  type: "device" | "segment";
   value: string;
   label: string;
   fullPath: string;
@@ -18,6 +18,7 @@ export function PhotoPaths() {
   const [navigationPath, setNavigationPath] = useState<NavigationPath[]>([]);
   const [sortMode, setSortMode] = useState<SortMode>("id");
   const [ascending, setAscending] = useState<boolean>(true);
+  const [devices, setDevices] = useState<Array<{ device: string; count: number }>>([]);
 
   // Fetch directory structure summary
   const [directoryStructure, setDirectoryStructure] = useState<Array<{
@@ -26,18 +27,29 @@ export function PhotoPaths() {
     count: number;
   }>>([]);
 
+  // Get current device from navigation path
+  const currentDevice = useMemo(() => {
+    const deviceItem = navigationPath.find(item => item.type === "device");
+    return deviceItem ? deviceItem.value : undefined;
+  }, [navigationPath]);
+
+  // Get path segments (excluding device)
+  const pathSegments = useMemo(() => {
+    return navigationPath.filter(item => item.type === "segment");
+  }, [navigationPath]);
+
   const loadPaths = useCallback(async () => {
     try {
       setLoading(true);
 
-      const pathPrefix = navigationPath.length > 0
-        ? navigationPath.map(n => n.value).join("/")
+      const pathPrefix = pathSegments.length > 0
+        ? pathSegments.map(n => n.value).join("/")
         : undefined;
 
       // Fetch paths for the current directory level
       // Use only_direct=true to only get files at this level, not in subdirectories
       // This prevents fetching thousands of paths when navigating directories
-      const allPaths = await api.getAllPhotoPaths(pathPrefix, true);
+      const allPaths = await api.getAllPhotoPaths(pathPrefix, true, currentDevice);
       setPaths(allPaths);
       setError(null);
     } catch (err) {
@@ -45,7 +57,7 @@ export function PhotoPaths() {
     } finally {
       setLoading(false);
     }
-  }, [navigationPath]);
+  }, [pathSegments, currentDevice]);
 
   // Only fetch paths when directory structure indicates there are files at this level
   // This prevents unnecessary pagination requests when only directories are present
@@ -60,15 +72,31 @@ export function PhotoPaths() {
     }
   }, [navigationPath, directoryStructure, loadPaths]);
 
+  // Load devices at root level
+  useEffect(() => {
+    const loadDevices = async () => {
+      try {
+        const devicesList = await api.getPhotoPathDevices();
+        setDevices(devicesList);
+      } catch (err) {
+        console.error("Failed to load devices:", err);
+      }
+    };
+
+    if (navigationPath.length === 0) {
+      loadDevices();
+    }
+  }, [navigationPath]);
+
   useEffect(() => {
     const loadDirectoryStructure = async () => {
       try {
         setLoading(true);
         setError(null);
-        const pathPrefix = navigationPath.length > 0
-          ? navigationPath.map(n => n.value).join("/")
+        const pathPrefix = pathSegments.length > 0
+          ? pathSegments.map(n => n.value).join("/")
           : undefined;
-        const directories = await api.getPhotoPathDirectories(pathPrefix);
+        const directories = await api.getPhotoPathDirectories(pathPrefix, currentDevice);
         setDirectoryStructure(directories);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Failed to load directory structure";
@@ -80,8 +108,13 @@ export function PhotoPaths() {
       }
     };
 
-    loadDirectoryStructure();
-  }, [navigationPath]);
+    // Only load directory structure if we have a device selected
+    if (currentDevice) {
+      loadDirectoryStructure();
+    } else {
+      setDirectoryStructure([]);
+    }
+  }, [pathSegments, currentDevice]);
 
   // Parse paths and build hierarchy (only used when we have actual path data)
   const pathHierarchy = useMemo(() => {
@@ -108,6 +141,14 @@ export function PhotoPaths() {
 
   // Get current view based on navigation path
   const currentView = useMemo(() => {
+    // If no device selected, show devices
+    if (!currentDevice) {
+      return {
+        type: "devices" as const,
+        devices: devices,
+      };
+    }
+
     // Use directory structure from API when available (for hierarchy levels)
     if (directoryStructure.length > 0) {
       const segments = directoryStructure
@@ -125,7 +166,7 @@ export function PhotoPaths() {
     }
 
     // Fallback to path hierarchy when we have actual path data
-    if (navigationPath.length === 0) {
+    if (pathSegments.length === 0) {
       // Show root segments - only directories, not files
       const rootSegments = Object.keys(pathHierarchy).filter(key =>
         Object.keys(pathHierarchy[key].children).length > 0
@@ -142,7 +183,7 @@ export function PhotoPaths() {
     } else {
       // Navigate through hierarchy
       let current = pathHierarchy;
-      for (const nav of navigationPath) {
+      for (const nav of pathSegments) {
         if (!current[nav.value]) {
           return { type: "paths" as const, items: [] };
         }
@@ -170,12 +211,18 @@ export function PhotoPaths() {
         paths: pathsAtLevel,
       };
     }
-  }, [navigationPath, pathHierarchy, directoryStructure, paths]);
+  }, [currentDevice, devices, navigationPath, pathHierarchy, directoryStructure, paths, pathSegments]);
+
+  const navigateToDevice = (device: string) => {
+    setNavigationPath([
+      { type: "device", value: device, label: device, fullPath: device },
+    ]);
+  };
 
   const navigateTo = (segment: string) => {
-    const fullPath = navigationPath.length === 0
+    const fullPath = pathSegments.length === 0
       ? segment
-      : `${navigationPath.map(n => n.value).join("/")}/${segment}`;
+      : `${pathSegments.map(n => n.value).join("/")}/${segment}`;
 
     setNavigationPath([
       ...navigationPath,
@@ -226,12 +273,19 @@ export function PhotoPaths() {
 
   // Get paths that match the current navigation path
   const getFilteredPaths = () => {
-    if (navigationPath.length === 0) {
-      return paths;
+    let filtered = paths;
+
+    // Filter by device if set
+    if (currentDevice) {
+      filtered = filtered.filter(path => path.device === currentDevice);
     }
 
-    const prefix = navigationPath.map(n => n.value).join("/");
-    return paths.filter(path => {
+    if (pathSegments.length === 0) {
+      return filtered;
+    }
+
+    const prefix = pathSegments.map(n => n.value).join("/");
+    return filtered.filter(path => {
       const normalizedPath = path.path.replace(/\\/g, "/");
       return normalizedPath.startsWith(prefix + "/") || normalizedPath === prefix;
     });
@@ -258,10 +312,18 @@ export function PhotoPaths() {
     }
   };
 
+  // Calculate total path count for display
+  const totalPathCount = useMemo(() => {
+    if (!currentDevice) {
+      return devices.reduce((sum, d) => sum + d.count, 0);
+    }
+    return paths.length;
+  }, [currentDevice, devices, paths.length]);
+
   return (
     <div className="photo-paths">
       <div className="photo-paths-header">
-        <h2>Photo Paths ({paths.length})</h2>
+        <h2>Photo Paths ({totalPathCount})</h2>
         {(currentView.type === "root" || currentView.type === "mixed") &&
          (currentView.paths.length > 0 || (currentView.type === "root" && currentView.segments.length === 0)) && (
           <div className="sort-controls">
@@ -281,7 +343,7 @@ export function PhotoPaths() {
           className="breadcrumb-item"
           onClick={() => setNavigationPath([])}
         >
-          All Paths
+          Device
         </button>
         {navigationPath.map((item, index) => (
           <span key={index}>
@@ -297,6 +359,24 @@ export function PhotoPaths() {
       </div>
 
       {/* Current View */}
+      {currentView.type === "devices" && (
+        <div className="hierarchy-section">
+          <h3>Devices</h3>
+          <div className="hierarchy-grid">
+            {currentView.devices.map((device) => (
+              <div
+                key={device.device}
+                className="hierarchy-item"
+                onClick={() => navigateToDevice(device.device)}
+              >
+                <div className="hierarchy-item-name">{device.device}</div>
+                <div className="hierarchy-item-count">{device.count} path{device.count !== 1 ? "s" : ""}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {currentView.type === "root" && (
         <>
           {currentView.segments.length > 0 && (

@@ -209,6 +209,11 @@ class PhotoPathViewSet(viewsets.ModelViewSet):
         """Filter queryset based on query parameters."""
         queryset = super().get_queryset()
 
+        # Filter by device
+        device = self.request.query_params.get("device", None)
+        if device:
+            queryset = queryset.filter(device=device)
+
         # Filter by path prefix
         path_prefix = self.request.query_params.get("path_prefix", None)
         only_direct = (
@@ -306,6 +311,23 @@ class PhotoPathViewSet(viewsets.ModelViewSet):
         return segments
 
     @action(detail=False, methods=["get"])
+    def devices(self, request):
+        """Get list of devices with photo path counts."""
+        from django.db.models import Count
+
+        devices = (
+            PhotoPath.objects.values("device")
+            .annotate(count=Count("id"))
+            .order_by("device")
+        )
+
+        result = [
+            {"device": item["device"], "count": item["count"]} for item in devices
+        ]
+
+        return Response(result)
+
+    @action(detail=False, methods=["get"])
     def directories(self, request):
         """Get directory structure for a given path prefix."""
         import logging
@@ -315,10 +337,18 @@ class PhotoPathViewSet(viewsets.ModelViewSet):
         logger = logging.getLogger(__name__)
 
         try:
+            # Filter by device if provided
+            device = request.query_params.get("device", None)
             path_prefix = request.query_params.get("path_prefix", "")
             normalized_prefix = path_prefix.replace("\\", "/") if path_prefix else ""
 
             # Build queryset - only get paths we need
+            queryset = PhotoPath.objects.all()
+
+            # Filter by device if provided
+            if device:
+                queryset = queryset.filter(device=device)
+
             if normalized_prefix:
                 # Normalize prefix for database query
                 normalized_prefix_clean = normalized_prefix.strip("/")
@@ -331,15 +361,11 @@ class PhotoPathViewSet(viewsets.ModelViewSet):
                 # Pattern 3: prefix exactly (for files, e.g., "home")
                 pattern3 = normalized_prefix_clean
 
-                queryset = PhotoPath.objects.filter(
+                queryset = queryset.filter(
                     Q(path__startswith=pattern1)
                     | Q(path__startswith=pattern2)
                     | Q(path=pattern3)
                 )
-            else:
-                # Root level - use a more efficient approach
-                # Limit the query to a reasonable number for performance
-                queryset = PhotoPath.objects.all()
 
             # For root level, use a much smaller sample to avoid timeout
             # For subdirectories, we can process more since the dataset is smaller

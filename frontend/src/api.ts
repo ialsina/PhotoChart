@@ -124,7 +124,7 @@ export const api = {
   getPhotoPaths: (): Promise<PaginatedResponse<PhotoPath>> =>
     fetchAPI("/photo-paths/"),
 
-  getAllPhotoPaths: (pathPrefix?: string, onlyDirect?: boolean): Promise<PhotoPath[]> => {
+  getAllPhotoPaths: (pathPrefix?: string, onlyDirect?: boolean, device?: string): Promise<PhotoPath[]> => {
     const params: Record<string, string> = {};
     if (pathPrefix) {
       params.path_prefix = pathPrefix;
@@ -132,14 +132,28 @@ export const api = {
     if (onlyDirect) {
       params.only_direct = "true";
     }
+    if (device) {
+      params.device = device;
+    }
     return fetchAllPages<PhotoPath>("/photo-paths/", Object.keys(params).length > 0 ? params : undefined);
   },
 
-  getPhotoPathDirectories: (pathPrefix?: string): Promise<Array<{ name: string; is_directory: boolean; count: number }>> => {
-    const url = pathPrefix
-      ? `/photo-paths/directories/?path_prefix=${encodeURIComponent(pathPrefix)}`
-      : "/photo-paths/directories/";
-    return fetchAPI(url);
+  getPhotoPathDirectories: (pathPrefix?: string, device?: string): Promise<Array<{ name: string; is_directory: boolean; count: number }>> => {
+    const params: Record<string, string> = {};
+    if (pathPrefix) {
+      params.path_prefix = pathPrefix;
+    }
+    if (device) {
+      params.device = device;
+    }
+    const queryString = Object.keys(params).length > 0
+      ? `?${new URLSearchParams(params).toString()}`
+      : "";
+    return fetchAPI(`/photo-paths/directories/${queryString}`);
+  },
+
+  getPhotoPathDevices: (): Promise<Array<{ device: string; count: number }>> => {
+    return fetchAPI("/photo-paths/devices/");
   },
 
   getPhotoPath: (id: number): Promise<PhotoPath> =>
