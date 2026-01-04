@@ -17,11 +17,18 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 
 async function fetchAPI<T>(endpoint: string): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${endpoint}`);
-  if (!response.ok) {
-    throw new Error(`API error: ${response.statusText}`);
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`);
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status} ${response.statusText}`);
+    }
+    return response.json();
+  } catch (err) {
+    if (err instanceof TypeError && err.message.includes('fetch')) {
+      throw new Error(`Network error: Unable to connect to backend at ${API_BASE_URL}. Is the server running?`);
+    }
+    throw err;
   }
-  return response.json();
 }
 
 async function fetchAPIMethod<T>(
@@ -29,21 +36,28 @@ async function fetchAPIMethod<T>(
   method: string,
   body?: unknown
 ): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!response.ok) {
-    throw new Error(`API error: ${response.statusText}`);
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status} ${response.statusText}`);
+    }
+    // Handle 204 No Content responses
+    if (response.status === 204) {
+      return undefined as T;
+    }
+    return response.json();
+  } catch (err) {
+    if (err instanceof TypeError && err.message.includes('fetch')) {
+      throw new Error(`Network error: Unable to connect to backend at ${API_BASE_URL}. Is the server running?`);
+    }
+    throw err;
   }
-  // Handle 204 No Content responses
-  if (response.status === 204) {
-    return undefined as T;
-  }
-  return response.json();
 }
 
 async function fetchAllPages<T>(
@@ -61,14 +75,21 @@ async function fetchAllPages<T>(
 
   let nextUrl: string | null = url;
 
-  while (nextUrl) {
-    const response = await fetch(nextUrl);
-    if (!response.ok) {
-      throw new Error(`API error: ${response.statusText}`);
+  try {
+    while (nextUrl) {
+      const response = await fetch(nextUrl);
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      }
+      const data: PaginatedResponse<T> = await response.json();
+      allItems.push(...data.results);
+      nextUrl = data.next;
     }
-    const data: PaginatedResponse<T> = await response.json();
-    allItems.push(...data.results);
-    nextUrl = data.next;
+  } catch (err) {
+    if (err instanceof TypeError && err.message.includes('fetch')) {
+      throw new Error(`Network error: Unable to connect to backend at ${API_BASE_URL}. Is the server running?`);
+    }
+    throw err;
   }
 
   return allItems;

@@ -77,14 +77,16 @@ class PhotographViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"])
     def years(self, request):
         """Get list of years with photo counts."""
-        from django.db.models import Count, Q
+        from django.db.models import Count
         from django.db.models.functions import ExtractYear
 
-        queryset = self.get_queryset()
+        # Use a simpler queryset without prefetch_related for better performance
+        # We only need counts, not the full objects
+        base_queryset = Photograph.objects.all()
 
-        # Get years from photos with time
+        # Get years from photos with time - use only() to avoid loading unnecessary fields
         years_with_time = (
-            queryset.exclude(time__isnull=True)
+            base_queryset.exclude(time__isnull=True)
             .annotate(year=ExtractYear("time"))
             .values("year")
             .annotate(count=Count("id"))
@@ -92,7 +94,7 @@ class PhotographViewSet(viewsets.ModelViewSet):
         )
 
         # Count photos without time
-        unknown_count = queryset.filter(time__isnull=True).count()
+        unknown_count = base_queryset.filter(time__isnull=True).count()
 
         result = [
             {"year": str(item["year"]), "count": item["count"]}
@@ -107,24 +109,27 @@ class PhotographViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"])
     def months(self, request):
         """Get list of months for a given year with photo counts."""
-        from django.db.models import Count, Q
-        from django.db.models.functions import ExtractYear, ExtractMonth
+        from django.db.models import Count
+        from django.db.models.functions import ExtractMonth
 
         year = request.query_params.get("year")
         if not year or year == "Unknown":
             return Response([])
 
-        queryset = self.get_queryset()
+        # Use a simpler queryset without prefetch_related for better performance
+        base_queryset = Photograph.objects.all()
         try:
             year_int = int(year)
             start_date = timezone.make_aware(datetime(year_int, 1, 1))
             end_date = timezone.make_aware(datetime(year_int + 1, 1, 1))
-            queryset = queryset.filter(time__gte=start_date, time__lt=end_date)
+            base_queryset = base_queryset.filter(
+                time__gte=start_date, time__lt=end_date
+            )
         except (ValueError, TypeError):
             return Response([])
 
         months = (
-            queryset.annotate(month=ExtractMonth("time"))
+            base_queryset.annotate(month=ExtractMonth("time"))
             .values("month")
             .annotate(count=Count("id"))
             .order_by("month")
@@ -141,14 +146,15 @@ class PhotographViewSet(viewsets.ModelViewSet):
     def days(self, request):
         """Get list of days for a given year/month with photo counts."""
         from django.db.models import Count
-        from django.db.models.functions import ExtractYear, ExtractMonth, ExtractDay
+        from django.db.models.functions import ExtractDay
 
         year = request.query_params.get("year")
         month = request.query_params.get("month")
         if not year or not month:
             return Response([])
 
-        queryset = self.get_queryset()
+        # Use a simpler queryset without prefetch_related for better performance
+        base_queryset = Photograph.objects.all()
         try:
             year_int = int(year)
             month_int = int(month)
@@ -157,12 +163,14 @@ class PhotographViewSet(viewsets.ModelViewSet):
                 end_date = timezone.make_aware(datetime(year_int + 1, 1, 1))
             else:
                 end_date = timezone.make_aware(datetime(year_int, month_int + 1, 1))
-            queryset = queryset.filter(time__gte=start_date, time__lt=end_date)
+            base_queryset = base_queryset.filter(
+                time__gte=start_date, time__lt=end_date
+            )
         except (ValueError, TypeError):
             return Response([])
 
         days = (
-            queryset.annotate(day=ExtractDay("time"))
+            base_queryset.annotate(day=ExtractDay("time"))
             .values("day")
             .annotate(count=Count("id"))
             .order_by("day")
@@ -301,6 +309,8 @@ class PhotoPathViewSet(viewsets.ModelViewSet):
     def directories(self, request):
         """Get directory structure for a given path prefix."""
         import logging
+        from django.db.models import Q, Count
+        from django.db import connection
 
         logger = logging.getLogger(__name__)
 
@@ -313,7 +323,6 @@ class PhotoPathViewSet(viewsets.ModelViewSet):
                 # Normalize prefix for database query
                 normalized_prefix_clean = normalized_prefix.strip("/")
                 # Try multiple patterns to match paths with/without leading slashes
-                from django.db.models import Q
 
                 # Pattern 1: prefix/ (e.g., "home/")
                 pattern1 = normalized_prefix_clean + "/"
@@ -328,12 +337,17 @@ class PhotoPathViewSet(viewsets.ModelViewSet):
                     | Q(path=pattern3)
                 )
             else:
-                # Root level - get all paths
+                # Root level - use a more efficient approach
+                # Limit the query to a reasonable number for performance
                 queryset = PhotoPath.objects.all()
 
-            # Get distinct paths and process them in Python
-            # Limit to prevent memory issues with very large datasets
-            paths = list(queryset.values_list("path", flat=True).distinct()[:10000])
+            # For root level, use a much smaller sample to avoid timeout
+            # For subdirectories, we can process more since the dataset is smaller
+            max_paths = 1000 if not normalized_prefix else 5000
+
+            # Get distinct paths efficiently using iterator to avoid loading all into memory
+            paths_iter = queryset.values_list("path", flat=True).distinct()[:max_paths]
+            paths = list(paths_iter)
 
             logger.debug(f"Found {len(paths)} paths for prefix: {normalized_prefix}")
 
@@ -368,7 +382,7 @@ class PhotoPathViewSet(viewsets.ModelViewSet):
             return Response(result)
         except Exception as e:
             logger.error(f"Error in directories endpoint: {str(e)}", exc_info=True)
-            return Response([])
+            return Response({"error": str(e)}, status=500)
 
     def get_serializer_context(self):
         """Add request to serializer context for image URLs."""

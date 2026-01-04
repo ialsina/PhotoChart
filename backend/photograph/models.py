@@ -135,6 +135,7 @@ class Photograph(models.Model):
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["hash"]),
+            models.Index(fields=["time"]),
         ]
 
     def __str__(self):

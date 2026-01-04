@@ -63,13 +63,20 @@ export function PhotoPaths() {
   useEffect(() => {
     const loadDirectoryStructure = async () => {
       try {
+        setLoading(true);
+        setError(null);
         const pathPrefix = navigationPath.length > 0
           ? navigationPath.map(n => n.value).join("/")
           : undefined;
         const directories = await api.getPhotoPathDirectories(pathPrefix);
         setDirectoryStructure(directories);
       } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Failed to load directory structure";
         console.error("Failed to load directory structure:", err);
+        setError(errorMessage);
+        setDirectoryStructure([]);
+      } finally {
+        setLoading(false);
       }
     };
 

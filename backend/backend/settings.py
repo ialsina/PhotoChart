@@ -26,7 +26,7 @@ SECRET_KEY = "django-insecure-hb@)8si=zy^7_j(u40z1a7m)6gsq7ty1#!g6rb5we%%&c7vz_0
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 
 
 # Application definition
@@ -136,10 +136,14 @@ MEDIA_ROOT = config("MEDIA_ROOT", default=BASE_DIR / "media", cast=Path)
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # CORS settings
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",  # Vite default port
-    "http://127.0.0.1:5173",
-]
+# In development, allow all localhost origins
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:5173",  # Vite default port
+        "http://127.0.0.1:5173",
+    ]
 
 CORS_ALLOW_CREDENTIALS = True
 
