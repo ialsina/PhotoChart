@@ -9,7 +9,11 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
+from typing import Optional
+
+from decouple import config
 
 try:
     from rich.console import Console
@@ -28,11 +32,43 @@ from photochart.resolution import get_resolution_presets
 from photochart.metadata import extract_metadata
 
 
+def resolve_ingest_log_path(raw: Optional[str]) -> str:
+    """Turn ``--log`` / ``LOG_DIR`` into a concrete log file path.
+
+    Paths with a file extension are treated as log files. Paths without an
+    extension are treated as directories; the directory must already exist,
+    and logging is written to ``log_YYYYMMDD_HHMMSS.txt`` inside it (same
+    naming as ``log_$(date +%Y%m%d_%H%M%S).txt``).
+    """
+    if not raw or not str(raw).strip():
+        raise ValueError("Log path is empty.")
+    p = Path(raw).expanduser()
+    if p.suffix:
+        return str(p.resolve())
+    rp = p.resolve()
+    if not rp.is_dir():
+        raise ValueError(f"Log directory does not exist or is not a directory: {raw}")
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return str(rp / f"log_{stamp}.txt")
+
+
 def cmd_ingest(args: argparse.Namespace) -> int:
     """Ingest photos from a directory and persist to database."""
     from photochart.ingest import ingest_photos
 
-    log_path = getattr(args, "log", None)
+    raw_log = getattr(args, "log", None)
+    if raw_log is None:
+        raw_log = config("LOG_DIR", default=None)
+    if isinstance(raw_log, str) and not raw_log.strip():
+        raw_log = None
+
+    log_path: Optional[str] = None
+    if raw_log is not None:
+        try:
+            log_path = resolve_ingest_log_path(raw_log)
+        except ValueError as err:
+            print(f"Error: {err}", file=sys.stderr)
+            return 1
 
     # Call the ingestion function
     result = ingest_photos(

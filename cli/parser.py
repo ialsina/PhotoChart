@@ -141,7 +141,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_ing.add_argument(
         "--log",
-        help="Path to log file where detailed error information will be written",
+        default=None,
+        help=(
+            "Log file path, or an existing directory (no file extension) to write "
+            "log_YYYYMMDD_HHMMSS.txt inside (timestamp at run time). "
+            "Defaults to LOG_DIR from the environment when omitted."
+        ),
     )
     p_ing.set_defaults(func=cmd_ingest)
 
