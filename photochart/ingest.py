@@ -231,7 +231,7 @@ def get_image_files(path: str, recursive: bool = True) -> List[Path]:
 def ingest_photos(
     path: str,
     resolution: Optional[str] = None,
-    calculate_checksum: bool = False,
+    calculate_checksum: bool = True,
     recursive: bool = True,
     device: Optional[str] = None,
     store_images: bool = False,
@@ -242,7 +242,7 @@ def ingest_photos(
     This function:
     1. Finds all image files in the given path (recursively or not)
     2. Recognizes which files are pictures
-    3. Calculates checksum if instructed
+    3. Calculates and stores a checksum for each photo (unless disabled)
     4. Optionally stores image files in the database
     5. Creates PhotoPath models (which automatically create/link Photograph models)
 
@@ -255,7 +255,7 @@ def ingest_photos(
             or a preset name (e.g., 'low', 'medium', 'high'). Images will be resized
             to this resolution when processed through backends. If store_images is True,
             images will be stored at this resolution.
-        calculate_checksum: Whether to calculate and store checksum for each photo
+        calculate_checksum: Whether to calculate and store a checksum for each photo (default: True)
         recursive: Whether to search subdirectories recursively
         device: Device identifier (defaults to hostname)
         store_images: Whether to store image files in the Photograph's image field.

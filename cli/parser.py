@@ -115,17 +115,12 @@ def build_parser() -> argparse.ArgumentParser:
             "Use 'pf list-resolutions' to see all available presets."
         ),
     )
-    # Preferred option name
     p_ing.add_argument(
-        "--checksum",
-        action="store_true",
-        help="Calculate and store checksum for each photo",
-    )
-    # Backward-compatible option name
-    p_ing.add_argument(
-        "--hash",
-        action="store_true",
-        help="(Deprecated) Use --checksum. Calculate and store checksum for each photo",
+        "--no-checksum",
+        action="store_false",
+        dest="checksum",
+        default=True,
+        help="Skip calculating and storing checksums for each photo (checksums are computed by default)",
     )
     p_ing.add_argument(
         "--no-recursive",

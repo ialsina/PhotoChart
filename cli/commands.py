@@ -74,8 +74,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     result = ingest_photos(
         path=args.path,
         resolution=getattr(args, "resolution", None),
-        calculate_checksum=getattr(args, "checksum", False)
-        or getattr(args, "hash", False),
+        calculate_checksum=getattr(args, "checksum", True),
         recursive=not getattr(args, "no_recursive", False),
         store_images=getattr(args, "store_images", True),
         log_path=log_path,
