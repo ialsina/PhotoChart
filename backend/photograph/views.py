@@ -328,6 +328,50 @@ class PhotoPathViewSet(viewsets.ModelViewSet):
         return Response(result)
 
     @action(detail=False, methods=["get"])
+    def count(self, request):
+        """Get total count of photo paths for a given device and path prefix."""
+        from django.db.models import Q
+
+        device = request.query_params.get("device", None)
+        path_prefix = request.query_params.get("path_prefix", "")
+        only_direct = request.query_params.get("only_direct", "false").lower() == "true"
+
+        queryset = PhotoPath.objects.all()
+
+        # Filter by device if provided
+        if device:
+            queryset = queryset.filter(device=device)
+
+        # Filter by path prefix if provided
+        if path_prefix:
+            normalized_prefix = path_prefix.replace("\\", "/")
+            if only_direct:
+                # Only count direct children (files in this directory, not in subdirectories)
+                prefix_with_slash = normalized_prefix + "/"
+                queryset = queryset.filter(path__startswith=prefix_with_slash)
+
+                # Filter to only include paths where the part after prefix+"/" has no "/"
+                from django.db import connection
+                import re
+
+                prefix_pattern = re.escape(prefix_with_slash)
+
+                if connection.vendor == "postgresql":
+                    queryset = queryset.extra(
+                        where=["path ~ %s"], params=[rf"^{prefix_pattern}[^/]+$"]
+                    )
+                elif connection.vendor == "mysql":
+                    queryset = queryset.extra(
+                        where=["path REGEXP %s"], params=[rf"^{prefix_pattern}[^/]+$"]
+                    )
+            else:
+                queryset = queryset.filter(path__startswith=normalized_prefix)
+
+        count = queryset.count()
+
+        return Response({"count": count})
+
+    @action(detail=False, methods=["get"])
     def directories(self, request):
         """Get directory structure for a given path prefix."""
         import logging

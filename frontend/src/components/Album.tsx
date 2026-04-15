@@ -102,11 +102,17 @@ export function Album() {
         </button>
       </div>
 
-      {loading ? (
-        <div className="loading">Loading...</div>
-      ) : error ? (
+      {error && !loading && (
         <div className="error">Error: {error}</div>
-      ) : (
+      )}
+
+      {loading && (
+        <div className="loading-content">
+          <div className="loading">Loading...</div>
+        </div>
+      )}
+
+      {!loading && (
         <div className="albums-list">
           {albums.length === 0 ? (
             <p className="empty-state">No albums found. Create your first album!</p>

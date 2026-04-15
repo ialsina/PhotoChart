@@ -138,6 +138,38 @@ export const api = {
     return fetchAllPages<PhotoPath>("/photo-paths/", Object.keys(params).length > 0 ? params : undefined);
   },
 
+  getPhotoPathsPage: (pathPrefix?: string, onlyDirect?: boolean, device?: string, pageUrl?: string): Promise<PaginatedResponse<PhotoPath>> => {
+    if (pageUrl) {
+      // If pageUrl is provided, use it directly (it's already a full URL from the API)
+      // Extract the path from the full URL
+      try {
+        const url = new URL(pageUrl);
+        const path = url.pathname + url.search;
+        return fetchAPI<PaginatedResponse<PhotoPath>>(path);
+      } catch (err) {
+        // If URL parsing fails, try using it as-is (might be relative)
+        return fetchAPI<PaginatedResponse<PhotoPath>>(pageUrl.startsWith('/') ? pageUrl : `/${pageUrl}`);
+      }
+    }
+
+    // Build initial request URL
+    const params: Record<string, string> = {};
+    if (pathPrefix) {
+      params.path_prefix = pathPrefix;
+    }
+    if (onlyDirect) {
+      params.only_direct = "true";
+    }
+    if (device) {
+      params.device = device;
+    }
+
+    const queryString = Object.keys(params).length > 0
+      ? `?${new URLSearchParams(params).toString()}`
+      : "";
+    return fetchAPI<PaginatedResponse<PhotoPath>>(`/photo-paths/${queryString}`);
+  },
+
   getPhotoPathDirectories: (pathPrefix?: string, device?: string): Promise<Array<{ name: string; is_directory: boolean; count: number }>> => {
     const params: Record<string, string> = {};
     if (pathPrefix) {
@@ -154,6 +186,23 @@ export const api = {
 
   getPhotoPathDevices: (): Promise<Array<{ device: string; count: number }>> => {
     return fetchAPI("/photo-paths/devices/");
+  },
+
+  getPhotoPathCount: (pathPrefix?: string, onlyDirect?: boolean, device?: string): Promise<{ count: number }> => {
+    const params: Record<string, string> = {};
+    if (pathPrefix) {
+      params.path_prefix = pathPrefix;
+    }
+    if (onlyDirect) {
+      params.only_direct = "true";
+    }
+    if (device) {
+      params.device = device;
+    }
+    const queryString = Object.keys(params).length > 0
+      ? `?${new URLSearchParams(params).toString()}`
+      : "";
+    return fetchAPI(`/photo-paths/count/${queryString}`);
   },
 
   getPhotoPath: (id: number): Promise<PhotoPath> =>

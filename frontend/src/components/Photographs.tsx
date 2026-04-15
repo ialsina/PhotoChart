@@ -433,12 +433,25 @@ export function Photographs() {
     (navigationPath.length === 2 && !hierarchyData.days)
   );
 
-  if (isActuallyLoading) {
-    return <div className="loading">Loading...</div>;
-  }
-
-  if (error) {
-    return <div className="error">Error: {error}</div>;
+  // Don't return early for loading - show header and breadcrumb always
+  // Only show error early return if it's a critical error
+  if (error && !isActuallyLoading) {
+    return (
+      <div className="photographs">
+        <div className="photographs-header">
+          <h2>Photographs</h2>
+        </div>
+        <div className="breadcrumb">
+          <button
+            className="breadcrumb-item"
+            onClick={() => setNavigationPath([])}
+          >
+            All Photographs
+          </button>
+        </div>
+        <div className="error">Error: {error}</div>
+      </div>
+    );
   }
 
   return (
@@ -478,8 +491,15 @@ export function Photographs() {
         ))}
       </div>
 
+      {/* Loading indicator in content area */}
+      {isActuallyLoading && (
+        <div className="loading-content">
+          <div className="loading">Loading...</div>
+        </div>
+      )}
+
       {/* Current View */}
-      {currentView.type === "years" && (
+      {!isActuallyLoading && currentView.type === "years" && (
         <div className="hierarchy-grid">
           {currentView.items.map((year) => {
             const count = currentView.counts?.[year] ??
@@ -502,7 +522,7 @@ export function Photographs() {
         </div>
       )}
 
-      {currentView.type === "months" && (
+      {!isActuallyLoading && currentView.type === "months" && (
         <div className="hierarchy-grid">
           {currentView.items.map((month) => {
             const count = currentView.counts?.[month] ??
@@ -521,7 +541,7 @@ export function Photographs() {
         </div>
       )}
 
-      {currentView.type === "days" && (
+      {!isActuallyLoading && currentView.type === "days" && (
         <div className="hierarchy-grid">
           {currentView.items.map((day) => {
             const count = currentView.counts?.[day] ??
@@ -540,7 +560,7 @@ export function Photographs() {
         </div>
       )}
 
-      {currentView.type === "photographs" && (
+      {!isActuallyLoading && currentView.type === "photographs" && (
         <>
           {/* Action Bar */}
           {sortedPhotographs.length > 0 && (

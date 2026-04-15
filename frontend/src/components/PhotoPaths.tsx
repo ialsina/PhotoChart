@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { api } from "../api";
 import type { PhotoPath } from "../types";
 
@@ -20,6 +20,17 @@ export function PhotoPaths() {
   const [ascending, setAscending] = useState<boolean>(true);
   const [devices, setDevices] = useState<Array<{ device: string; count: number }>>([]);
 
+  // Pagination state
+  const [nextPageUrl, setNextPageUrl] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+
+  // Total count state (fetched from API, doesn't flicker)
+  const [totalCount, setTotalCount] = useState<number | null>(null);
+
+  // Ref for scroll detection
+  const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
+
   // Fetch directory structure summary
   const [directoryStructure, setDirectoryStructure] = useState<Array<{
     name: string;
@@ -38,53 +49,108 @@ export function PhotoPaths() {
     return navigationPath.filter(item => item.type === "segment");
   }, [navigationPath]);
 
-  const loadPaths = useCallback(async () => {
+  const loadPaths = useCallback(async (reset: boolean = true) => {
+    // Don't load paths if no device is selected
+    if (!currentDevice) {
+      return;
+    }
+
     try {
-      setLoading(true);
+      if (reset) {
+        setLoading(true);
+        setPaths([]);
+        setNextPageUrl(null);
+        setHasMore(false);
+      } else {
+        setLoadingMore(true);
+      }
 
       const pathPrefix = pathSegments.length > 0
         ? pathSegments.map(n => n.value).join("/")
         : undefined;
 
-      // Fetch paths for the current directory level
+      // Fetch first page of paths for the current directory level
       // Use only_direct=true to only get files at this level, not in subdirectories
-      // This prevents fetching thousands of paths when navigating directories
-      const allPaths = await api.getAllPhotoPaths(pathPrefix, true, currentDevice);
-      setPaths(allPaths);
+      const pageUrl = reset ? undefined : (nextPageUrl || undefined);
+      const response = await api.getPhotoPathsPage(pathPrefix, true, currentDevice, pageUrl);
+
+      if (reset) {
+        setPaths(response.results);
+      } else {
+        setPaths(prev => [...prev, ...response.results]);
+      }
+
+      setNextPageUrl(response.next);
+      setHasMore(response.next !== null);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load photo paths");
     } finally {
-      setLoading(false);
+      if (reset) {
+        setLoading(false);
+      } else {
+        setLoadingMore(false);
+      }
     }
-  }, [pathSegments, currentDevice]);
+  }, [pathSegments, currentDevice, nextPageUrl]);
+
+  const loadMorePaths = useCallback(() => {
+    if (!loadingMore && hasMore && nextPageUrl) {
+      loadPaths(false);
+    }
+  }, [loadPaths, loadingMore, hasMore, nextPageUrl]);
 
   // Only fetch paths when directory structure indicates there are files at this level
   // This prevents unnecessary pagination requests when only directories are present
   useEffect(() => {
+    // Only run this effect if we have a device selected
+    if (!currentDevice) {
+      setPaths([]);
+      setNextPageUrl(null);
+      setHasMore(false);
+      return;
+    }
+
+    // Only proceed if we have directory structure loaded
+    if (directoryStructure.length === 0) {
+      return;
+    }
+
     const hasFiles = directoryStructure.some(item => !item.is_directory);
     if (hasFiles) {
-      loadPaths();
-    } else if (directoryStructure.length > 0) {
+      loadPaths(true); // Reset and load first page
+    } else {
       // Only directories, no need to fetch paths yet
       setPaths([]);
-      setLoading(false);
+      setNextPageUrl(null);
+      setHasMore(false);
+      // Loading state is managed by loadDirectoryStructure
     }
-  }, [navigationPath, directoryStructure, loadPaths]);
+  }, [currentDevice, directoryStructure, loadPaths]);
 
   // Load devices at root level
   useEffect(() => {
     const loadDevices = async () => {
       try {
+        setLoading(true);
+        setError(null);
         const devicesList = await api.getPhotoPathDevices();
         setDevices(devicesList);
       } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Failed to load devices";
         console.error("Failed to load devices:", err);
+        setError(errorMessage);
+        setDevices([]);
+      } finally {
+        setLoading(false);
       }
     };
 
     if (navigationPath.length === 0) {
       loadDevices();
+    } else {
+      // If we navigate away from root, clear devices to free memory
+      setDevices([]);
     }
   }, [navigationPath]);
 
@@ -112,7 +178,9 @@ export function PhotoPaths() {
     if (currentDevice) {
       loadDirectoryStructure();
     } else {
+      // Clear directory structure and paths when no device is selected
       setDirectoryStructure([]);
+      setPaths([]);
     }
   }, [pathSegments, currentDevice]);
 
@@ -155,7 +223,6 @@ export function PhotoPaths() {
         .filter(item => item.is_directory)
         .map(item => item.name)
         .sort();
-      const fileItems = directoryStructure.filter(item => !item.is_directory);
 
       return {
         type: "mixed" as const,
@@ -271,33 +338,6 @@ export function PhotoPaths() {
     return sorted;
   };
 
-  // Get paths that match the current navigation path
-  const getFilteredPaths = () => {
-    let filtered = paths;
-
-    // Filter by device if set
-    if (currentDevice) {
-      filtered = filtered.filter(path => path.device === currentDevice);
-    }
-
-    if (pathSegments.length === 0) {
-      return filtered;
-    }
-
-    const prefix = pathSegments.map(n => n.value).join("/");
-    return filtered.filter(path => {
-      const normalizedPath = path.path.replace(/\\/g, "/");
-      return normalizedPath.startsWith(prefix + "/") || normalizedPath === prefix;
-    });
-  };
-
-  if (loading) {
-    return <div className="loading">Loading photo paths...</div>;
-  }
-
-  if (error) {
-    return <div className="error">Error: {error}</div>;
-  }
 
   const getSortModeLabel = () => {
     switch (sortMode) {
@@ -312,13 +352,97 @@ export function PhotoPaths() {
     }
   };
 
+  // Fetch total count when breadcrumb path changes
+  useEffect(() => {
+    const fetchCount = async () => {
+      if (!currentDevice) {
+        // At root level, use sum of device counts
+        const sum = devices.reduce((s, d) => s + d.count, 0);
+        setTotalCount(sum);
+        return;
+      }
+
+      try {
+        const pathPrefix = pathSegments.length > 0
+          ? pathSegments.map(n => n.value).join("/")
+          : undefined;
+        const response = await api.getPhotoPathCount(pathPrefix, true, currentDevice);
+        setTotalCount(response.count);
+      } catch (err) {
+        console.error("Failed to load path count:", err);
+        // Don't set fallback here - let it use the previous value or default
+      }
+    };
+
+    fetchCount();
+  }, [currentDevice, pathSegments, devices]);
+
   // Calculate total path count for display
+  // IMPORTANT: This hook must be called before any early returns
   const totalPathCount = useMemo(() => {
+    // Use totalCount from API if available, otherwise fallback
+    if (totalCount !== null) {
+      return totalCount;
+    }
     if (!currentDevice) {
       return devices.reduce((sum, d) => sum + d.count, 0);
     }
     return paths.length;
-  }, [currentDevice, devices, paths.length]);
+  }, [totalCount, currentDevice, devices, paths.length]);
+
+  // Scroll detection for infinite scrolling
+  useEffect(() => {
+    if (!hasMore || loadingMore || !loadMoreTriggerRef.current) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry.isIntersecting) {
+          loadMorePaths();
+        }
+      },
+      {
+        root: null,
+        rootMargin: '100px', // Start loading when 100px before the trigger
+        threshold: 0.1,
+      }
+    );
+
+    const triggerElement = loadMoreTriggerRef.current;
+    if (triggerElement) {
+      observer.observe(triggerElement);
+    }
+
+    return () => {
+      if (triggerElement) {
+        observer.unobserve(triggerElement);
+      }
+    };
+  }, [hasMore, loadingMore, loadMorePaths]);
+
+  // Early returns must come AFTER all hooks
+  // Don't return early for loading - show header and breadcrumb always
+  // Only show error early return if it's a critical error
+  if (error && !loading) {
+    return (
+      <div className="photo-paths">
+        <div className="photo-paths-header">
+          <h2>Photo Paths</h2>
+        </div>
+        <div className="breadcrumb">
+          <button
+            className="breadcrumb-item"
+            onClick={() => setNavigationPath([])}
+          >
+            Device
+          </button>
+        </div>
+        <div className="error">Error: {error}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="photo-paths">
@@ -359,7 +483,15 @@ export function PhotoPaths() {
       </div>
 
       {/* Current View */}
-      {currentView.type === "devices" && (
+      {loading && (
+        <div className="loading-content">
+          <div className="loading">
+            {!currentDevice ? "Loading devices..." : "Loading photo paths..."}
+          </div>
+        </div>
+      )}
+
+      {!loading && currentView.type === "devices" && (
         <div className="hierarchy-section">
           <h3>Devices</h3>
           <div className="hierarchy-grid">
@@ -377,7 +509,7 @@ export function PhotoPaths() {
         </div>
       )}
 
-      {currentView.type === "root" && (
+      {!loading && currentView.type === "root" && (
         <>
           {currentView.segments.length > 0 && (
             <div className="hierarchy-section">
@@ -492,13 +624,22 @@ export function PhotoPaths() {
                     </div>
                   </div>
                 ))}
+                {/* Loading more indicator */}
+                {hasMore && (
+                  <div ref={loadMoreTriggerRef} className="load-more-trigger" style={{ height: '1px' }} />
+                )}
+                {loadingMore && (
+                  <div className="loading-more">
+                    <div className="loading-more-text">Loading more results...</div>
+                  </div>
+                )}
               </div>
             </div>
           )}
         </>
       )}
 
-      {currentView.type === "mixed" && (
+      {!loading && currentView.type === "mixed" && (
         <>
           {(currentView.segments.length > 0 || (currentView as any).directoryStructure) && (
             <div className="hierarchy-section">
@@ -627,6 +768,15 @@ export function PhotoPaths() {
                     </div>
                   </div>
                 ))}
+                {/* Loading more indicator */}
+                {hasMore && (
+                  <div ref={loadMoreTriggerRef} className="load-more-trigger" style={{ height: '1px' }} />
+                )}
+                {loadingMore && (
+                  <div className="loading-more">
+                    <div className="loading-more-text">Loading more results...</div>
+                  </div>
+                )}
               </div>
             </div>
           )}
