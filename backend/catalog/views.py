@@ -1,9 +1,9 @@
 """API views for the catalog app."""
 
 from rest_framework import viewsets
-from .models import Hash, Directory, DirKind, Location, TimeLoc
+from .models import Checksum, Directory, DirKind, Location, TimeLoc
 from .serializers import (
-    HashSerializer,
+    ChecksumSerializer,
     DirectorySerializer,
     DirKindSerializer,
     LocationSerializer,
@@ -11,11 +11,15 @@ from .serializers import (
 )
 
 
-class HashViewSet(viewsets.ReadOnlyModelViewSet):
-    """ViewSet for viewing Hash instances."""
+class ChecksumViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet for viewing Checksum instances."""
 
-    queryset = Hash.objects.all()
-    serializer_class = HashSerializer
+    queryset = Checksum.objects.all()
+    serializer_class = ChecksumSerializer
+
+
+class HashViewSet(ChecksumViewSet):
+    """Backward-compatible alias for ChecksumViewSet."""
 
 
 class DirectoryViewSet(viewsets.ReadOnlyModelViewSet):

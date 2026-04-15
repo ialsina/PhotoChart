@@ -184,15 +184,21 @@ class PhotographViewSet(viewsets.ModelViewSet):
         )
 
     @action(detail=True, methods=["post"])
-    def compute_hash(self, request, pk=None):
-        """Compute hash from the image file."""
+    def compute_checksum(self, request, pk=None):
+        """Compute checksum from the image file."""
         photograph = self.get_object()
-        hash_value = photograph.compute_hash_from_image()
-        if hash_value:
-            return Response({"hash": hash_value, "status": "success"})
+        checksum_value = photograph.compute_checksum_from_image()
+        if checksum_value:
+            return Response({"checksum": checksum_value, "status": "success"})
         return Response(
-            {"status": "error", "message": "Could not compute hash"}, status=400
+            {"status": "error", "message": "Could not compute checksum"}, status=400
         )
+
+    # Backward-compatible endpoint
+    @action(detail=True, methods=["post"])
+    def compute_hash(self, request, pk=None):
+        """Backward-compatible alias for compute_checksum."""
+        return self.compute_checksum(request, pk=pk)
 
 
 class PhotoPathViewSet(viewsets.ModelViewSet):

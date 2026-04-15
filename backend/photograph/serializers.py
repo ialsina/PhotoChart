@@ -127,7 +127,7 @@ class PhotographSerializer(serializers.ModelSerializer):
         model = Photograph
         fields = [
             "id",
-            "hash",
+            "checksum",
             "thumbnail",
             "image_url",
             "time",

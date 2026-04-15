@@ -23,6 +23,7 @@ from rest_framework.routers import DefaultRouter
 from photograph.views import PhotographViewSet, PhotoPathViewSet
 from catalog.views import (
     HashViewSet,
+    ChecksumViewSet,
     DirectoryViewSet,
     DirKindViewSet,
     LocationViewSet,
@@ -35,6 +36,8 @@ from planner.views import PlannedActionViewSet
 router = DefaultRouter()
 router.register(r"photographs", PhotographViewSet, basename="photograph")
 router.register(r"photo-paths", PhotoPathViewSet, basename="photopath")
+router.register(r"checksums", ChecksumViewSet, basename="checksum")
+# Backward-compatible route
 router.register(r"hashes", HashViewSet, basename="hash")
 router.register(r"directories", DirectoryViewSet, basename="directory")
 router.register(r"dir-kinds", DirKindViewSet, basename="dirkind")

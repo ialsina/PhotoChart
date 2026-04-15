@@ -38,7 +38,8 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     result = ingest_photos(
         path=args.path,
         resolution=getattr(args, "resolution", None),
-        calculate_hash=getattr(args, "hash", False),
+        calculate_checksum=getattr(args, "checksum", False)
+        or getattr(args, "hash", False),
         recursive=not getattr(args, "no_recursive", False),
         store_images=getattr(args, "store_images", True),
         log_path=log_path,
@@ -52,8 +53,8 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         return 1
 
     print(f"Ingested {result['count']} photo(s) from '{args.path}'.")
-    if result.get("hashes_calculated", 0) > 0:
-        print(f"Calculated {result['hashes_calculated']} hash(es).")
+    if result.get("checksums_calculated", 0) > 0:
+        print(f"Calculated {result['checksums_calculated']} checksum(s).")
     if result.get("images_stored", 0) > 0:
         print(f"Stored {result['images_stored']} image(s) in database.")
     if log_path:

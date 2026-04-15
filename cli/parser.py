@@ -101,7 +101,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_ing = sub.add_parser(
         "ingest",
         help="Ingest photos from a directory",
-        description="Ingest photos from a directory, calculate hashes, and persist to database",
+        description="Ingest photos from a directory, calculate checksums, and persist to database",
     )
     p_ing.add_argument(
         "path",
@@ -115,10 +115,17 @@ def build_parser() -> argparse.ArgumentParser:
             "Use 'pf list-resolutions' to see all available presets."
         ),
     )
+    # Preferred option name
+    p_ing.add_argument(
+        "--checksum",
+        action="store_true",
+        help="Calculate and store checksum for each photo",
+    )
+    # Backward-compatible option name
     p_ing.add_argument(
         "--hash",
         action="store_true",
-        help="Calculate and store hash for each photo",
+        help="(Deprecated) Use --checksum. Calculate and store checksum for each photo",
     )
     p_ing.add_argument(
         "--no-recursive",

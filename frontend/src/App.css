@@ -453,12 +453,12 @@
   color: #ff4444;
 }
 
-.photograph-hash {
+.photograph-checksum {
   margin-bottom: 0.75rem;
   font-size: 0.85rem;
 }
 
-.photograph-hash code {
+.photograph-checksum code {
   font-size: 0.8rem;
   color: #646cff;
   background-color: #1a1a1a;
@@ -469,11 +469,11 @@
   margin-top: 0.25rem;
 }
 
-.photograph-hash code.has-errors {
+.photograph-checksum code.has-errors {
   color: #ff4444;
 }
 
-.photograph-hash .no-hash {
+.photograph-checksum .no-checksum {
   color: rgba(255, 255, 255, 0.5);
   font-size: 0.85rem;
 }
@@ -773,25 +773,25 @@
   margin-top: 1rem;
 }
 
-/* Hash Cards */
-.hashes-list {
+/* Checksum Cards */
+.checksums-list {
   display: flex;
   flex-direction: column;
   gap: 1rem;
 }
 
-.hash-card {
+.checksum-card {
   background-color: #2a2a2a;
   border: 1px solid #3a3a3a;
   border-radius: 8px;
   padding: 1rem;
 }
 
-.hash-value {
+.checksum-value {
   margin-bottom: 0.5rem;
 }
 
-.hash-value code {
+.checksum-value code {
   font-size: 0.9rem;
   color: #646cff;
   background-color: #1a1a1a;
@@ -801,7 +801,7 @@
   word-break: break-all;
 }
 
-.hash-path {
+.checksum-path {
   font-family: monospace;
   font-size: 0.85rem;
   color: rgba(255, 255, 255, 0.7);
@@ -953,7 +953,7 @@
 
   .photograph-card,
   .path-card,
-  .hash-card,
+  .checksum-card,
   .directory-card,
   .location-card,
   .timeloc-card {
@@ -972,13 +972,13 @@
     color: rgba(33, 53, 71, 0.4);
   }
 
-  .photograph-hash code,
-  .hash-value code {
+  .photograph-checksum code,
+  .checksum-value code {
     background-color: #ffffff;
     color: #646cff;
   }
 
-  .photograph-hash code.has-errors {
+  .photograph-checksum code.has-errors {
     color: #d32f2f;
   }
 

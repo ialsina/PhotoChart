@@ -637,7 +637,7 @@ export function Photographs() {
                 {photo.image_url ? (
                   <img
                     src={photo.image_url}
-                    alt={photo.hash || `Photo ${photo.id}`}
+                    alt={photo.checksum || `Photo ${photo.id}`}
                     className="photograph-image"
                   />
                 ) : (
@@ -674,18 +674,18 @@ export function Photographs() {
                       <span className="model-value">{photo.model}</span>
                     </div>
                   )}
-                  <div className="photograph-hash">
-                    {photo.hash ? (
+                  <div className="photograph-checksum">
+                    {photo.checksum ? (
                       <div>
-                        <span className="field-label">Hash:</span>{" "}
+                        <span className="field-label">Checksum:</span>{" "}
                         <code className={photo.has_errors ? 'has-errors' : ''}>
-                          {photo.hash.substring(0, 16)}...
+                          {photo.checksum.substring(0, 16)}...
                         </code>
                       </div>
                     ) : (
                       <div>
-                        <span className="field-label">Hash:</span>{" "}
-                        <span className="no-hash">No hash</span>
+                        <span className="field-label">Checksum:</span>{" "}
+                        <span className="no-checksum">No checksum</span>
                       </div>
                     )}
                   </div>

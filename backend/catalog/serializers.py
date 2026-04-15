@@ -1,7 +1,7 @@
 """Serializers for the catalog app."""
 
 from rest_framework import serializers
-from .models import Hash, Directory, DirKind, Location, TimeLoc
+from .models import Checksum, Directory, DirKind, Location, TimeLoc
 
 
 class DirKindSerializer(serializers.ModelSerializer):
@@ -37,12 +37,12 @@ class DirectorySerializer(serializers.ModelSerializer):
         ]
 
 
-class HashSerializer(serializers.ModelSerializer):
-    """Serializer for Hash model."""
+class ChecksumSerializer(serializers.ModelSerializer):
+    """Serializer for Checksum model."""
 
     class Meta:
-        model = Hash
-        fields = ["id", "path", "hash"]
+        model = Checksum
+        fields = ["id", "path", "checksum"]
 
 
 class TimeLocSerializer(serializers.ModelSerializer):

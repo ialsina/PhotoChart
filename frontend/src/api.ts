@@ -3,7 +3,7 @@
 import type {
   Photograph,
   PhotoPath,
-  Hash,
+  Checksum,
   Directory,
   DirKind,
   Location,
@@ -208,12 +208,12 @@ export const api = {
   getPhotoPath: (id: number): Promise<PhotoPath> =>
     fetchAPI(`/photo-paths/${id}/`),
 
-  // Hashes
-  getHashes: (): Promise<PaginatedResponse<Hash>> => fetchAPI("/hashes/"),
+  // Checksums
+  getChecksums: (): Promise<PaginatedResponse<Checksum>> => fetchAPI("/checksums/"),
 
-  getAllHashes: (): Promise<Hash[]> => fetchAllPages<Hash>("/hashes/"),
+  getAllChecksums: (): Promise<Checksum[]> => fetchAllPages<Checksum>("/checksums/"),
 
-  getHash: (id: number): Promise<Hash> => fetchAPI(`/hashes/${id}/`),
+  getChecksum: (id: number): Promise<Checksum> => fetchAPI(`/checksums/${id}/`),
 
   // Directories
   getDirectories: (): Promise<PaginatedResponse<Directory>> =>

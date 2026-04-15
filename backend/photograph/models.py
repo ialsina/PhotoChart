@@ -19,10 +19,10 @@ from django.utils import timezone
 def photograph_upload_path(instance, filename):
     """Generate a dynamic directory structure for photograph storage.
 
-    Creates a tree structure based on hash (if available) or ID to prevent
+    Creates a tree structure based on checksum (if available) or ID to prevent
     directory bloat. Structure examples:
-    - With hash: photographs/ab/cd/ef/abcdef1234567890...jpg
-    - Without hash: photographs/00/01/23/photo_12345.jpg
+    - With checksum: photographs/ab/cd/ef/abcdef1234567890...jpg
+    - Without checksum: photographs/00/01/23/photo_12345.jpg
 
     Args:
         instance: The Photograph instance being saved
@@ -45,20 +45,26 @@ def photograph_upload_path(instance, filename):
     ]:
         ext = ".jpg"
 
-    # Use hash-based structure if hash is available
-    if instance.hash and len(instance.hash) >= 6:
+    # Use checksum-based structure if checksum is available
+    if instance.checksum and len(instance.checksum) >= 6:
         # Split first 6 characters into 3 directory levels (2 chars each)
         # e.g., "abcdef" -> ["ab", "cd", "ef"]
-        hash_prefix = instance.hash[:6]
+        checksum_prefix = instance.checksum[:6]
+        # Keep variable names stable in returned path parts
+        hash_prefix = checksum_prefix
         dir1 = hash_prefix[0:2]
         dir2 = hash_prefix[2:4]
         dir3 = hash_prefix[4:6]
 
-        # Use full hash as filename (or first 16 chars for shorter paths)
-        file_hash = instance.hash[:16] if len(instance.hash) >= 16 else instance.hash
-        return f"photographs/{dir1}/{dir2}/{dir3}/{file_hash}{ext}"
+        # Use full checksum as filename (or first 16 chars for shorter paths)
+        file_checksum = (
+            instance.checksum[:16]
+            if len(instance.checksum) >= 16
+            else instance.checksum
+        )
+        return f"photographs/{dir1}/{dir2}/{dir3}/{file_checksum}{ext}"
 
-    # Fallback to ID-based structure if no hash
+    # Fallback to ID-based structure if no checksum
     if instance.pk:
         # Convert ID to string and pad with zeros
         id_str = str(instance.pk).zfill(8)
@@ -84,20 +90,20 @@ def photograph_upload_path(instance, filename):
 class Photograph(models.Model):
     """Photograph model storing photo metadata.
 
-    Represents a photograph with optional hash and thumbnail file.
-    The hash can be computed using the calculate_hash function from
+    Represents a photograph with optional checksum and thumbnail file.
+    The checksum can be computed using the calculate_checksum function from
     photochart.protocols.
     """
 
-    hash = models.CharField(
+    checksum = models.CharField(
         max_length=32,
         null=True,
         blank=True,
-        help_text="MD5 hash of the photo file (32 characters)",
+        help_text="Checksum of the photo file (32 hex characters)",
         validators=[
             RegexValidator(
                 regex=r"^[a-f0-9]{32}$",
-                message="Hash must be a 32-character hexadecimal string",
+                message="Checksum must be a 32-character hexadecimal string",
             )
         ],
     )
@@ -134,13 +140,13 @@ class Photograph(models.Model):
         verbose_name_plural = "Photographs"
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["hash"]),
+            models.Index(fields=["checksum"]),
             models.Index(fields=["time"]),
         ]
 
     def __str__(self):
-        if self.hash:
-            return f"Photograph ({self.hash[:8]}...)"
+        if self.checksum:
+            return f"Photograph ({self.checksum[:8]}...)"
         elif self.thumbnail:
             return f"Photograph ({self.thumbnail.name})"
         else:
@@ -169,45 +175,45 @@ class Photograph(models.Model):
             self.save(update_fields=["has_errors"])
             return None
 
-    def compute_hash_from_image(self):
-        """Compute and set the hash from the image file if available.
+    def compute_checksum_from_image(self):
+        """Compute and set the checksum from the image file if available.
 
-        Uses the calculate_hash function from photochart.protocols.
+        Uses the calculate_checksum function from photochart.protocols.
 
         Returns:
-            The computed hash string, or None if computation fails
+            The computed checksum string, or None if computation fails
         """
         try:
             if self.thumbnail and self.thumbnail.path:
-                from photochart.protocols import calculate_hash
+                from photochart.protocols import calculate_checksum
 
-                hash_value = calculate_hash(self.thumbnail.path)
-                if hash_value:
-                    self.hash = hash_value
-                    self.save(update_fields=["hash"])
+                checksum_value = calculate_checksum(self.thumbnail.path)
+                if checksum_value:
+                    self.checksum = checksum_value
+                    self.save(update_fields=["checksum"])
                 else:
-                    # Hash computation failed (returned None)
+                    # Checksum computation failed (returned None)
                     self.has_errors = True
                     self.save(update_fields=["has_errors"])
-                return hash_value
+                return checksum_value
             # No image or path available - not an error, just can't compute
             return None
         except Exception:
-            # Any exception during hash computation
+            # Any exception during checksum computation
             self.has_errors = True
             self.save(update_fields=["has_errors"])
             return None
 
-    def compute_hash_from_file(self, file_path):
-        """Compute and set the hash from an external file path.
+    def compute_checksum_from_file(self, file_path):
+        """Compute and set the checksum from an external file path.
 
-        Uses the calculate_hash function from photochart.protocols.
+        Uses the calculate_checksum function from photochart.protocols.
 
         Args:
-            file_path: Path to the file to compute hash from
+            file_path: Path to the file to compute checksum from
 
         Returns:
-            The computed hash string, or None if computation fails
+            The computed checksum string, or None if computation fails
         """
         try:
             if not file_path or not os.path.exists(file_path):
@@ -215,22 +221,29 @@ class Photograph(models.Model):
                 self.save(update_fields=["has_errors"])
                 return None
 
-            from photochart.protocols import calculate_hash
+            from photochart.protocols import calculate_checksum
 
-            hash_value = calculate_hash(file_path)
-            if hash_value:
-                self.hash = hash_value
-                self.save(update_fields=["hash"])
+            checksum_value = calculate_checksum(file_path)
+            if checksum_value:
+                self.checksum = checksum_value
+                self.save(update_fields=["checksum"])
             else:
-                # Hash computation failed
+                # Checksum computation failed
                 self.has_errors = True
                 self.save(update_fields=["has_errors"])
-            return hash_value
+            return checksum_value
         except Exception:
-            # Any exception during hash computation
+            # Any exception during checksum computation
             self.has_errors = True
             self.save(update_fields=["has_errors"])
             return None
+
+    # Backward-compatible method names (older API / callers)
+    def compute_hash_from_image(self):
+        return self.compute_checksum_from_image()
+
+    def compute_hash_from_file(self, file_path):
+        return self.compute_checksum_from_file(file_path)
 
     def _generate_timestamp_filename(self, original_file_path, extension=None):
         """Generate a timestamp-based filename to avoid clashes.
@@ -565,13 +578,13 @@ class PhotoPath(models.Model):
 
         When a PhotoPath is saved and no photograph is linked, this will:
         1. Check if the file at the path exists
-        2. Compute the hash from the file
-        3. Find or create a Photograph with that hash
+        2. Compute the checksum from the file
+        3. Find or create a Photograph with that checksum
         4. Optionally store the image file if store_image is True
         5. Link this PhotoPath to the Photograph
 
-        If a Photograph with the same hash already exists, it will be linked.
-        Otherwise, a new Photograph will be created with the computed hash.
+        If a Photograph with the same checksum already exists, it will be linked.
+        Otherwise, a new Photograph will be created with the computed checksum.
 
         Keyword Args:
             store_image: If True, store the image file in the Photograph's thumbnail field
@@ -658,27 +671,27 @@ class PhotoPath(models.Model):
             and os.path.exists(file_access_path)
         ):
             try:
-                from photochart.protocols import calculate_hash
+                from photochart.protocols import calculate_checksum
 
-                # Compute hash from the file
-                hash_value = calculate_hash(file_access_path)
+                # Compute checksum from the file
+                checksum_value = calculate_checksum(file_access_path)
 
-                if hash_value:
-                    # Find or create a Photograph with this hash
+                if checksum_value:
+                    # Find or create a Photograph with this checksum
                     photograph, created = Photograph.objects.get_or_create(
-                        hash=hash_value, defaults={}
+                        checksum=checksum_value, defaults={}
                     )
 
                     # Link this PhotoPath to the Photograph
                     self.photograph = photograph
                 else:
-                    # Hash computation failed - create photograph without hash and mark error
+                    # Checksum computation failed - create photograph without checksum and mark error
                     photograph = Photograph.objects.create()
                     photograph.has_errors = True
                     photograph.save(update_fields=["has_errors"])
                     self.photograph = photograph
             except Exception:
-                # Any error during hash computation or photograph creation
+                # Any error during checksum computation or photograph creation
                 photograph = Photograph.objects.create()
                 photograph.has_errors = True
                 photograph.save(update_fields=["has_errors"])

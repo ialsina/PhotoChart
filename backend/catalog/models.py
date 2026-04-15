@@ -5,7 +5,7 @@ It handles photo metadata, directory organization, and provides functionality fo
 finding duplicates and managing photo locations.
 
 The models correspond to the original SQLite schema:
-- Hash: File paths and their MD5 hashes
+- Checksum: File paths and their checksums
 - Directories: Directory paths and metadata
 - DirKinds: Directory type definitions
 - TimeLoc: Timestamp and location data
@@ -91,38 +91,38 @@ class Directory(models.Model):
         return self.path
 
 
-class Hash(models.Model):
-    """File paths and their MD5 hashes.
+class Checksum(models.Model):
+    """File paths and their checksums.
 
-    Stores photo file paths along with their MD5 hash values for
+    Stores photo file paths along with their checksum values for
     duplicate detection and file identification.
     """
 
     path = models.CharField(
         max_length=2048, unique=True, help_text="Full path to the photo file"
     )
-    hash = models.CharField(
+    checksum = models.CharField(
         max_length=32,
-        help_text="MD5 hash of the file (32 characters)",
+        help_text="Checksum of the file (32 hex characters)",
         validators=[
             RegexValidator(
                 regex=r"^[a-f0-9]{32}$",
-                message="Hash must be a 32-character hexadecimal string",
+                message="Checksum must be a 32-character hexadecimal string",
             )
         ],
     )
 
     class Meta:
         db_table = "Hash"
-        verbose_name = "Photo Hash"
-        verbose_name_plural = "Photo Hashes"
+        verbose_name = "Photo Checksum"
+        verbose_name_plural = "Photo Checksums"
         ordering = ["path"]
         indexes = [
-            models.Index(fields=["hash"]),
+            models.Index(fields=["checksum"]),
         ]
 
     def __str__(self):
-        return f"{self.path} ({self.hash[:8]}...)"
+        return f"{self.path} ({self.checksum[:8]}...)"
 
 
 class TimeLoc(models.Model):

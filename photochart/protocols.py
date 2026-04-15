@@ -15,6 +15,7 @@ Key features:
 import os
 import shutil
 import hashlib
+from zlib import crc32
 from logging import Logger
 from typing import Optional
 
@@ -23,32 +24,55 @@ from .log import get_logger
 LOGGER = get_logger(__name__)
 
 
-def calculate_hash(path: str, logger: Logger = LOGGER) -> Optional[str]:
-    """Calculate MD5 hash of a file for integrity checking.
+def calculate_checksum(path: str, logger: Logger = LOGGER) -> Optional[str]:
+    """Calculate a fast checksum of a file for integrity checking.
 
     This function reads the file in chunks to handle large files efficiently
-    and calculates an MD5 hash for integrity verification.
+    and calculates a checksum for integrity verification.
 
     Args:
-        path: Path to the file to hash
+        path: Path to the file to checksum
         logger: Logger instance for error reporting
 
     Returns:
-        MD5 hash as a hexadecimal string, or None if hashing fails
+        Checksum as a hexadecimal string, or None if computation fails
 
     Note:
-        Uses a chunk size of 4096 bytes for efficient memory usage
+        Prefers XXH3-128 when available (very fast, 32-hex chars). Falls back
+        to a CRC32-based checksum if xxhash is not installed.
     """
-    hash_md5 = hashlib.md5()
+    # Keep output length stable (32 hex chars) for storage/UI compatibility.
+    try:
+        import xxhash  # type: ignore
+
+        hasher = xxhash.xxh3_128()
+        try:
+            with open(path, "rb") as f:
+                for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                    hasher.update(chunk)
+            return hasher.hexdigest()
+        except Exception as exc:
+            logger.error("Failed to calculate checksum for %s: %s", path, exc)
+            return None
+    except Exception:
+        # Fall back below if xxhash import isn't available.
+        pass
+
+    checksum = 0
     try:
         with open(path, "rb") as f:
-            # Read file in chunks to handle large files efficiently
-            for chunk in iter(lambda: f.read(4096), b""):
-                hash_md5.update(chunk)
-        return hash_md5.hexdigest()
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                checksum = crc32(chunk, checksum)
+        # Expand CRC32 (8 hex chars) to a stable 32-char string.
+        return f"{checksum & 0xFFFFFFFF:08x}".ljust(32, "0")
     except Exception as exc:
-        logger.error("Failed to calculate hash for %s: %s", path, exc)
+        logger.error("Failed to calculate checksum for %s: %s", path, exc)
         return None
+
+
+def calculate_hash(path: str, logger: Logger = LOGGER) -> Optional[str]:
+    """Backward-compatible alias for calculate_checksum()."""
+    return calculate_checksum(path, logger=logger)
 
 
 def check_disk_space(path: str, required_size: int, logger: Logger = LOGGER) -> bool:
@@ -117,7 +141,7 @@ def mv(src: str, dst: str, logger: Logger = LOGGER) -> None:
     This function implements a safe file move operation with the following features:
     - Space availability verification
     - Atomic operation using temporary files
-    - Integrity verification through hash checking
+    - Integrity verification through checksum checking
     - Comprehensive error handling and cleanup
 
     Args:
@@ -148,11 +172,11 @@ def mv(src: str, dst: str, logger: Logger = LOGGER) -> None:
         # Perform chunked copy to temporary location
         cp(src, temp_dst)
 
-        # Verify file integrity through hash comparison
-        src_hash = calculate_hash(src)
-        dst_hash = calculate_hash(temp_dst)
+        # Verify file integrity through checksum comparison
+        src_checksum = calculate_checksum(src)
+        dst_checksum = calculate_checksum(temp_dst)
 
-        if src_hash and dst_hash and src_hash == dst_hash:
+        if src_checksum and dst_checksum and src_checksum == dst_checksum:
             logger.info("Integrity check passed for file %s", src)
             # Atomic rename to final destination
             os.rename(temp_dst, dst)

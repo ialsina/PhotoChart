@@ -11,7 +11,7 @@ export interface Album {
 
 export interface Photograph {
   id: number;
-  hash: string | null;
+  checksum: string | null;
   image: string | null;
   image_url: string | null;
   time: string | null;
@@ -42,10 +42,10 @@ export interface PhotoPath {
   updated_at: string;
 }
 
-export interface Hash {
+export interface Checksum {
   id: number;
   path: string;
-  hash: string;
+  checksum: string;
 }
 
 export interface DirKind {

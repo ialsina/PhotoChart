@@ -38,6 +38,7 @@ dependencies = [
   "setuptools==70.1.0",
   "sysrsync==1.1.1",
   "tqdm==4.66.4",
+  "xxhash>=3.5.0",
 ]
 
 [project.optional-dependencies]

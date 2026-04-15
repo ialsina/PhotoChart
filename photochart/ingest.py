@@ -1,7 +1,7 @@
 """Photo ingestion functionality.
 
 This module provides functions for ingesting photos from directories,
-calculating hashes, and storing them in the database.
+calculating checksums, and storing them in the database.
 """
 
 import os
@@ -15,7 +15,7 @@ from django.conf import settings
 from django.db import transaction
 from tqdm import tqdm
 
-from photochart.protocols import calculate_hash as calculate_file_hash
+from photochart.protocols import calculate_checksum as calculate_file_checksum
 from photochart.resolution import parse_resolution
 from photochart.device import get_device_name, get_mount_point
 
@@ -231,7 +231,7 @@ def get_image_files(path: str, recursive: bool = True) -> List[Path]:
 def ingest_photos(
     path: str,
     resolution: Optional[str] = None,
-    calculate_hash: bool = False,
+    calculate_checksum: bool = False,
     recursive: bool = True,
     device: Optional[str] = None,
     store_images: bool = False,
@@ -242,7 +242,7 @@ def ingest_photos(
     This function:
     1. Finds all image files in the given path (recursively or not)
     2. Recognizes which files are pictures
-    3. Calculates hash if instructed
+    3. Calculates checksum if instructed
     4. Optionally stores image files in the database
     5. Creates PhotoPath models (which automatically create/link Photograph models)
 
@@ -255,7 +255,7 @@ def ingest_photos(
             or a preset name (e.g., 'low', 'medium', 'high'). Images will be resized
             to this resolution when processed through backends. If store_images is True,
             images will be stored at this resolution.
-        calculate_hash: Whether to calculate and store hash for each photo
+        calculate_checksum: Whether to calculate and store checksum for each photo
         recursive: Whether to search subdirectories recursively
         device: Device identifier (defaults to hostname)
         store_images: Whether to store image files in the Photograph's image field.
@@ -268,14 +268,14 @@ def ingest_photos(
         Dictionary with:
             - success: bool indicating if ingestion was successful
             - count: number of photos ingested
-            - hashes_calculated: number of hashes calculated
+            - checksums_calculated: number of checksums calculated
             - images_stored: number of images stored (if store_images=True)
             - errors: list of error messages
     """
     result = {
         "success": True,
         "count": 0,
-        "hashes_calculated": 0,
+        "checksums_calculated": 0,
         "images_stored": 0,
         "errors": [],
     }
@@ -292,7 +292,7 @@ def ingest_photos(
     if logger:
         logger.info(f"Starting photo ingestion from: {path}")
         logger.info(
-            f"Parameters: resolution={resolution}, calculate_hash={calculate_hash}, "
+            f"Parameters: resolution={resolution}, calculate_checksum={calculate_checksum}, "
             f"recursive={recursive}, store_images={store_images}"
         )
 
@@ -377,22 +377,22 @@ def ingest_photos(
                             pbar.update(1)
                             continue
 
-                        # If hash calculation is requested, do it before creating PhotoPath
-                        # This way the Photograph will be created with the hash
+                        # If checksum calculation is requested, do it before creating PhotoPath
+                        # This way the Photograph will be created with the checksum
                         photograph = None
-                        if calculate_hash:
-                            hash_value = calculate_file_hash(file_path_str)
-                            if hash_value:
-                                # Check if Photograph with this hash exists
+                        if calculate_checksum:
+                            checksum_value = calculate_file_checksum(file_path_str)
+                            if checksum_value:
+                                # Check if Photograph with this checksum exists
                                 photograph, created = Photograph.objects.get_or_create(
-                                    hash=hash_value, defaults={}
+                                    checksum=checksum_value, defaults={}
                                 )
-                                result["hashes_calculated"] += 1
+                                result["checksums_calculated"] += 1
 
                         # Create PhotoPath
                         # Note: The save() method will automatically create/link Photograph
                         # if the file exists and no photograph is set. If we already have
-                        # a photograph (from hash calculation), it will be used.
+                        # a photograph (from checksum calculation), it will be used.
                         # We store the relative path (or absolute for root filesystem)
                         # but need to pass the full path to save() for file access
                         # Extract filename from the path (last component)
@@ -432,7 +432,7 @@ def ingest_photos(
                                 f"Error processing {file_path_str}: "
                                 "Photograph has_errors flag is set. "
                                 "This indicates an error occurred during image processing, "
-                                "EXIF extraction, or hash computation."
+                                "EXIF extraction, or checksum computation."
                             )
                             result["errors"].append(error_msg)
 
@@ -444,7 +444,7 @@ def ingest_photos(
                                     f"has_errors=True. "
                                     f"This error was caught silently in model methods. "
                                     f"Possible causes: EXIF extraction failure, "
-                                    f"hash computation failure, or image processing error.",
+                                    f"checksum computation failure, or image processing error.",
                                     extra={
                                         "file_path": file_path_str,
                                         "photograph_id": photo_path.photograph.id,
