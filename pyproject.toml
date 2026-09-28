@@ -63,6 +63,9 @@ nef = [
 remote = [
   "paramiko>=3.4.0",
 ]
+s3 = [
+  "boto3>=1.35.0",
+]
 
 [tool.setuptools]
 include-package-data = true

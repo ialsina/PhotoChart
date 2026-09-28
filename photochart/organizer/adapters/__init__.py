@@ -7,6 +7,7 @@ from .pcloud_drive import PCloudDriveAdapter
 from .pcloud_api import PCloudApiAdapter
 from .webdav import NextcloudAdapter, WebDavAdapter
 from .sftp import SftpAdapter
+from .s3 import S3Adapter
 from ..config import OrganizerConfig
 from ..storage import StorageAdapter
 
@@ -56,6 +57,20 @@ def build_adapter(config: OrganizerConfig) -> StorageAdapter:
             key_filename=options.get("key_filename"),
             known_hosts=options.get("known_hosts"),
         )
+    if config.adapter == "s3":
+        access_key = options.get("access_key_id")
+        if options.get("access_key_id_env"):
+            access_key = os.environ.get(str(options["access_key_id_env"]))
+        secret_key = options.get("secret_access_key")
+        if options.get("secret_access_key_env"):
+            secret_key = os.environ.get(str(options["secret_access_key_env"]))
+        return S3Adapter(
+            str(options["bucket"]),
+            endpoint_url=options.get("endpoint_url"),
+            region_name=options.get("region_name"),
+            access_key_id=access_key,
+            secret_access_key=secret_key,
+        )
     raise ValueError(f"Unknown or unavailable adapter: {config.adapter}")
 
 
@@ -64,6 +79,7 @@ __all__ = [
     "NextcloudAdapter",
     "PCloudApiAdapter",
     "PCloudDriveAdapter",
+    "S3Adapter",
     "SftpAdapter",
     "WebDavAdapter",
     "build_adapter",
