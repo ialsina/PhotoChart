@@ -30,6 +30,7 @@ class OrganizerConfig:
     source: str
     destination: str
     adapter: str = "local"
+    adapter_options: Mapping[str, Any] = field(default_factory=dict)
     pattern: str = "%Y/%YQ%Q/%Y%M%D"
     quarantine: str | None = None
     timezone: str = "UTC"
@@ -109,6 +110,7 @@ def config_from_mapping(data: Mapping[str, Any]) -> OrganizerConfig:
         source=str(source.get("path", data.get("source_path", ""))),
         destination=str(destination.get("path", data.get("destination_path", ""))),
         adapter=str(adapter.get("type", "local")),
+        adapter_options={key: value for key, value in adapter.items() if key != "type"},
         pattern=str(destination.get("pattern", "%Y/%YQ%Q/%Y%M%D")),
         quarantine=(
             data.get("quarantine", {}).get("path")

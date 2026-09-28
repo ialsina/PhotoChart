@@ -100,16 +100,12 @@ def cmd_ingest(args: argparse.Namespace) -> int:
 
 def cmd_organize(args: argparse.Namespace) -> int:
     """Run the storage-independent organizer once."""
-    from photochart.organizer.adapters import LocalFilesystemAdapter
+    from photochart.organizer.adapters import build_adapter
     from photochart.organizer.config import load_config
     from photochart.organizer.service import Organizer
 
     try:
         organizer_config = load_config(args.config)
-        if organizer_config.adapter not in {"local", "pcloud_drive"}:
-            raise ValueError(
-                f"Adapter '{organizer_config.adapter}' is not installed yet"
-            )
         overrides = {}
         if args.pattern:
             overrides["pattern"] = args.pattern
@@ -120,7 +116,7 @@ def cmd_organize(args: argparse.Namespace) -> int:
         if overrides:
             organizer_config = replace(organizer_config, **overrides)
 
-        organizer = Organizer(LocalFilesystemAdapter(), organizer_config)
+        organizer = Organizer(build_adapter(organizer_config), organizer_config)
         batches = (
             organizer.watch(dry_run=args.dry_run)
             if args.organize_action == "watch"
