@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -36,6 +37,9 @@ class OrganizerConfig:
     duplicate_detection: str = "size_then_hash"
     mode: str = "move"
     workers: int = 1
+    process_after: datetime | None = None
+    include_first: bool = True
+    day_starts_at: float = 0
     media_extensions: tuple[str, ...] = field(
         default=(
             ".jpg",
@@ -75,6 +79,8 @@ class OrganizerConfig:
             raise ValueError("unsupported collision policy")
         if self.workers < 1:
             raise ValueError("workers must be at least one")
+        if not 0 <= self.day_starts_at < 24:
+            raise ValueError("day_starts_at must be between 0 and 24")
 
 
 def _nested(mapping: Mapping[str, Any], key: str, default: Any = None) -> Any:
@@ -92,6 +98,10 @@ def config_from_mapping(data: Mapping[str, Any]) -> OrganizerConfig:
     media = _nested(data, "media", {})
     duplicate = _nested(data, "duplicate_detection", {})
     collision = _nested(data, "collision", {})
+    date = _nested(data, "date", {})
+    process_after = date.get("process_after")
+    if isinstance(process_after, str):
+        process_after = datetime.fromisoformat(process_after)
 
     return OrganizerConfig(
         source=str(source.get("path", data.get("source_path", ""))),
@@ -112,6 +122,9 @@ def config_from_mapping(data: Mapping[str, Any]) -> OrganizerConfig:
         duplicate_detection=str(duplicate.get("mode", "size_then_hash")),
         mode=str(data.get("mode", "move")),
         workers=int(data.get("workers", 1)),
+        process_after=process_after,
+        include_first=bool(date.get("include_first", True)),
+        day_starts_at=float(date.get("day_starts_at", 0)),
         media_extensions=tuple(
             extension.lower()
             for extension in media.get(

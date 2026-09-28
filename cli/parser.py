@@ -22,6 +22,7 @@ from .commands import (
     cmd_convert,
     cmd_list_resolutions,
     cmd_info,
+    cmd_organize,
     HAS_RICH,
 )
 
@@ -196,6 +197,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to the image file to inspect",
     )
     p_info.set_defaults(func=cmd_info)
+
+    # organize
+    p_org = sub.add_parser(
+        "organize",
+        help="Classify media into date-based paths",
+        description="Scan and safely copy or move media using organizer configuration",
+    )
+    org_sub = p_org.add_subparsers(dest="organize_action", required=True)
+    for action in ("scan", "once"):
+        action_parser = org_sub.add_parser(action)
+        action_parser.add_argument(
+            "config", help="Path to organizer YAML configuration"
+        )
+        action_parser.add_argument("--dry-run", action="store_true")
+        action_parser.add_argument("--pattern", help="Override destination pattern")
+        mode = action_parser.add_mutually_exclusive_group()
+        mode.add_argument("--copy", action="store_true")
+        mode.add_argument("--move", action="store_true")
+        action_parser.set_defaults(func=cmd_organize)
 
     return p
 

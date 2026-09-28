@@ -7,8 +7,10 @@ All commands use Django ORM.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
+from dataclasses import asdict, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -94,6 +96,43 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         print(f"Log file written to: {log_path}")
 
     return 0
+
+
+def cmd_organize(args: argparse.Namespace) -> int:
+    """Run the storage-independent organizer once."""
+    from photochart.organizer.adapters import LocalFilesystemAdapter
+    from photochart.organizer.config import load_config
+    from photochart.organizer.service import Organizer
+
+    try:
+        organizer_config = load_config(args.config)
+        if organizer_config.adapter not in {"local", "pcloud_drive"}:
+            raise ValueError(
+                f"Adapter '{organizer_config.adapter}' is not installed yet"
+            )
+        overrides = {}
+        if args.pattern:
+            overrides["pattern"] = args.pattern
+        if args.copy:
+            overrides["mode"] = "copy"
+        elif args.move:
+            overrides["mode"] = "move"
+        if overrides:
+            organizer_config = replace(organizer_config, **overrides)
+
+        results = Organizer(LocalFilesystemAdapter(), organizer_config).run_once(
+            dry_run=args.dry_run
+        )
+        for result in results:
+            payload = asdict(result)
+            payload["status"] = result.status.value
+            if result.date_result:
+                payload["date_result"]["value"] = result.date_result.value.isoformat()
+            print(json.dumps(payload, default=str, sort_keys=True))
+        return 1 if any(result.status.value == "failed" for result in results) else 0
+    except Exception as exc:
+        print(f"Organizer failed: {exc}", file=sys.stderr)
+        return 1
 
 
 def cmd_convert(args: argparse.Namespace) -> int:
