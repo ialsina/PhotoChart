@@ -37,6 +37,7 @@ class OrganizerConfig:
     duplicate_detection: str = "size_then_hash"
     mode: str = "move"
     workers: int = 1
+    scan_interval_seconds: float = 60
     process_after: datetime | None = None
     include_first: bool = True
     day_starts_at: float = 0
@@ -95,6 +96,7 @@ def config_from_mapping(data: Mapping[str, Any]) -> OrganizerConfig:
     metadata = _nested(data, "metadata", {})
     stability = _nested(data, "stability", {})
     retry = _nested(data, "retry", {})
+    scan = _nested(data, "scan", {})
     media = _nested(data, "media", {})
     duplicate = _nested(data, "duplicate_detection", {})
     collision = _nested(data, "collision", {})
@@ -122,6 +124,7 @@ def config_from_mapping(data: Mapping[str, Any]) -> OrganizerConfig:
         duplicate_detection=str(duplicate.get("mode", "size_then_hash")),
         mode=str(data.get("mode", "move")),
         workers=int(data.get("workers", 1)),
+        scan_interval_seconds=float(scan.get("interval_seconds", 60)),
         process_after=process_after,
         include_first=bool(date.get("include_first", True)),
         day_starts_at=float(date.get("day_starts_at", 0)),

@@ -120,16 +120,27 @@ def cmd_organize(args: argparse.Namespace) -> int:
         if overrides:
             organizer_config = replace(organizer_config, **overrides)
 
-        results = Organizer(LocalFilesystemAdapter(), organizer_config).run_once(
-            dry_run=args.dry_run
+        organizer = Organizer(LocalFilesystemAdapter(), organizer_config)
+        batches = (
+            organizer.watch(dry_run=args.dry_run)
+            if args.organize_action == "watch"
+            else [organizer.run_once(dry_run=args.dry_run)]
         )
-        for result in results:
-            payload = asdict(result)
-            payload["status"] = result.status.value
-            if result.date_result:
-                payload["date_result"]["value"] = result.date_result.value.isoformat()
-            print(json.dumps(payload, default=str, sort_keys=True))
-        return 1 if any(result.status.value == "failed" for result in results) else 0
+        failed = False
+        try:
+            for results in batches:
+                for result in results:
+                    payload = asdict(result)
+                    payload["status"] = result.status.value
+                    if result.date_result:
+                        payload["date_result"][
+                            "value"
+                        ] = result.date_result.value.isoformat()
+                    print(json.dumps(payload, default=str, sort_keys=True))
+                    failed = failed or result.status.value == "failed"
+        except KeyboardInterrupt:
+            return 130
+        return 1 if failed else 0
     except Exception as exc:
         print(f"Organizer failed: {exc}", file=sys.stderr)
         return 1

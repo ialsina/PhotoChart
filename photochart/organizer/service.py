@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import posixpath
+import time
 from datetime import timedelta
 from pathlib import PurePosixPath
 from typing import Callable, Iterable
@@ -11,6 +12,8 @@ from .collision import resolve_collision, streams_equal
 from .config import OrganizerConfig
 from .domain import DateResult, MediaObject, OperationResult, OperationStatus
 from .patterns import ClassificationPattern
+from .metadata import MetadataExtractor, resolve_capture_date
+from .policies import is_stable, with_retry
 from .storage import StorageAdapter
 
 
@@ -23,11 +26,14 @@ class Organizer:
         adapter: StorageAdapter,
         config: OrganizerConfig,
         date_resolver: DateResolver | None = None,
+        metadata_extractor: MetadataExtractor | None = None,
     ) -> None:
         self.adapter = adapter
         self.config = config
         self.pattern = ClassificationPattern(config.pattern)
-        self.date_resolver = date_resolver or self._filesystem_date
+        self.date_resolver = date_resolver
+        self.metadata_extractor = metadata_extractor or MetadataExtractor()
+        self._processing: set[str] = set()
 
     @staticmethod
     def _filesystem_date(media: MediaObject) -> DateResult:
@@ -43,10 +49,74 @@ class Organizer:
 
     def run_once(self, dry_run: bool = False) -> list[OperationResult]:
         self.adapter.healthcheck()
-        return [self.process(media, dry_run=dry_run) for media in self.discover()]
+        return [
+            self._process_with_policy(media, dry_run=dry_run)
+            for media in self.discover()
+        ]
+
+    def watch(self, dry_run: bool = False) -> Iterable[list[OperationResult]]:
+        while True:
+            yield self.run_once(dry_run=dry_run)
+            time.sleep(self.config.scan_interval_seconds)
+
+    def _process_with_policy(
+        self, media: MediaObject, dry_run: bool
+    ) -> OperationResult:
+        if media.object_id in self._processing:
+            return OperationResult(
+                OperationStatus.SKIPPED, media.path, detail="already processing"
+            )
+        self._processing.add(media.object_id)
+        try:
+            if not is_stable(self.adapter, media, self.config.stability):
+                return OperationResult(
+                    OperationStatus.SKIPPED, media.path, detail="file is not stable"
+                )
+            return with_retry(
+                lambda: self.process(media, dry_run=dry_run), self.config.retry
+            )
+        except Exception as error:
+            if (
+                self.config.quarantine
+                and not dry_run
+                and self.adapter.exists(media.path)
+            ):
+                try:
+                    return self._quarantine(media, str(error))
+                except Exception:
+                    pass
+            return OperationResult(
+                OperationStatus.FAILED, media.path, detail=str(error), verified=False
+            )
+        finally:
+            self._processing.discard(media.object_id)
+
+    def _quarantine(self, media: MediaObject, detail: str) -> OperationResult:
+        directory = posixpath.join(
+            self.config.quarantine or "", time.strftime("%Y%m%d")
+        )
+        destination, _ = resolve_collision(
+            self.adapter,
+            media.path,
+            posixpath.join(directory, media.name),
+            "suffix",
+        )
+        self.adapter.ensure_directory(directory)
+        self.adapter.move(media.path, destination)
+        return OperationResult(
+            OperationStatus.QUARANTINED,
+            media.path,
+            destination,
+            detail=detail,
+            verified=self.adapter.exists(destination),
+        )
 
     def process(self, media: MediaObject, dry_run: bool = False) -> OperationResult:
-        date_result = self.date_resolver(media)
+        if self.date_resolver is not None:
+            date_result = self.date_resolver(media)
+        else:
+            metadata = self.metadata_extractor.inspect(self.adapter, media)
+            date_result = resolve_capture_date(metadata, media, self.config)
         classification_date = date_result.value - timedelta(
             hours=self.config.day_starts_at
         )

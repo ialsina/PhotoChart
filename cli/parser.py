@@ -205,7 +205,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Scan and safely copy or move media using organizer configuration",
     )
     org_sub = p_org.add_subparsers(dest="organize_action", required=True)
-    for action in ("scan", "once"):
+    for action in ("scan", "once", "watch"):
         action_parser = org_sub.add_parser(action)
         action_parser.add_argument(
             "config", help="Path to organizer YAML configuration"
