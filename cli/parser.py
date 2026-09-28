@@ -23,6 +23,8 @@ from .commands import (
     cmd_list_resolutions,
     cmd_info,
     cmd_organize,
+    cmd_duplicates,
+    cmd_metadata_date,
     HAS_RICH,
 )
 
@@ -216,6 +218,24 @@ def build_parser() -> argparse.ArgumentParser:
         mode.add_argument("--copy", action="store_true")
         mode.add_argument("--move", action="store_true")
         action_parser.set_defaults(func=cmd_organize)
+
+    p_duplicates = sub.add_parser(
+        "duplicates", help="Report duplicate files and storage waste"
+    )
+    p_duplicates.add_argument("path")
+    p_duplicates.add_argument(
+        "--missing-against", help="Report files absent from another tree"
+    )
+    p_duplicates.set_defaults(func=cmd_duplicates)
+
+    p_date = sub.add_parser(
+        "metadata-date", help="Safely correct original capture dates"
+    )
+    p_date.add_argument("file")
+    p_date.add_argument("value", help="ISO date/time value")
+    p_date.add_argument("--apply", action="store_true", help="Apply instead of dry-run")
+    p_date.add_argument("--no-backup", action="store_true")
+    p_date.set_defaults(func=cmd_metadata_date)
 
     return p
 

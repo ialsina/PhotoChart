@@ -146,6 +146,51 @@ def cmd_organize(args: argparse.Namespace) -> int:
         return 1
 
 
+def cmd_duplicates(args: argparse.Namespace) -> int:
+    """Report duplicates, missing copies, and reclaimable bytes."""
+    from photochart.organizer.adapters import LocalFilesystemAdapter
+    from photochart.organizer.reports import (
+        find_duplicates,
+        find_missing,
+        storage_histogram,
+    )
+
+    try:
+        adapter = LocalFilesystemAdapter()
+        groups = find_duplicates(adapter, args.path)
+        payload = {
+            "groups": [asdict(group) for group in groups],
+            "summary": storage_histogram(groups),
+        }
+        if args.missing_against:
+            payload["missing"] = find_missing(adapter, args.path, args.missing_against)
+        print(json.dumps(payload, sort_keys=True))
+        return 0
+    except Exception as exc:
+        print(f"Duplicate report failed: {exc}", file=sys.stderr)
+        return 1
+
+
+def cmd_metadata_date(args: argparse.Namespace) -> int:
+    """Correct embedded capture dates with dry-run as the default."""
+    from photochart.organizer.metadata_edit import set_original_date
+
+    try:
+        value = datetime.fromisoformat(args.value)
+        print(
+            set_original_date(
+                args.file,
+                value,
+                dry_run=not args.apply,
+                backup=not args.no_backup,
+            )
+        )
+        return 0
+    except Exception as exc:
+        print(f"Metadata update failed: {exc}", file=sys.stderr)
+        return 1
+
+
 def cmd_convert(args: argparse.Namespace) -> int:
     """Convert an image file to a standard format."""
     from photochart.convert import convert_image
