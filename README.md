@@ -4,6 +4,19 @@ PhotoChart catalogs, browses, deduplicates, and organizes photo and video
 collections. The organizer core is independent of Django and storage providers;
 the Django API and React UI add configuration, execution, and audit history.
 
+## Documentation
+
+The comprehensive Sphinx manual lives in `docs/`:
+
+```bash
+pip install -e ".[docs]"
+make html
+make pdf-latex
+```
+
+HTML is written to `docs/_build/html`; the PDF is written to
+`docs/_build/latex/PhotoChart.pdf`.
+
 ## Install
 
 ```bash
