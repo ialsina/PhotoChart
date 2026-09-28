@@ -12,6 +12,8 @@ class PlannedAction(models.Model):
         """Action type choices for planned actions."""
 
         DELETE = "DELETE", "Delete"
+        ORGANIZE = "ORGANIZE", "Organize"
+        RETRY = "RETRY", "Retry"
 
     action_type = models.CharField(
         max_length=50,
@@ -23,6 +25,15 @@ class PlannedAction(models.Model):
         on_delete=models.CASCADE,
         related_name="planned_actions",
         help_text="Photograph this action applies to",
+        null=True,
+        blank=True,
+    )
+    organizer_job = models.ForeignKey(
+        "organizer.OrganizerJob",
+        on_delete=models.CASCADE,
+        related_name="planned_actions",
+        null=True,
+        blank=True,
     )
     created_at = models.DateTimeField(
         auto_now_add=True, help_text="Timestamp when the planned action was created"
@@ -41,4 +52,5 @@ class PlannedAction(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.get_action_type_display()} for {self.photograph}"
+        target = self.photograph or self.organizer_job
+        return f"{self.get_action_type_display()} for {target}"

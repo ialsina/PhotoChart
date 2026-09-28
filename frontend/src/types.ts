@@ -84,6 +84,37 @@ export interface PlannedAction {
   updated_at: string;
 }
 
+export interface OrganizerConfiguration {
+  id: number;
+  name: string;
+  adapter: string;
+  source: string;
+  destination: string;
+  pattern: string;
+  mode: "copy" | "move";
+  enabled: boolean;
+}
+
+export interface OrganizerOperation {
+  id: number;
+  status: string;
+  source: string;
+  destination: string | null;
+  date_source: string;
+  detail: string;
+  verified: boolean;
+}
+
+export interface OrganizerJob {
+  id: number;
+  configuration: number;
+  status: string;
+  dry_run: boolean;
+  error: string;
+  created_at: string;
+  operations: OrganizerOperation[];
+}
+
 export interface PaginatedResponse<T> {
   count: number;
   next: string | null;

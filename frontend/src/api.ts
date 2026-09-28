@@ -10,6 +10,8 @@ import type {
   TimeLoc,
   Album,
   PlannedAction,
+  OrganizerConfiguration,
+  OrganizerJob,
   PaginatedResponse,
 } from "./types";
 
@@ -278,4 +280,20 @@ export const api = {
   // Planned Actions
   createPlannedAction: (data: { action_type: string; photograph: number }): Promise<PlannedAction> =>
     fetchAPIMethod<PlannedAction>("/planned-actions/", "POST", data),
+
+  getOrganizerConfigurations: (): Promise<OrganizerConfiguration[]> =>
+    fetchAllPages<OrganizerConfiguration>("/organizer-configurations/"),
+
+  getOrganizerJobs: (): Promise<OrganizerJob[]> =>
+    fetchAllPages<OrganizerJob>("/organizer-jobs/"),
+
+  runOrganizer: (configurationId: number, dryRun = true): Promise<OrganizerJob> =>
+    fetchAPIMethod<OrganizerJob>(
+      `/organizer-configurations/${configurationId}/run/`,
+      "POST",
+      { dry_run: dryRun }
+    ),
+
+  retryOrganizerJob: (jobId: number): Promise<OrganizerJob> =>
+    fetchAPIMethod<OrganizerJob>(`/organizer-jobs/${jobId}/retry/`, "POST"),
 };

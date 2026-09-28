@@ -31,6 +31,12 @@ from catalog.views import (
 )
 from album.views import AlbumViewSet
 from planner.views import PlannedActionViewSet
+from organizer.views import (
+    DuplicateGroupViewSet,
+    OrganizerConfigurationViewSet,
+    OrganizerJobViewSet,
+    OrganizerOperationViewSet,
+)
 
 # Create a router and register viewsets
 router = DefaultRouter()
@@ -45,6 +51,18 @@ router.register(r"locations", LocationViewSet, basename="location")
 router.register(r"time-locs", TimeLocViewSet, basename="timeloc")
 router.register(r"albums", AlbumViewSet, basename="album")
 router.register(r"planned-actions", PlannedActionViewSet, basename="plannedaction")
+router.register(
+    r"organizer-configurations",
+    OrganizerConfigurationViewSet,
+    basename="organizer-configuration",
+)
+router.register(r"organizer-jobs", OrganizerJobViewSet, basename="organizer-job")
+router.register(
+    r"organizer-operations",
+    OrganizerOperationViewSet,
+    basename="organizer-operation",
+)
+router.register(r"duplicate-groups", DuplicateGroupViewSet, basename="duplicate-group")
 
 urlpatterns = [
     path("admin/", admin.site.urls),

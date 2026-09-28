@@ -13,6 +13,7 @@ class PlannedActionSerializer(serializers.ModelSerializer):
             "id",
             "action_type",
             "photograph",
+            "organizer_job",
             "created_at",
             "updated_at",
         ]
