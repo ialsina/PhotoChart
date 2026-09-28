@@ -26,8 +26,6 @@ except Exception:  # pragma: no cover
     HAS_RICH = False
     _console = None
 
-# Django models - these will be imported after django.setup() in main.py
-from photograph.models import PhotoPath
 from photochart.resolution import get_resolution_presets
 from photochart.metadata import extract_metadata
 

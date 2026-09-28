@@ -8,23 +8,23 @@ import sys
 import os
 from typing import Optional
 
-# Setup Django environment before importing Django models
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-# Add project root to path first (so photochart can be found)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
-# Also add backend directory to path so Django apps can be found
 backend_dir = os.path.join(project_root, "backend")
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.backend.settings")
-
-import django
-
-django.setup()
 
 from .parser import build_parser, _expand_abbreviations, _print_help_for
 from .commands import HAS_RICH
+
+
+def _setup_django() -> None:
+    """Initialize Django only for commands that use the catalog database."""
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings")
+    import django
+
+    django.setup()
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -44,6 +44,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             return 2
         parser.print_help()
         return 2
+    if args.command == "ingest":
+        _setup_django()
     return int(args.func(args))
 
 
