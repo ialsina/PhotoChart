@@ -11,22 +11,24 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import dj_database_url
 from decouple import config
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
+DEBUG = config("DEBUG", default=True, cast=bool)
+SECRET_KEY = config("SECRET_KEY", default="django-insecure-development-only")
+if not DEBUG and SECRET_KEY == "django-insecure-development-only":
+    raise ImproperlyConfigured("SECRET_KEY must be set when DEBUG is false")
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-hb@)8si=zy^7_j(u40z1a7m)6gsq7ty1#!g6rb5we%%&c7vz_0"
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+ALLOWED_HOSTS = config(
+    "ALLOWED_HOSTS",
+    default="localhost,127.0.0.1",
+    cast=lambda value: [host.strip() for host in value.split(",") if host.strip()],
+)
 
 
 # Application definition
@@ -81,12 +83,20 @@ WSGI_APPLICATION = "backend.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": config("DATABASE_PATH", default=BASE_DIR / "db.sqlite3", cast=Path),
+database_url = config("DATABASE_URL", default="")
+if database_url:
+    DATABASES = {
+        "default": dj_database_url.parse(
+            database_url, conn_max_age=60, conn_health_checks=True
+        )
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": config("DATABASE_PATH", default=BASE_DIR / "db.sqlite3", cast=Path),
+        }
+    }
 
 
 # Password validation
@@ -138,15 +148,26 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # CORS settings
 # In development, allow all localhost origins
-if DEBUG:
-    CORS_ALLOW_ALL_ORIGINS = True
-else:
-    CORS_ALLOWED_ORIGINS = [
-        "http://localhost:5173",  # Vite default port
-        "http://127.0.0.1:5173",
-    ]
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+CORS_ALLOWED_ORIGINS = config(
+    "CORS_ALLOWED_ORIGINS",
+    default="http://localhost:5173,http://127.0.0.1:5173",
+    cast=lambda value: [
+        origin.strip() for origin in value.split(",") if origin.strip()
+    ],
+)
 
 CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = config(
+    "CSRF_TRUSTED_ORIGINS",
+    default="",
+    cast=lambda value: [
+        origin.strip() for origin in value.split(",") if origin.strip()
+    ],
+)
+SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=False, cast=bool)
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 
 # REST Framework settings
 REST_FRAMEWORK = {

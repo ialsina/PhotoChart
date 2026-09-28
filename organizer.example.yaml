@@ -1,0 +1,45 @@
+adapter:
+  type: local
+
+source:
+  path: /data/PhotoUpload
+
+destination:
+  path: /data/Photos
+  pattern: "%Y/%YQ%Q/%Y%M%D"
+
+quarantine:
+  path: /data/OrganizerQuarantine
+
+mode: move
+workers: 1
+
+scan:
+  interval_seconds: 60
+
+stability:
+  interval_seconds: 30
+  checks: 2
+
+metadata:
+  date_priority:
+    - DateTimeOriginal
+    - SubSecDateTimeOriginal
+    - CreateDate
+    - MediaCreateDate
+    - TrackCreateDate
+    - ModifyDate
+
+timezone:
+  default: Europe/Madrid
+
+collision:
+  mode: suffix
+
+duplicate_detection:
+  mode: size_then_hash
+
+retry:
+  attempts: 4
+  initial_seconds: 5
+  multiplier: 3

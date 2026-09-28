@@ -5,6 +5,12 @@ from .serializers import OrganizerConfigurationSerializer
 
 
 class OrganizerModelTests(TestCase):
+    def test_health_endpoint(self):
+        response = self.client.get("/api/organizer-health/")
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "ready"
+
     def test_job_keeps_operation_audit(self):
         configuration = OrganizerConfiguration.objects.create(
             name="local",

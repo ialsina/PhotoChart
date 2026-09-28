@@ -36,6 +36,7 @@ from organizer.views import (
     OrganizerConfigurationViewSet,
     OrganizerJobViewSet,
     OrganizerOperationViewSet,
+    organizer_health,
 )
 
 # Create a router and register viewsets
@@ -66,6 +67,7 @@ router.register(r"duplicate-groups", DuplicateGroupViewSet, basename="duplicate-
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("api/organizer-health/", organizer_health, name="organizer-health"),
     path("api/", include(router.urls)),
 ]
 

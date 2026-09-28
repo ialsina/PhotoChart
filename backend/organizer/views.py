@@ -1,6 +1,9 @@
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from django.db import connection
 
 from .models import (
     DuplicateGroup,
@@ -15,6 +18,27 @@ from .serializers import (
     OrganizerOperationSerializer,
 )
 from .services import execute_job
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def organizer_health(request):
+    connection.ensure_connection()
+    return Response(
+        {
+            "status": "ready",
+            "database": "available",
+            "adapters": [
+                "local",
+                "pcloud_drive",
+                "pcloud_api",
+                "webdav",
+                "nextcloud",
+                "sftp",
+                "s3",
+            ],
+        }
+    )
 
 
 class OrganizerConfigurationViewSet(viewsets.ModelViewSet):
