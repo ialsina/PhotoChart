@@ -36,7 +36,7 @@ def _print_help_for(parser: argparse.ArgumentParser):
             return 2
 
         # Attempt to render a nicer help using Rich
-        prog = parser.prog or "pf"
+        prog = parser.prog or "pchart"
         desc = parser.description or ""
         table = Table(title=f"[bold cyan]{prog}[/] - {desc}")
         table.add_column("[bold]Command[/]", style="bold yellow")
@@ -91,7 +91,7 @@ def _print_help_for(parser: argparse.ArgumentParser):
 def build_parser() -> argparse.ArgumentParser:
     """Build the argument parser with all subcommands."""
     p = argparse.ArgumentParser(
-        prog="pf",
+        prog="pchart",
         description="PhotoChart CLI - manage and organize photo collections",
     )
     sub = p.add_subparsers(dest="command")
@@ -115,7 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Optional resolution for the image. Can be explicit (e.g., '1920x1080') "
             "or a preset name (e.g., 'low', 'medium', 'high', '4k', '1080p', '720p'). "
-            "Use 'pf list-resolutions' to see all available presets."
+            "Use 'pchart list-resolutions' to see all available presets."
         ),
     )
     p_ing.add_argument(
@@ -168,7 +168,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Optional resolution for the output image. Can be explicit (e.g., '1920x1080') "
             "or a preset name (e.g., 'low', 'medium', 'high', '4k', '1080p', '720p'). "
-            "Use 'pf list-resolutions' to see all available presets. "
+            "Use 'pchart list-resolutions' to see all available presets. "
             "If not specified, original resolution is preserved."
         ),
     )
