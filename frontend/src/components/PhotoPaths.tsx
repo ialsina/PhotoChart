@@ -11,6 +11,11 @@ type NavigationPath = {
 
 type SortMode = "id" | "path" | "device" | "date";
 
+type PathNode = {
+  children: Record<string, PathNode>;
+  paths: PhotoPath[];
+};
+
 export function PhotoPaths() {
   const [paths, setPaths] = useState<PhotoPath[]>([]);
   const [loading, setLoading] = useState(true);
@@ -186,7 +191,7 @@ export function PhotoPaths() {
 
   // Parse paths and build hierarchy (only used when we have actual path data)
   const pathHierarchy = useMemo(() => {
-    const hierarchy: Record<string, { children: Record<string, any>; paths: PhotoPath[] }> = {};
+    const hierarchy: Record<string, PathNode> = {};
 
     paths.forEach((path) => {
       const pathParts = path.path.split(/[/\\]/).filter(p => p.length > 0);
@@ -276,9 +281,10 @@ export function PhotoPaths() {
         type: "mixed" as const,
         segments: segments.sort(),
         paths: pathsAtLevel,
+        directoryStructure: [],
       };
     }
-  }, [currentDevice, devices, navigationPath, pathHierarchy, directoryStructure, paths, pathSegments]);
+  }, [currentDevice, devices, pathHierarchy, directoryStructure, pathSegments]);
 
   const navigateToDevice = (device: string) => {
     setNavigationPath([
@@ -641,16 +647,21 @@ export function PhotoPaths() {
 
       {!loading && currentView.type === "mixed" && (
         <>
-          {(currentView.segments.length > 0 || (currentView as any).directoryStructure) && (
+          {(currentView.segments.length > 0 || currentView.directoryStructure.length > 0) && (
             <div className="hierarchy-section">
               <h3>Directories</h3>
               <div className="hierarchy-grid">
-                {((currentView as any).directoryStructure?.filter((item: any) => item.is_directory) || currentView.segments.map(name => ({ name, is_directory: true, count: 0 }))).map((item: any) => {
-                  const segment = typeof item === 'string' ? item : item.name;
-                  let count = 0;
-                  if (typeof item === 'object' && item.count !== undefined) {
-                    count = item.count;
-                  } else {
+                {(currentView.directoryStructure.length > 0
+                  ? currentView.directoryStructure.filter((item) => item.is_directory)
+                  : currentView.segments.map((name) => ({
+                      name,
+                      is_directory: true,
+                      count: 0,
+                    }))
+                ).map((item) => {
+                  const segment = item.name;
+                  let count = item.count;
+                  if (count === 0) {
                     // Fallback to counting from hierarchy
                     let current = pathHierarchy;
                     for (const nav of navigationPath) {
@@ -787,7 +798,7 @@ export function PhotoPaths() {
 }
 
 // Helper function to count all paths in a node and its children
-function countPathsInNode(node: { children: Record<string, any>; paths: PhotoPath[] }): number {
+function countPathsInNode(node: PathNode): number {
   let count = node.paths.length;
   for (const child of Object.values(node.children)) {
     count += countPathsInNode(child);

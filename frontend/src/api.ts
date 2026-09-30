@@ -16,7 +16,7 @@ import type {
 } from "./types";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
+  import.meta.env.VITE_API_BASE_URL || "/api";
 
 async function fetchAPI<T>(endpoint: string): Promise<T> {
   try {
@@ -148,7 +148,7 @@ export const api = {
         const url = new URL(pageUrl);
         const path = url.pathname + url.search;
         return fetchAPI<PaginatedResponse<PhotoPath>>(path);
-      } catch (err) {
+      } catch {
         // If URL parsing fails, try using it as-is (might be relative)
         return fetchAPI<PaginatedResponse<PhotoPath>>(pageUrl.startsWith('/') ? pageUrl : `/${pageUrl}`);
       }

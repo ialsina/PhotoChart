@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { api } from "../api";
 import type { Photograph, Album } from "../types";
 
@@ -50,23 +50,7 @@ export function Photographs() {
     loadAlbums();
   }, []);
 
-  // Only fetch photographs when at leaf level (day or Unknown)
-  // For hierarchy navigation (year/month), use summary endpoints instead
-  useEffect(() => {
-    const shouldFetchPhotos =
-      navigationPath.length === 3 || // At day level
-      (navigationPath.length === 1 && navigationPath[0].value === "Unknown"); // At Unknown level
-
-    if (shouldFetchPhotos) {
-      loadPhotographs();
-    } else {
-      // Clear photos when not at leaf level to save memory
-      setPhotographs([]);
-      setSelectedPhotos(new Set()); // Clear selection when navigating away
-    }
-  }, [navigationPath]);
-
-  const loadPhotographs = async () => {
+  const loadPhotographs = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -112,7 +96,23 @@ export function Photographs() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigationPath]);
+
+  // Only fetch photographs when at leaf level (day or Unknown)
+  // For hierarchy navigation (year/month), use summary endpoints instead
+  useEffect(() => {
+    const shouldFetchPhotos =
+      navigationPath.length === 3 || // At day level
+      (navigationPath.length === 1 && navigationPath[0].value === "Unknown"); // At Unknown level
+
+    if (shouldFetchPhotos) {
+      loadPhotographs();
+    } else {
+      // Clear photos when not at leaf level to save memory
+      setPhotographs([]);
+      setSelectedPhotos(new Set()); // Clear selection when navigating away
+    }
+  }, [navigationPath, loadPhotographs]);
 
   const toggleSort = () => {
     setSortMode((prev) => (prev === "id" ? "date" : "id"));
@@ -419,7 +419,7 @@ export function Photographs() {
         return timeValue;
       }
       return date.toLocaleString();
-    } catch (e) {
+    } catch {
       return timeValue;
     }
   };

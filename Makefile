@@ -1,19 +1,58 @@
 SPHINXBUILD ?= python3 -m sphinx
 SPHINXOPTS ?= -W --keep-going
+PYTHON ?= python3
+NPM ?= npm
 DOCS_SOURCE := docs
 DOCS_BUILD := docs/_build
 
 .DEFAULT_GOAL := help
 
-.PHONY: help html docs-html latex pdf-latex latexpdf docs-pdf linkcheck clean docs-clean
+.PHONY: help verify test test-cov django-test migrations-check check-deploy \
+	frontend-lint frontend-build package html docs-html latex pdf-latex \
+	latexpdf docs-pdf linkcheck clean docs-clean
 
 help:
+	@echo "Verification targets:"
+	@echo "  make verify      Run the local CI verification suite"
+	@echo "  make test        Run Python unit tests"
+	@echo "  make test-cov    Run risk-focused Python coverage"
+	@echo "  make django-test Run Django tests"
+	@echo "  make frontend-lint / frontend-build"
+	@echo "  make package     Build wheel and source distribution"
 	@echo "Documentation targets:"
 	@echo "  make html        Build strict HTML documentation"
 	@echo "  make latex       Generate LaTeX sources"
 	@echo "  make pdf-latex   Build the PDF through LaTeX"
 	@echo "  make linkcheck   Check documentation links"
 	@echo "  make clean       Remove documentation build output"
+
+verify: test-cov django-test migrations-check frontend-lint frontend-build html
+
+test:
+	$(PYTHON) -m pytest
+
+test-cov:
+	$(PYTHON) -m pytest --cov=photochart.organizer \
+		--cov-report=term-missing --cov-report=xml --cov-fail-under=60
+
+django-test:
+	$(PYTHON) backend/manage.py test organizer planner album catalog photograph
+
+migrations-check:
+	$(PYTHON) backend/manage.py makemigrations --check --dry-run
+
+check-deploy:
+	DEBUG=false SECRET_KEY=ci-not-a-production-secret \
+	ALLOWED_HOSTS=localhost $(PYTHON) backend/manage.py check --deploy
+
+frontend-lint:
+	$(NPM) --prefix frontend run lint
+
+frontend-build:
+	$(NPM) --prefix frontend run build
+
+package:
+	$(PYTHON) -m build
 
 html docs-html:
 	$(SPHINXBUILD) -M html $(DOCS_SOURCE) $(DOCS_BUILD) $(SPHINXOPTS)

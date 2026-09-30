@@ -30,14 +30,13 @@ Testing
 
 .. code-block:: console
 
-   python -m pytest tests --no-cov
-   python backend/manage.py test organizer
-   python backend/manage.py check
-   npm --prefix frontend run build
+   make verify
+   make check-deploy
+   make package
 
-The project-wide pytest configuration enforces coverage when ``--no-cov`` is
-not supplied. Use focused tests during development, then run the configured
-coverage suite before release.
+``make verify`` mirrors the pull-request checks: risk-focused Python coverage,
+all Django tests, migration drift, frontend lint and build, and strict HTML
+documentation. Use ``make test`` for a fast Python-only development cycle.
 
 Adding an adapter
 -----------------
