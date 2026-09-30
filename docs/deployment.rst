@@ -103,8 +103,9 @@ Release checklist
 Versioned releases
 ------------------
 
-``photochart/_version.py`` is the package version source. Before tagging,
-replace ``[Unreleased]`` with ``[vX.Y.Z]`` and the release date, then run:
+Release versions come from annotated git tags matching ``v*`` (for example
+``v0.3.0``), via ``setuptools-scm``. Before tagging, replace
+``[Unreleased]`` with ``[vX.Y.Z]`` and the release date, then run:
 
 .. code-block:: console
 
@@ -114,3 +115,8 @@ replace ``[Unreleased]`` with ``[vX.Y.Z]`` and the release date, then run:
 Pushing the matching tag builds distributions and both container targets,
 repeats all release gates, and creates the GitHub release. Perform and record a
 successful backup/restore drill before pushing the tag.
+
+Container images are built without ``.git`` in the build context. Pass the
+release version explicitly, for example
+``docker build --build-arg SETUPTOOLS_SCM_PRETEND_VERSION=0.3.0 ...`` (the
+release workflow does this from the tag name).

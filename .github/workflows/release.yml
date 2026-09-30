@@ -14,6 +14,8 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -30,8 +32,8 @@ jobs:
       - run: make verify
       - run: make check-deploy
       - run: make package
-      - run: docker build --target app -t "photochart:${GITHUB_REF_NAME#v}" .
-      - run: docker build --target gateway -t "photochart-gateway:${GITHUB_REF_NAME#v}" .
+      - run: docker build --build-arg "SETUPTOOLS_SCM_PRETEND_VERSION=${GITHUB_REF_NAME#v}" --target app -t "photochart:${GITHUB_REF_NAME#v}" .
+      - run: docker build --build-arg "SETUPTOOLS_SCM_PRETEND_VERSION=${GITHUB_REF_NAME#v}" --target gateway -t "photochart-gateway:${GITHUB_REF_NAME#v}" .
       - uses: actions/upload-artifact@v4
         with:
           name: release-distributions

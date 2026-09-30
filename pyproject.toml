@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=68", "wheel", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -50,6 +50,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "setuptools-scm>=8",
   "pytest>=7.0.0",
   "pytest-cov>=4.0.0",
   "pytest-mock>=3.10.0",
@@ -75,8 +76,9 @@ s3 = [
   "boto3>=1.35.0",
 ]
 
-[tool.setuptools.dynamic]
-version = { attr = "photochart._version.__version__" }
+[tool.setuptools_scm]
+tag_regex = "^v(?P<version>.+)$"
+git_describe_command = "git describe --tags --long --match v*"
 
 [tool.setuptools]
 include-package-data = true

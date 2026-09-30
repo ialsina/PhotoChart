@@ -10,6 +10,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app:/app/backend
 WORKDIR /app
+ARG SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0+local
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=${SETUPTOOLS_SCM_PRETEND_VERSION}
 RUN apt-get update \
     && apt-get install --no-install-recommends -y exiftool libpq5 curl \
     && rm -rf /var/lib/apt/lists/*

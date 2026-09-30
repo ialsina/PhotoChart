@@ -21,6 +21,10 @@ All notable changes to PhotoChart are documented in this file.
 - Automated CI, provider acceptance contracts, backup/restore tooling, package
   builds, and release validation.
 
+### Fixed
+
+- Dynamic version, automatic detection of software version based on tag.
+
 ## [v0.2.0] - 2026-09-29
 
 ### Added
