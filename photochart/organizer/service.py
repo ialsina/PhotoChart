@@ -8,13 +8,14 @@ from datetime import timedelta
 from pathlib import PurePosixPath
 from typing import Callable, Iterable
 
-from .collision import resolve_collision, streams_equal
+from .collision import resolve_collision
 from .config import OrganizerConfig
 from .domain import DateResult, MediaObject, OperationResult, OperationStatus
 from .patterns import ClassificationPattern
 from .metadata import MetadataExtractor, resolve_capture_date
 from .policies import is_stable, with_retry
 from .storage import StorageAdapter
+from .verify import verified_transfer
 
 
 DateResolver = Callable[[MediaObject], DateResult]
@@ -83,8 +84,13 @@ class Organizer:
             ):
                 try:
                     return self._quarantine(media, str(error))
-                except Exception:
-                    pass
+                except Exception as quarantine_error:
+                    return OperationResult(
+                        OperationStatus.FAILED,
+                        media.path,
+                        detail=(f"{error}; quarantine failed: {quarantine_error}"),
+                        verified=False,
+                    )
             return OperationResult(
                 OperationStatus.FAILED, media.path, detail=str(error), verified=False
             )
@@ -102,13 +108,13 @@ class Organizer:
             "suffix",
         )
         self.adapter.ensure_directory(directory)
-        self.adapter.move(media.path, destination)
+        verified_transfer(self.adapter, media.path, destination, delete_source=True)
         return OperationResult(
             OperationStatus.QUARANTINED,
             media.path,
             destination,
             detail=detail,
-            verified=self.adapter.exists(destination),
+            verified=True,
         )
 
     def process(self, media: MediaObject, dry_run: bool = False) -> OperationResult:
@@ -162,19 +168,14 @@ class Organizer:
             )
 
         self.adapter.ensure_directory(directory)
-        if self.config.mode == "copy":
-            self.adapter.copy(media.path, destination)
-            status = OperationStatus.COPIED
-        else:
-            self.adapter.move(media.path, destination)
-            status = OperationStatus.MOVED
-
-        if not self.adapter.exists(destination):
-            raise IOError(f"Destination was not created: {destination}")
-        if self.config.mode == "copy" and not streams_equal(
-            self.adapter, media.path, destination
-        ):
-            raise IOError(f"Verification failed: {destination}")
+        moving = self.config.mode == "move"
+        verified_transfer(
+            self.adapter,
+            media.path,
+            destination,
+            delete_source=moving,
+        )
+        status = OperationStatus.MOVED if moving else OperationStatus.COPIED
         return OperationResult(
             status,
             media.path,

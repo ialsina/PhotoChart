@@ -7,6 +7,12 @@ from photochart.organizer.domain import OperationStatus
 from photochart.organizer.service import Organizer
 
 
+class CorruptingLocalAdapter(LocalFilesystemAdapter):
+    def copy(self, source: str, destination: str) -> None:
+        super().copy(source, destination)
+        Path(destination).write_bytes(b"corrupt")
+
+
 def build_organizer(source: Path, destination: Path, mode: str = "move") -> Organizer:
     config = OrganizerConfig(
         source=str(source),
@@ -79,3 +85,28 @@ def test_dry_run_changes_nothing(tmp_path: Path) -> None:
     assert result.status == OperationStatus.DRY_RUN
     assert photo.exists()
     assert not destination.exists()
+
+
+def test_move_retains_source_and_cleans_corrupt_destination(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "PhotoUpload"
+    destination = tmp_path / "Photos"
+    source.mkdir()
+    photo = source / "photo.jpg"
+    photo.write_bytes(b"photo")
+    set_date(photo)
+    config = OrganizerConfig(
+        source=str(source),
+        destination=str(destination),
+        mode="move",
+        pattern="%YQ%Q/%Y%M%D",
+        stability=config_stability(),
+    )
+
+    result = Organizer(CorruptingLocalAdapter(), config).run_once()[0]
+
+    assert result.status == OperationStatus.FAILED
+    assert "Verification failed" in (result.detail or "")
+    assert photo.read_bytes() == b"photo"
+    assert not (destination / "2026Q3" / "20260928" / "photo.jpg").exists()

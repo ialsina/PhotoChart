@@ -7,7 +7,7 @@ from collections.abc import Callable
 from typing import TypeVar
 
 from .config import RetryConfig, StabilityConfig
-from .domain import MediaObject
+from .domain import ErrorKind, MediaObject, OrganizerError
 from .storage import StorageAdapter
 
 T = TypeVar("T")
@@ -36,12 +36,18 @@ def with_retry(
     sleep: Callable[[float], None] = time.sleep,
 ) -> T:
     delay = config.initial_seconds
-    last_error: OSError | None = None
+    last_error: OSError | OrganizerError | None = None
     for attempt in range(config.attempts):
         try:
             return operation()
-        except OSError as error:
+        except (OSError, OrganizerError) as error:
             last_error = error
+            retryable = not isinstance(error, FileExistsError) and (
+                not isinstance(error, OrganizerError)
+                or error.kind == ErrorKind.TRANSIENT
+            )
+            if not retryable:
+                raise
             if attempt + 1 < config.attempts:
                 sleep(delay)
                 delay *= config.multiplier

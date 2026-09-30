@@ -89,11 +89,19 @@ class SftpAdapter:
                 self.sftp.stat(current)
 
     def copy(self, source: str, destination: str) -> None:
-        with self.sftp.open(source, "rb") as input_stream:
-            with self.sftp.open(destination + ".partial", "wb") as output_stream:
-                for chunk in iter(lambda: input_stream.read(1024 * 1024), b""):
-                    output_stream.write(chunk)
-        self.sftp.rename(destination + ".partial", destination)
+        temporary = destination + ".partial"
+        try:
+            with self.sftp.open(source, "rb") as input_stream:
+                with self.sftp.open(temporary, "wb") as output_stream:
+                    for chunk in iter(lambda: input_stream.read(1024 * 1024), b""):
+                        output_stream.write(chunk)
+            self.sftp.rename(temporary, destination)
+        except Exception:
+            try:
+                self.sftp.remove(temporary)
+            except (FileNotFoundError, OSError):
+                pass
+            raise
 
     def move(self, source: str, destination: str) -> None:
         self.sftp.rename(source, destination)
