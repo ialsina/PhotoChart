@@ -91,6 +91,7 @@ class OrganizerJob(models.Model):
         RUNNING = "RUNNING", "Running"
         COMPLETED = "COMPLETED", "Completed"
         FAILED = "FAILED", "Failed"
+        CANCELLED = "CANCELLED", "Cancelled"
 
     configuration = models.ForeignKey(
         OrganizerConfiguration, on_delete=models.PROTECT, related_name="jobs"
@@ -99,13 +100,41 @@ class OrganizerJob(models.Model):
         max_length=20, choices=Status.choices, default=Status.PENDING
     )
     dry_run = models.BooleanField(default=True)
+    retry_of = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="retry_jobs",
+    )
+    task_id = models.CharField(max_length=255, blank=True)
+    worker_id = models.CharField(max_length=255, blank=True)
     error = models.TextField(blank=True)
     started_at = models.DateTimeField(null=True, blank=True)
+    heartbeat_at = models.DateTimeField(null=True, blank=True)
+    cancel_requested_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class OrganizerLease(models.Model):
+    configuration = models.OneToOneField(
+        OrganizerConfiguration,
+        on_delete=models.CASCADE,
+        related_name="lease",
+    )
+    owner_job = models.ForeignKey(
+        OrganizerJob,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    locked_until = models.DateTimeField(null=True, blank=True)
+    heartbeat_at = models.DateTimeField(null=True, blank=True)
 
 
 class OrganizerOperation(models.Model):

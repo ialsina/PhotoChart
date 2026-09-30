@@ -1,12 +1,20 @@
 import json
+from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth.models import Permission, User
 from django.test import Client
 from django.test import TestCase
+from django.utils import timezone
 
-from .models import OrganizerConfiguration, OrganizerJob, OrganizerOperation
+from .models import (
+    OrganizerConfiguration,
+    OrganizerJob,
+    OrganizerOperation,
+)
 from .serializers import OrganizerConfigurationSerializer
 from .services import _core_config
+from .tasks import acquire_lease, recover_stale_jobs
 
 
 class OrganizerModelTests(TestCase):
@@ -127,3 +135,86 @@ class OrganizerModelTests(TestCase):
         assert rejected.status_code == 403
         assert accepted.status_code == 200
         assert accepted.json()["operator"] is True
+
+    def test_run_is_enqueued_and_returns_immediately(self):
+        configuration = OrganizerConfiguration.objects.create(
+            name="queued",
+            source="/in",
+            destination="/out",
+        )
+        user = User.objects.create_user("operator", password="secret")
+        user.user_permissions.add(Permission.objects.get(codename="operate_organizer"))
+        self.client.login(username="operator", password="secret")
+
+        with patch("organizer.views.execute_job_task.delay") as delay:
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post(
+                    f"/api/organizer-configurations/{configuration.pk}/run/",
+                    {"dry_run": True},
+                )
+
+        assert response.status_code == 202
+        job = OrganizerJob.objects.get()
+        assert job.status == OrganizerJob.Status.PENDING
+        delay.assert_called_once_with(job.pk)
+
+    def test_configuration_lease_prevents_overlapping_jobs(self):
+        configuration = OrganizerConfiguration.objects.create(
+            name="leased",
+            source="/in",
+            destination="/out",
+        )
+        first = OrganizerJob.objects.create(configuration=configuration)
+        second = OrganizerJob.objects.create(configuration=configuration)
+
+        assert acquire_lease(first) is True
+        assert acquire_lease(second) is False
+
+    def test_stale_job_recovery_marks_job_failed(self):
+        configuration = OrganizerConfiguration.objects.create(
+            name="stale",
+            source="/in",
+            destination="/out",
+        )
+        job = OrganizerJob.objects.create(
+            configuration=configuration,
+            status=OrganizerJob.Status.RUNNING,
+            heartbeat_at=timezone.now() - timedelta(hours=1),
+        )
+        acquire_lease(job)
+
+        recovered = recover_stale_jobs()
+
+        job.refresh_from_db()
+        assert recovered == 1
+        assert job.status == OrganizerJob.Status.FAILED
+        assert job.configuration.lease.owner_job is None
+
+    def test_job_summaries_and_operation_filters_are_bounded(self):
+        configuration = OrganizerConfiguration.objects.create(
+            name="filtered",
+            source="/in",
+            destination="/out",
+        )
+        job = OrganizerJob.objects.create(configuration=configuration)
+        other_job = OrganizerJob.objects.create(configuration=configuration)
+        OrganizerOperation.objects.create(
+            job=job,
+            status="failed",
+            source="/in/failed.jpg",
+        )
+        OrganizerOperation.objects.create(
+            job=other_job,
+            status="copied",
+            source="/in/copied.jpg",
+        )
+        user = User.objects.create_user("reader", password="secret")
+        self.client.login(username="reader", password="secret")
+
+        jobs = self.client.get("/api/organizer-jobs/").json()["results"]
+        operations = self.client.get(
+            f"/api/organizer-operations/?job={job.pk}&status=failed"
+        ).json()["results"]
+
+        assert "operations" not in jobs[0]
+        assert {operation["source"] for operation in operations} == {"/in/failed.jpg"}

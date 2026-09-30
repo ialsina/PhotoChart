@@ -86,7 +86,7 @@ class OrganizerOperationSerializer(serializers.ModelSerializer):
 
 
 class OrganizerJobSerializer(serializers.ModelSerializer):
-    operations = OrganizerOperationSerializer(many=True, read_only=True)
+    operation_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = OrganizerJob
@@ -98,6 +98,14 @@ class OrganizerJobSerializer(serializers.ModelSerializer):
             "finished_at",
             "created_at",
         ]
+
+
+class OrganizerJobSummarySerializer(serializers.ModelSerializer):
+    operation_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = OrganizerJob
+        fields = "__all__"
 
 
 class DuplicateGroupSerializer(serializers.ModelSerializer):

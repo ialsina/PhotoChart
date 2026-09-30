@@ -125,7 +125,8 @@ export interface OrganizerJob {
   dry_run: boolean;
   error: string;
   created_at: string;
-  operations: OrganizerOperation[];
+  operation_count?: number;
+  operations?: OrganizerOperation[];
 }
 
 export interface PaginatedResponse<T> {

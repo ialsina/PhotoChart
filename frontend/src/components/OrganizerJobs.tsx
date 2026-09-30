@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 import type { OrganizerConfiguration, OrganizerJob } from "../types";
 
@@ -8,7 +8,7 @@ export function OrganizerJobs() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     try {
       const [configurationData, jobData] = await Promise.all([
         api.getOrganizerConfigurations(),
@@ -20,11 +20,19 @@ export function OrganizerJobs() {
     } catch (value) {
       setError(value instanceof Error ? value.message : String(value));
     }
-  };
+  }, []);
 
   useEffect(() => {
     void refresh();
-  }, []);
+  }, [refresh]);
+
+  useEffect(() => {
+    if (!jobs.some((job) => ["PENDING", "RUNNING"].includes(job.status))) {
+      return;
+    }
+    const timer = window.setInterval(() => void refresh(), 3000);
+    return () => window.clearInterval(timer);
+  }, [jobs, refresh]);
 
   const run = async (configuration: OrganizerConfiguration, dryRun: boolean) => {
     setBusy(true);
@@ -33,6 +41,22 @@ export function OrganizerJobs() {
       await refresh();
     } finally {
       setBusy(false);
+    }
+  };
+
+  const loadJobDetails = async (job: OrganizerJob) => {
+    if (job.operations) return;
+    try {
+      const [detail, operations] = await Promise.all([
+        api.getOrganizerJob(job.id),
+        api.getOrganizerOperations(job.id),
+      ]);
+      detail.operations = operations;
+      setJobs((current) =>
+        current.map((item) => (item.id === detail.id ? detail : item))
+      );
+    } catch (value) {
+      setError(value instanceof Error ? value.message : String(value));
     }
   };
 
@@ -57,13 +81,18 @@ export function OrganizerJobs() {
       ))}
       <h3>Recent jobs</h3>
       {jobs.map((job) => (
-        <details key={job.id}>
+        <details
+          key={job.id}
+          onToggle={(event) => {
+            if (event.currentTarget.open) void loadJobDetails(job);
+          }}
+        >
           <summary>
             Job {job.id}: {job.status} {job.dry_run ? "(dry run)" : ""}
           </summary>
           {job.error && <p className="error">{job.error}</p>}
           <ul>
-            {job.operations.map((operation) => (
+            {(job.operations ?? []).map((operation) => (
               <li key={operation.id}>
                 {operation.status}: {operation.source}
                 {operation.destination ? ` → ${operation.destination}` : ""}

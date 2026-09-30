@@ -53,10 +53,15 @@ Run request
 
    {"dry_run": true}
 
-The response is the created job with nested operations. Execution is currently
-synchronous: the HTTP request remains open while the scan runs. For long remote
-jobs, invoke the core CLI through a scheduler or place ``execute_job`` behind a
-deployment-specific worker queue.
+The authenticated operator receives ``202 Accepted`` with a pending job.
+Celery workers claim a database lease for the configuration, execute the scan,
+and persist operations incrementally. The UI polls job summaries and fetches
+paginated operation details separately. Retry jobs process only failed source
+objects from the selected job; pending or running jobs can be cancelled.
+
+All API routes require a Django session except liveness/readiness endpoints.
+Real runs, retries, cancellation, planned actions, and configuration mutations
+require the ``organizer.operate_organizer`` permission.
 
 Operation filtering
 -------------------

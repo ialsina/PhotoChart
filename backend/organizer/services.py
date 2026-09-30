@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 from django.utils import timezone
 
 from photochart.organizer.adapters import build_adapter
@@ -10,6 +12,10 @@ from photochart.organizer.domain import OperationStatus
 from photochart.organizer.service import Organizer
 
 from .models import OrganizerJob, OrganizerOperation
+
+
+class JobCancelled(Exception):
+    pass
 
 
 def _core_config(job: OrganizerJob) -> OrganizerConfig:
@@ -52,42 +58,60 @@ def _catalog_local_result(result) -> None:
     )
 
 
-def execute_job(job: OrganizerJob) -> OrganizerJob:
+def _retry_media(job: OrganizerJob, organizer: Organizer):
+    if not job.retry_of_id:
+        return None
+    failed_sources = job.retry_of.operations.filter(status="failed").values_list(
+        "source", flat=True
+    )
+    return [organizer.adapter.get_object_info(source) for source in failed_sources]
+
+
+def execute_job(
+    job: OrganizerJob, heartbeat: Callable[[], None] | None = None
+) -> OrganizerJob:
     job.status = OrganizerJob.Status.RUNNING
     job.started_at = timezone.now()
+    job.heartbeat_at = job.started_at
     job.error = ""
-    job.save(update_fields=["status", "started_at", "error"])
+    job.save(update_fields=["status", "started_at", "heartbeat_at", "error"])
     try:
         if not job.configuration.enabled:
             raise ValueError("Organizer configuration is disabled")
         config = _core_config(job)
-        results = Organizer(build_adapter(config), config).run_once(dry_run=job.dry_run)
-        operations = []
-        for result in results:
-            operations.append(
-                OrganizerOperation(
-                    job=job,
-                    status=result.status.value,
-                    source=result.source,
-                    destination=result.destination,
-                    object_id=result.object_id,
-                    capture_date=(
-                        result.date_result.value if result.date_result else None
-                    ),
-                    date_source=(
-                        result.date_result.source if result.date_result else ""
-                    ),
-                    detail=result.detail or "",
-                    verified=result.verified,
-                )
+        organizer = Organizer(build_adapter(config), config)
+        failed = False
+        for result in organizer.iter_once(
+            dry_run=job.dry_run,
+            media_objects=_retry_media(job, organizer),
+        ):
+            job.refresh_from_db(fields=["cancel_requested_at"])
+            if job.cancel_requested_at:
+                raise JobCancelled("Cancellation requested")
+            OrganizerOperation.objects.create(
+                job=job,
+                status=result.status.value,
+                source=result.source,
+                destination=result.destination,
+                object_id=result.object_id,
+                capture_date=(result.date_result.value if result.date_result else None),
+                date_source=(result.date_result.source if result.date_result else ""),
+                detail=result.detail or "",
+                verified=result.verified,
             )
             if not job.dry_run and config.adapter in {"local", "pcloud_drive"}:
                 _catalog_local_result(result)
-        OrganizerOperation.objects.bulk_create(operations)
-        failed = any(result.status == OperationStatus.FAILED for result in results)
+            failed = failed or result.status == OperationStatus.FAILED
+            job.heartbeat_at = timezone.now()
+            job.save(update_fields=["heartbeat_at"])
+            if heartbeat:
+                heartbeat()
         job.status = (
             OrganizerJob.Status.FAILED if failed else OrganizerJob.Status.COMPLETED
         )
+    except JobCancelled as error:
+        job.status = OrganizerJob.Status.CANCELLED
+        job.error = str(error)
     except Exception as error:
         job.status = OrganizerJob.Status.FAILED
         job.error = str(error)

@@ -3,7 +3,9 @@ from rest_framework.decorators import action
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated, SAFE_METHODS
 from rest_framework.response import Response
-from django.db import connection
+from django.db import connection, transaction
+from django.db.models import Count
+from django.utils import timezone
 
 from backend.permissions import IsPhotoChartOperator
 
@@ -17,9 +19,10 @@ from .serializers import (
     DuplicateGroupSerializer,
     OrganizerConfigurationSerializer,
     OrganizerJobSerializer,
+    OrganizerJobSummarySerializer,
     OrganizerOperationSerializer,
 )
-from .services import execute_job
+from .tasks import execute_job_task
 
 
 @api_view(["GET"])
@@ -67,21 +70,33 @@ class OrganizerConfigurationViewSet(viewsets.ModelViewSet):
             configuration=configuration,
             dry_run=bool(request.data.get("dry_run", True)),
         )
-        execute_job(job)
+        transaction.on_commit(lambda: execute_job_task.delay(job.pk))
         return Response(
             OrganizerJobSerializer(job).data,
-            status=status.HTTP_201_CREATED,
+            status=status.HTTP_202_ACCEPTED,
         )
 
 
 class OrganizerJobViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = OrganizerJob.objects.select_related("configuration").prefetch_related(
-        "operations"
+    queryset = (
+        OrganizerJob.objects.select_related("configuration")
+        .annotate(operation_count=Count("operations"))
+        .order_by("-created_at")
     )
     serializer_class = OrganizerJobSerializer
+    filterset_fields = ["configuration", "status", "dry_run"]
+
+    def get_serializer_class(self):
+        if self.action == "list":
+            return OrganizerJobSummarySerializer
+        return OrganizerJobSerializer
 
     def get_permissions(self):
-        permission = IsPhotoChartOperator if self.action == "retry" else IsAuthenticated
+        permission = (
+            IsPhotoChartOperator
+            if self.action in {"retry", "cancel"}
+            else IsAuthenticated
+        )
         return [permission()]
 
     @action(detail=True, methods=["post"])
@@ -95,12 +110,31 @@ class OrganizerJobViewSet(viewsets.ReadOnlyModelViewSet):
         job = OrganizerJob.objects.create(
             configuration=previous.configuration,
             dry_run=previous.dry_run,
+            retry_of=previous,
         )
-        execute_job(job)
+        transaction.on_commit(lambda: execute_job_task.delay(job.pk))
         return Response(
             OrganizerJobSerializer(job).data,
-            status=status.HTTP_201_CREATED,
+            status=status.HTTP_202_ACCEPTED,
         )
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        job = self.get_object()
+        if job.status not in {
+            OrganizerJob.Status.PENDING,
+            OrganizerJob.Status.RUNNING,
+        }:
+            return Response(
+                {"detail": "Only pending or running jobs can be cancelled."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        job.cancel_requested_at = timezone.now()
+        if job.status == OrganizerJob.Status.PENDING:
+            job.status = OrganizerJob.Status.CANCELLED
+            job.finished_at = timezone.now()
+        job.save(update_fields=["cancel_requested_at", "status", "finished_at"])
+        return Response(OrganizerJobSerializer(job).data)
 
 
 class OrganizerOperationViewSet(viewsets.ReadOnlyModelViewSet):

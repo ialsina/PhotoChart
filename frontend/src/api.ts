@@ -12,6 +12,7 @@ import type {
   PlannedAction,
   OrganizerConfiguration,
   OrganizerJob,
+  OrganizerOperation,
   PaginatedResponse,
 } from "./types";
 
@@ -317,6 +318,14 @@ export const api = {
 
   getOrganizerJobs: (): Promise<OrganizerJob[]> =>
     fetchAllPages<OrganizerJob>("/organizer-jobs/"),
+
+  getOrganizerJob: (jobId: number): Promise<OrganizerJob> =>
+    fetchAPI<OrganizerJob>(`/organizer-jobs/${jobId}/`),
+
+  getOrganizerOperations: (jobId: number): Promise<OrganizerOperation[]> =>
+    fetchAllPages<OrganizerOperation>("/organizer-operations/", {
+      job: String(jobId),
+    }),
 
   runOrganizer: (configurationId: number, dryRun = true): Promise<OrganizerJob> =>
     fetchAPIMethod<OrganizerJob>(

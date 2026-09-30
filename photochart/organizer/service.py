@@ -49,15 +49,24 @@ class Organizer:
             if PurePosixPath(media.name).suffix.lower() in extensions:
                 yield media
 
-    def run_once(self, dry_run: bool = False) -> list[OperationResult]:
+    def iter_once(
+        self,
+        dry_run: bool = False,
+        media_objects: Iterable[MediaObject] | None = None,
+    ) -> Iterable[OperationResult]:
         self.adapter.healthcheck()
-        return [
-            replace(
+        for media in media_objects if media_objects is not None else self.discover():
+            yield replace(
                 self._process_with_policy(media, dry_run=dry_run),
                 object_id=media.object_id,
             )
-            for media in self.discover()
-        ]
+
+    def run_once(
+        self,
+        dry_run: bool = False,
+        media_objects: Iterable[MediaObject] | None = None,
+    ) -> list[OperationResult]:
+        return list(self.iter_once(dry_run=dry_run, media_objects=media_objects))
 
     def watch(self, dry_run: bool = False) -> Iterable[list[OperationResult]]:
         while True:
