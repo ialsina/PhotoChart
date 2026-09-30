@@ -19,6 +19,7 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from backend.auth_views import session, session_login, session_logout
 from rest_framework.routers import DefaultRouter
 from photograph.views import PhotographViewSet, PhotoPathViewSet
 from catalog.views import (
@@ -67,6 +68,9 @@ router.register(r"duplicate-groups", DuplicateGroupViewSet, basename="duplicate-
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("api/session/", session, name="session"),
+    path("api/session/login/", session_login, name="session-login"),
+    path("api/session/logout/", session_logout, name="session-logout"),
     path("api/organizer-health/", organizer_health, name="organizer-health"),
     path("api/", include(router.urls)),
 ]

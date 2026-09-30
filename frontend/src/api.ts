@@ -18,9 +18,25 @@ import type {
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "/api";
 
+export interface Session {
+  authenticated: boolean;
+  username: string | null;
+  operator: boolean;
+}
+
+function getCookie(name: string): string | undefined {
+  return document.cookie
+    .split(";")
+    .map((value) => value.trim())
+    .find((value) => value.startsWith(`${name}=`))
+    ?.slice(name.length + 1);
+}
+
 async function fetchAPI<T>(endpoint: string): Promise<T> {
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`);
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      credentials: "same-origin",
+    });
     if (!response.ok) {
       throw new Error(`API error: ${response.status} ${response.statusText}`);
     }
@@ -41,8 +57,12 @@ async function fetchAPIMethod<T>(
   try {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method,
+      credentials: "same-origin",
       headers: {
         "Content-Type": "application/json",
+        ...(getCookie("csrftoken")
+          ? { "X-CSRFToken": decodeURIComponent(getCookie("csrftoken")!) }
+          : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -79,7 +99,7 @@ async function fetchAllPages<T>(
 
   try {
     while (nextUrl) {
-      const response = await fetch(nextUrl);
+      const response = await fetch(nextUrl, { credentials: "same-origin" });
       if (!response.ok) {
         throw new Error(`API error: ${response.status} ${response.statusText}`);
       }
@@ -98,6 +118,17 @@ async function fetchAllPages<T>(
 }
 
 export const api = {
+  getSession: (): Promise<Session> => fetchAPI("/session/"),
+
+  login: (username: string, password: string): Promise<Session> =>
+    fetchAPIMethod<Session>("/session/login/", "POST", {
+      username,
+      password,
+    }),
+
+  logout: (): Promise<Session> =>
+    fetchAPIMethod<Session>("/session/logout/", "POST"),
+
   // Photographs
   getPhotographs: (): Promise<PaginatedResponse<Photograph>> =>
     fetchAPI("/photographs/"),

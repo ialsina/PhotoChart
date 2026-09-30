@@ -1,9 +1,11 @@
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated, SAFE_METHODS
 from rest_framework.response import Response
 from django.db import connection
+
+from backend.permissions import IsPhotoChartOperator
 
 from .models import (
     DuplicateGroup,
@@ -45,6 +47,14 @@ class OrganizerConfigurationViewSet(viewsets.ModelViewSet):
     queryset = OrganizerConfiguration.objects.all().order_by("name")
     serializer_class = OrganizerConfigurationSerializer
 
+    def get_permissions(self):
+        permission = (
+            IsAuthenticated
+            if self.request.method in SAFE_METHODS
+            else IsPhotoChartOperator
+        )
+        return [permission()]
+
     @action(detail=True, methods=["post"])
     def run(self, request, pk=None):
         configuration = self.get_object()
@@ -69,6 +79,10 @@ class OrganizerJobViewSet(viewsets.ReadOnlyModelViewSet):
         "operations"
     )
     serializer_class = OrganizerJobSerializer
+
+    def get_permissions(self):
+        permission = IsPhotoChartOperator if self.action == "retry" else IsAuthenticated
+        return [permission()]
 
     @action(detail=True, methods=["post"])
     def retry(self, request, pk=None):

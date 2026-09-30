@@ -4,6 +4,10 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
+
+from backend.permissions import IsPhotoChartOperator
+
 from .models import Album
 from .serializers import AlbumSerializer
 
@@ -13,6 +17,14 @@ class AlbumViewSet(viewsets.ModelViewSet):
 
     queryset = Album.objects.all().prefetch_related("photos")
     serializer_class = AlbumSerializer
+
+    def get_permissions(self):
+        permission = (
+            IsAuthenticated
+            if self.request.method in SAFE_METHODS
+            else IsPhotoChartOperator
+        )
+        return [permission()]
 
     @action(detail=True, methods=["post"])
     def add_photos(self, request, pk=None):
