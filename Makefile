@@ -1,72 +1,61 @@
-SPHINXBUILD ?= python3 -m sphinx
-SPHINXOPTS ?= -W --keep-going
 PYTHON ?= python3
 NPM ?= npm
-DOCS_SOURCE := docs
-DOCS_BUILD := docs/_build
 
 .DEFAULT_GOAL := help
 
 .PHONY: help verify test test-cov django-test migrations-check check-deploy \
-	frontend-lint frontend-build package html docs-html latex pdf-latex \
-	latexpdf docs-pdf linkcheck clean docs-clean
+	frontend-lint frontend-build package clean \
+	html linkcheck latex pdf-latex latexpdf docs-pdf docs-%
 
-help:
-	@echo "Verification targets:"
-	@echo "  make verify      Run the local CI verification suite"
-	@echo "  make test        Run Python unit tests"
-	@echo "  make test-cov    Run risk-focused Python coverage"
-	@echo "  make django-test Run Django tests"
-	@echo "  make frontend-lint / frontend-build"
-	@echo "  make package     Build wheel and source distribution"
-	@echo "Documentation targets:"
-	@echo "  make html        Build strict HTML documentation"
-	@echo "  make latex       Generate LaTeX sources"
-	@echo "  make pdf-latex   Build the PDF through LaTeX"
-	@echo "  make linkcheck   Check documentation links"
-	@echo "  make clean       Remove documentation build output"
+help: ## Show this help
+	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_.-]+:.*## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@printf '\n  Documentation (make docs-<target> runs docs/Makefile):\n'
+	@printf '  \033[36m%-18s\033[0m %s\n' docs-html 'Build the HTML documentation into docs/_build/html'
+	@printf '  \033[36m%-18s\033[0m %s\n' docs-clean 'Remove the documentation build'
+	@printf '  \033[36m%-18s\033[0m %s\n' docs-linkcheck 'Check external links in the documentation'
+	@printf '  \033[36m%-18s\033[0m %s\n' docs-latexpdf 'Build PDF documentation (requires LaTeX) into docs/_build/latex'
 
-verify: test-cov django-test migrations-check frontend-lint frontend-build html
+verify: test-cov django-test migrations-check frontend-lint frontend-build docs-html ## Run the local CI verification suite
 
-test:
+test: ## Run Python unit tests
 	$(PYTHON) -m pytest -m "not integration"
 
-test-cov:
+test-cov: ## Run risk-focused Python coverage
 	$(PYTHON) -m pytest -m "not integration" --cov=photochart.organizer \
 		--cov-report=term-missing --cov-report=xml --cov-fail-under=60
 
-django-test:
+django-test: ## Run Django tests
 	$(PYTHON) backend/manage.py test organizer planner album catalog photograph
 
-migrations-check:
+migrations-check: ## Fail if model changes need new migrations
 	$(PYTHON) backend/manage.py makemigrations --check --dry-run
 
-check-deploy:
+check-deploy: ## Run Django deploy checks with production-like settings
 	DEBUG=false \
 	SECRET_KEY=ci-only-long-secret-key-with-more-than-fifty-unique-characters-123 \
 	ALLOWED_HOSTS=localhost SECURE_SSL_REDIRECT=true SECURE_HSTS_SECONDS=31536000 \
 	$(PYTHON) backend/manage.py check --deploy --fail-level WARNING
 
-frontend-lint:
+frontend-lint: ## Lint the frontend
 	$(NPM) --prefix frontend run lint
 
-frontend-build:
+frontend-build: ## Build the frontend assets
 	$(NPM) --prefix frontend run build
 
-package:
+package: ## Build wheel and source distribution
 	$(PYTHON) -m build
 
-html docs-html:
-	$(SPHINXBUILD) -M html $(DOCS_SOURCE) $(DOCS_BUILD) $(SPHINXOPTS)
+# --- Documentation (make docs-<target> → docs/Makefile) ----------------------
 
-latex:
-	$(SPHINXBUILD) -M latex $(DOCS_SOURCE) $(DOCS_BUILD) $(SPHINXOPTS)
+docs-%:
+	$(MAKE) -C docs $*
 
-pdf-latex latexpdf docs-pdf:
-	$(SPHINXBUILD) -M latexpdf $(DOCS_SOURCE) $(DOCS_BUILD) $(SPHINXOPTS)
+html: docs-html ## Alias for docs-html
 
-linkcheck:
-	$(SPHINXBUILD) -M linkcheck $(DOCS_SOURCE) $(DOCS_BUILD) $(SPHINXOPTS)
+linkcheck: docs-linkcheck ## Alias for docs-linkcheck
 
-clean docs-clean:
-	rm -rf $(DOCS_BUILD)
+latex: docs-latex ## Alias for docs-latex
+
+pdf-latex latexpdf docs-pdf: docs-latexpdf ## Alias for docs-latexpdf
+
+clean: docs-clean ## Remove documentation build output
