@@ -99,3 +99,18 @@ Release checklist
 #. migrate;
 #. run provider dry-run acceptance tests;
 #. deploy with move mode disabled initially.
+
+Versioned releases
+------------------
+
+``photochart/_version.py`` is the package version source. Before tagging,
+replace ``[Unreleased]`` with ``[vX.Y.Z]`` and the release date, then run:
+
+.. code-block:: console
+
+   scripts/check-release.py --tag vX.Y.Z
+   make verify check-deploy package
+
+Pushing the matching tag builds distributions and both container targets,
+repeats all release gates, and creates the GitHub release. Perform and record a
+successful backup/restore drill before pushing the tag.

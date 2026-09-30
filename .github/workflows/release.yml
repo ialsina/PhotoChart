@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev,remote,s3,docs]"
+      - run: npm ci --prefix frontend
+      - run: scripts/check-release.py --tag "${GITHUB_REF_NAME}"
+      - run: make verify
+      - run: make check-deploy
+      - run: make package
+      - run: docker build --target app -t "photochart:${GITHUB_REF_NAME#v}" .
+      - run: docker build --target gateway -t "photochart-gateway:${GITHUB_REF_NAME#v}" .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-distributions
+          path: dist/
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes --verify-tag

@@ -29,10 +29,10 @@ help:
 verify: test-cov django-test migrations-check frontend-lint frontend-build html
 
 test:
-	$(PYTHON) -m pytest
+	$(PYTHON) -m pytest -m "not integration"
 
 test-cov:
-	$(PYTHON) -m pytest --cov=photochart.organizer \
+	$(PYTHON) -m pytest -m "not integration" --cov=photochart.organizer \
 		--cov-report=term-missing --cov-report=xml --cov-fail-under=60
 
 django-test:

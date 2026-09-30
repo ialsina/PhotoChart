@@ -142,3 +142,19 @@ For every production adapter:
 #. test a large video and interrupted connectivity;
 #. run the same command twice to verify idempotency;
 #. enable move mode only after confirming source deletion semantics.
+
+The executable contract suite is opt-in:
+
+.. code-block:: console
+
+   export PHOTOCHART_ACCEPTANCE_PROVIDER=s3
+   export PHOTOCHART_ACCEPTANCE_CONFIG=/secure/s3-acceptance.yaml
+   export PHOTOCHART_ACCEPTANCE_SOURCE_OBJECT=/acceptance/fixture.jpg
+   export PHOTOCHART_ACCEPTANCE_PREFIX=/acceptance/photochart
+   python -m pytest tests/acceptance -m integration --no-cov
+
+The configured source object is never deleted. The suite copies it into a
+unique run prefix, byte-verifies it, exercises verified move semantics, and
+requires cleanup to succeed. The manual/scheduled provider workflow uses the
+same contract. Unattended move mode must remain disabled for a provider until
+its credentialed workflow is green.

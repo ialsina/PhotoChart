@@ -2,6 +2,25 @@
 
 All notable changes to PhotoChart are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Verified copy-before-delete transfers, explicit quarantine failures, and
+  transient/permanent retry classification across organizer adapters.
+- Complete persisted organizer configuration, honest single-worker semantics,
+  discover-only scanning, and operation object identifiers.
+- Same-origin session authentication, CSRF protection, operator permissions,
+  and authenticated media delivery.
+- Durable Celery jobs with PostgreSQL leases, cancellation, heartbeats, stale
+  recovery, failed-object retry, filtering, and bounded API payloads.
+- Worker-backed planned actions and duplicate scans with idempotency, state,
+  provenance, and persistent audit records.
+- Docker Compose production stack with PostgreSQL, Redis, Gunicorn, Celery,
+  Nginx, secure proxy settings, structured logs, metrics, and alert rules.
+- Automated CI, provider acceptance contracts, backup/restore tooling, package
+  builds, and release validation.
+
 ## [v0.2.0] - 2026-09-29
 
 ### Added

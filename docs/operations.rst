@@ -55,10 +55,12 @@ Monitoring
 
 Use:
 
-* ``/api/organizer-health/`` for process/database readiness;
+* ``/livez`` for web-process liveness;
+* ``/readyz`` for database, Redis, and worker readiness;
+* token-protected ``/metrics`` for job and failure gauges;
 * ``/api/organizer-jobs/`` for job state;
 * ``/api/organizer-operations/?job=ID`` for per-object audit;
-* structured CLI JSON lines for scheduler logs.
+* structured JSON application logs correlated by ``X-Request-ID``.
 
 A job can complete with skipped or duplicate objects. Failed object results
 make the persisted job fail. API retry creates a new job, preserving the
@@ -75,6 +77,28 @@ The organizer is not a backup system. Before move mode:
 #. verify quarantine and temporary-file cleanup;
 #. retain organizer operations long enough for incident investigation.
 
+Create an encrypted/off-host production backup with:
+
+.. code-block:: console
+
+   scripts/backup-production.sh /secure/off-host/photochart-$(date +%F)
+
+The backup contains a PostgreSQL custom-format dump, media archive, deployment
+configuration, environment file, and checksums. The environment file contains
+secrets; preserve mode ``0600`` and encrypt it at rest.
+
+Restore only into a prepared maintenance window:
+
+.. code-block:: console
+
+   scripts/restore-production.sh --confirm /secure/off-host/photochart-2026-09-30
+
+The restore script verifies checksums, stops mutating services, restores the
+database and media volume, applies migrations, and restarts the stack. After
+every restore, verify ``/readyz``, inspect failed/stale jobs, run catalog
+reconciliation, and execute a dry-run against representative sources. Record a
+successful restore drill before each production release.
+
 If processing stops mid-copy, the source remains and local/SFTP partial objects
 use a ``.partial`` suffix. The next reconciliation scan sees the source again.
 S3 source deletion occurs only after verified copy.
@@ -87,8 +111,8 @@ with one worker. Size checks avoid unnecessary hashing for most collisions, but
 duplicate reports intentionally read same-size candidates. Schedule large
 remote reports away from provider rate or bandwidth limits.
 
-Systemd example
----------------
+Legacy systemd example
+----------------------
 
 One-shot timer service:
 
@@ -124,4 +148,6 @@ Cron alternative
 
    * * * * * cd /opt/photochart && .venv/bin/pchart organize once /etc/photochart/organizer.yaml
 
-Do not run cron and watch mode against the same source simultaneously.
+The supported production stack uses Celery and database leases. Do not run
+these legacy schedulers alongside the Compose worker, cron, or watch mode
+against the same source.
