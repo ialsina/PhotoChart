@@ -52,6 +52,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "backend.middleware.RequestIdMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -60,6 +61,8 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+if not DEBUG:
+    MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
 
 ROOT_URLCONF = "backend.urls"
 
@@ -134,12 +137,21 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 # Media files (User uploaded files)
 # https://docs.djangoproject.com/en/5.2/topics/files/
 
-MEDIA_URL = "media/"
+MEDIA_URL = "/media/"
 MEDIA_ROOT = config("MEDIA_ROOT", default=BASE_DIR / "media", cast=Path)
 
 # Default primary key field type
@@ -169,6 +181,18 @@ CSRF_TRUSTED_ORIGINS = config(
 SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=False, cast=bool)
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = config("USE_X_FORWARDED_HOST", default=not DEBUG, cast=bool)
+SECURE_HSTS_SECONDS = config(
+    "SECURE_HSTS_SECONDS", default=31536000 if not DEBUG else 0, cast=int
+)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
+DATA_UPLOAD_MAX_MEMORY_SIZE = config(
+    "DATA_UPLOAD_MAX_MEMORY_SIZE", default=10 * 1024 * 1024, cast=int
+)
 
 # REST Framework settings
 REST_FRAMEWORK = {
@@ -183,6 +207,14 @@ REST_FRAMEWORK = {
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
     ],
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": config("API_ANON_RATE", default="30/minute"),
+        "user": config("API_USER_RATE", default="300/minute"),
+    },
 }
 
 CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="redis://localhost:6379/0")
@@ -192,8 +224,39 @@ CELERY_RESULT_BACKEND = config(
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = config("CELERY_TASK_TIME_LIMIT", default=86400, cast=int)
 CELERY_BEAT_SCHEDULE = {
+    "record-worker-heartbeat": {
+        "task": "organizer.worker_heartbeat",
+        "schedule": 30.0,
+    },
     "recover-stale-organizer-jobs": {
         "task": "organizer.recover_stale_jobs",
         "schedule": 300.0,
-    }
+    },
+}
+ORGANIZER_LEASE_SECONDS = config("ORGANIZER_LEASE_SECONDS", default=86400, cast=int)
+ORGANIZER_STALE_JOB_SECONDS = config(
+    "ORGANIZER_STALE_JOB_SECONDS", default=900, cast=int
+)
+METRICS_TOKEN = config("METRICS_TOKEN", default="")
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {
+        "request_id": {"()": "backend.logging.RequestIdFilter"},
+    },
+    "formatters": {
+        "json": {
+            "()": "pythonjsonlogger.json.JsonFormatter",
+            "format": "%(asctime)s %(levelname)s %(name)s %(message)s %(request_id)s",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "json",
+            "filters": ["request_id"],
+        },
+    },
+    "root": {"handlers": ["console"], "level": config("LOG_LEVEL", default="INFO")},
 }

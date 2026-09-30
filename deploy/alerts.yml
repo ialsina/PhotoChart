@@ -1,0 +1,24 @@
+groups:
+  - name: photochart
+    rules:
+      - alert: PhotoChartDown
+        expr: up{job="photochart"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: PhotoChart metrics endpoint is unavailable
+      - alert: PhotoChartFailedOperations
+        expr: photochart_organizer_failed_operations > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: PhotoChart has failed organizer operations
+      - alert: PhotoChartFailedJobs
+        expr: photochart_organizer_jobs{status="FAILED"} > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: PhotoChart has failed organizer jobs

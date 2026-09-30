@@ -14,12 +14,15 @@ At minimum configure:
    CORS_ALLOWED_ORIGINS=https://photos.example.test
    CSRF_TRUSTED_ORIGINS=https://photos.example.test
    SECURE_SSL_REDIRECT=true
+   SECURE_HSTS_SECONDS=31536000
    DATABASE_URL=postgresql://photochart:password@db/photochart
+   CELERY_BROKER_URL=redis://redis:6379/0
+   METRICS_TOKEN=a-separate-random-monitoring-token
 
 Terminate TLS at a trusted reverse proxy, forward the correct scheme, and
-restrict the API and admin site with deployment-appropriate authentication.
-The current development settings do not by themselves provide a public
-multi-user authorization model.
+restrict the admin site at the network layer. The API uses same-origin Django
+sessions and CSRF protection. Grant ``organizer.operate_organizer`` only to
+trusted operators.
 
 Filesystem permissions
 ----------------------
@@ -37,8 +40,8 @@ Do not run the organizer as root.
 Database
 --------
 
-SQLite is suitable for a single process and small installation. PostgreSQL is
-recommended when the API, scheduler, or workers can overlap. Back up the
+SQLite is development-only. Production requires PostgreSQL so job leases,
+workers, API requests, and audit writes share transactional state. Back up the
 database before migrations and test restoration of operation history.
 
 Provider credentials
@@ -59,6 +62,17 @@ version.
 Containers
 ----------
 
+The supported production topology is defined by ``compose.yaml``:
+PostgreSQL, Redis, a migration job, Gunicorn, Celery worker and beat, and an
+Nginx gateway. Start it only after creating a mode-``0600`` ``.env`` from
+``.env.example`` and mounting the intended photo library:
+
+.. code-block:: console
+
+   docker compose build
+   docker compose up -d
+   docker compose exec web python backend/manage.py createsuperuser
+
 Mount source, destination, quarantine, and media explicitly. A container using
 pCloud Drive generally needs the host mount passed through; API/WebDAV/SFTP/S3
 adapters do not require a virtual filesystem.
@@ -66,15 +80,20 @@ adapters do not require a virtual filesystem.
 ExifTool must be installed in the runtime image for comprehensive metadata.
 Install only optional Python extras needed by enabled providers.
 
+``/livez`` checks only the web process. ``/readyz`` requires PostgreSQL, Redis,
+and a recent Celery worker heartbeat. ``/metrics`` requires the configured
+bearer token and reports job and failed-operation gauges. Alert on readiness
+failure, stale/running jobs, failed operations, and transfer verification
+errors. Media responses are session-authorized by Django and delivered through
+Nginx's internal ``X-Accel-Redirect`` location.
+
 Release checklist
 -----------------
 
-#. ``python -m pytest tests --no-cov``
-#. ``python backend/manage.py test organizer``
-#. ``python backend/manage.py check --deploy``
-#. ``python backend/manage.py makemigrations --check --dry-run``
-#. ``npm --prefix frontend run build``
-#. ``make html``
+#. ``make verify``
+#. ``make check-deploy``
+#. ``make package``
+#. ``docker compose build``
 #. ``make linkcheck``
 #. backup database and configuration;
 #. migrate;

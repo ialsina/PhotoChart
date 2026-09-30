@@ -20,6 +20,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from backend.auth_views import session, session_login, session_logout
+from backend.health import liveness, metrics, protected_media, readiness
 from rest_framework.routers import DefaultRouter
 from photograph.views import PhotographViewSet, PhotoPathViewSet
 from catalog.views import (
@@ -38,7 +39,6 @@ from organizer.views import (
     OrganizerConfigurationViewSet,
     OrganizerJobViewSet,
     OrganizerOperationViewSet,
-    organizer_health,
 )
 
 # Create a router and register viewsets
@@ -73,7 +73,11 @@ urlpatterns = [
     path("api/session/", session, name="session"),
     path("api/session/login/", session_login, name="session-login"),
     path("api/session/logout/", session_logout, name="session-logout"),
-    path("api/organizer-health/", organizer_health, name="organizer-health"),
+    path("api/organizer-health/", liveness, name="organizer-health"),
+    path("livez", liveness, name="liveness"),
+    path("readyz", readiness, name="readiness"),
+    path("metrics", metrics, name="metrics"),
+    path("media/<path:path>", protected_media, name="protected-media"),
     path("api/", include(router.urls)),
 ]
 

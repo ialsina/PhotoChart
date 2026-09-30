@@ -1,0 +1,109 @@
+name: photochart
+
+x-app: &app
+  build:
+    context: .
+    target: app
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql://photochart:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/photochart
+    CELERY_BROKER_URL: redis://redis:6379/0
+    CELERY_RESULT_BACKEND: redis://redis:6379/1
+    DEBUG: "false"
+  volumes:
+    - media:/app/backend/media
+    - ${PHOTO_LIBRARY_PATH:-./photos}:/photos
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: photochart
+      POSTGRES_USER: photochart
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U photochart"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  init-volumes:
+    <<: *app
+    user: root
+    command: chown -R 10001:10001 /app/backend/media
+    restart: "no"
+
+  migrate:
+    <<: *app
+    command: python backend/manage.py migrate --noinput
+    depends_on:
+      db:
+        condition: service_healthy
+      init-volumes:
+        condition: service_completed_successfully
+    restart: "no"
+
+  web:
+    <<: *app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8000/livez"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  worker:
+    <<: *app
+    command: celery --workdir backend -A backend worker --loglevel=INFO
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  beat:
+    <<: *app
+    command: celery --workdir backend -A backend beat --loglevel=INFO
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  gateway:
+    build:
+      context: .
+      target: gateway
+    ports:
+      - "${PHOTOCHART_PORT:-8080}:8080"
+    volumes:
+      - media:/srv/media:ro
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres:
+  redis:
+  media:

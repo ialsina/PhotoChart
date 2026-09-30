@@ -2,11 +2,11 @@ import json
 from datetime import timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.contrib.auth.models import Permission, User
 from django.test import Client
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from .models import (
@@ -26,7 +26,34 @@ class OrganizerModelTests(TestCase):
         response = self.client.get("/api/organizer-health/")
 
         assert response.status_code == 200
-        assert response.json()["status"] == "ready"
+        assert response.json()["status"] == "alive"
+
+    def test_request_id_is_returned(self):
+        response = self.client.get("/livez", HTTP_X_REQUEST_ID="test-request-123")
+
+        assert response["X-Request-ID"] == "test-request-123"
+
+    @patch("backend.health.redis.Redis.from_url")
+    def test_readiness_checks_database_redis_and_worker(self, from_url):
+        client = Mock()
+        client.get.return_value = str(timezone.now().timestamp()).encode()
+        from_url.return_value = client
+
+        response = self.client.get("/readyz")
+
+        assert response.status_code == 200
+        assert response.json()["worker"] == "available"
+
+    @override_settings(METRICS_TOKEN="metrics-secret")
+    def test_metrics_require_bearer_token(self):
+        assert self.client.get("/metrics").status_code == 403
+
+        response = self.client.get(
+            "/metrics", HTTP_AUTHORIZATION="Bearer metrics-secret"
+        )
+
+        assert response.status_code == 200
+        assert b"photochart_organizer_jobs" in response.content
 
     def test_job_keeps_operation_audit(self):
         configuration = OrganizerConfiguration.objects.create(

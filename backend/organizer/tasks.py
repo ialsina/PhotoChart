@@ -1,7 +1,9 @@
 """Durable organizer tasks and database-backed single-flight leases."""
 
 from datetime import timedelta
+import time
 
+import redis
 from celery import shared_task
 from django.conf import settings
 from django.db import transaction
@@ -87,6 +89,14 @@ def recover_stale_jobs() -> int:
         release_lease(job)
         recovered += 1
     return recovered
+
+
+@shared_task(name="organizer.worker_heartbeat")
+def worker_heartbeat() -> float:
+    value = time.time()
+    client = redis.Redis.from_url(settings.CELERY_BROKER_URL)
+    client.set("photochart:worker:heartbeat", value, ex=120)
+    return value
 
 
 @shared_task(bind=True, name="organizer.scan_duplicates")

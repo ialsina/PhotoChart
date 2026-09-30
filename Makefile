@@ -42,8 +42,10 @@ migrations-check:
 	$(PYTHON) backend/manage.py makemigrations --check --dry-run
 
 check-deploy:
-	DEBUG=false SECRET_KEY=ci-not-a-production-secret \
-	ALLOWED_HOSTS=localhost $(PYTHON) backend/manage.py check --deploy
+	DEBUG=false \
+	SECRET_KEY=ci-only-long-secret-key-with-more-than-fifty-unique-characters-123 \
+	ALLOWED_HOSTS=localhost SECURE_SSL_REDIRECT=true SECURE_HSTS_SECONDS=31536000 \
+	$(PYTHON) backend/manage.py check --deploy --fail-level WARNING
 
 frontend-lint:
 	$(NPM) --prefix frontend run lint
