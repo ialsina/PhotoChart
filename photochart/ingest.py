@@ -15,6 +15,7 @@ from django.conf import settings
 from django.db import transaction
 from tqdm import tqdm
 
+from photochart.media_extensions import IMAGE_EXTENSIONS
 from photochart.protocols import calculate_checksum as calculate_file_checksum
 from photochart.resolution import parse_resolution
 from photochart.device import get_device_name, get_mount_point
@@ -105,62 +106,6 @@ def is_path_in_media_root(file_path: Path) -> bool:
         # If we can't determine, err on the side of caution and exclude it
         # This could happen if MEDIA_ROOT is not set or path resolution fails
         return True
-
-
-# Common image file extensions
-IMAGE_EXTENSIONS = {
-    ".jpg",
-    ".jpeg",
-    ".png",
-    ".gif",
-    ".bmp",
-    ".tiff",
-    ".tif",
-    ".webp",
-    ".heic",
-    ".heif",
-    ".raw",
-    ".cr2",
-    ".nef",
-    ".orf",
-    ".sr2",
-    ".arw",
-    ".dng",
-    ".raf",
-    ".rw2",
-    ".pef",
-    ".srw",
-    ".3fr",
-    ".mef",
-    ".mos",
-    ".ari",
-    ".bay",
-    ".crw",
-    ".cap",
-    ".dcs",
-    ".dcr",
-    ".drf",
-    ".eip",
-    ".erf",
-    ".fff",
-    ".iiq",
-    ".k25",
-    ".kdc",
-    ".mdc",
-    ".mrw",
-    ".nrw",
-    ".obm",
-    ".pbm",
-    ".pxn",
-    ".r3d",
-    ".raf",
-    ".rwl",
-    ".rwz",
-    ".x3f",
-    ".srf",
-    ".srw",
-    ".x3f",
-}
 
 
 def is_image_file(file_path: Path) -> bool:

@@ -9,6 +9,11 @@ from typing import Any, Mapping
 
 import yaml
 
+from photochart.media_extensions import (
+    DEFAULT_ORGANIZER_MEDIA_EXTENSIONS,
+    normalize_extensions,
+)
+
 from .patterns import ClassificationPattern
 
 
@@ -43,20 +48,7 @@ class OrganizerConfig:
     include_first: bool = True
     day_starts_at: float = 0
     media_extensions: tuple[str, ...] = field(
-        default=(
-            ".jpg",
-            ".jpeg",
-            ".heic",
-            ".heif",
-            ".png",
-            ".tif",
-            ".tiff",
-            ".nef",
-            ".dng",
-            ".mp4",
-            ".mov",
-            ".m4v",
-        )
+        default=DEFAULT_ORGANIZER_MEDIA_EXTENSIONS
     )
     date_priority: tuple[str, ...] = field(
         default=(
@@ -87,6 +79,11 @@ class OrganizerConfig:
             raise ValueError("parallel workers are not supported; workers must be 1")
         if not 0 <= self.day_starts_at < 24:
             raise ValueError("day_starts_at must be between 0 and 24")
+        object.__setattr__(
+            self,
+            "media_extensions",
+            normalize_extensions(self.media_extensions),
+        )
 
 
 def _nested(mapping: Mapping[str, Any], key: str, default: Any = None) -> Any:
@@ -134,9 +131,8 @@ def config_from_mapping(data: Mapping[str, Any]) -> OrganizerConfig:
         process_after=process_after,
         include_first=bool(date.get("include_first", True)),
         day_starts_at=float(date.get("day_starts_at", 0)),
-        media_extensions=tuple(
-            extension.lower()
-            for extension in media.get(
+        media_extensions=normalize_extensions(
+            media.get(
                 "extensions",
                 OrganizerConfig.__dataclass_fields__["media_extensions"].default,
             )

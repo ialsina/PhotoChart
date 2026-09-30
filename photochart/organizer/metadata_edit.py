@@ -8,17 +8,9 @@ from datetime import datetime
 from pathlib import Path
 
 
-SUPPORTED_EXTENSIONS = {
-    ".jpg",
-    ".jpeg",
-    ".tif",
-    ".tiff",
-    ".png",
-    ".heic",
-    ".heif",
-    ".dng",
-    ".nef",
-}
+from photochart.media_extensions import IMAGE_EXTENSIONS
+
+SUPPORTED_EXTENSIONS = IMAGE_EXTENSIONS
 
 
 def set_original_date(

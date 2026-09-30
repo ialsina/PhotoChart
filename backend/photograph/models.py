@@ -15,6 +15,8 @@ from django.core.files import File
 from django.core.validators import RegexValidator
 from django.utils import timezone
 
+from photochart.media_extensions import RASTER_IMAGE_EXTENSIONS, normalize_extension
+
 
 def photograph_upload_path(instance, filename):
     """Generate a dynamic directory structure for photograph storage.
@@ -33,16 +35,7 @@ def photograph_upload_path(instance, filename):
     """
     # Extract extension from filename, default to .jpg if missing
     _, ext = os.path.splitext(filename)
-    if not ext or ext.lower() not in [
-        ".jpg",
-        ".jpeg",
-        ".png",
-        ".gif",
-        ".bmp",
-        ".tiff",
-        ".tif",
-        ".webp",
-    ]:
+    if not ext or normalize_extension(ext) not in RASTER_IMAGE_EXTENSIONS:
         ext = ".jpg"
 
     # Use checksum-based structure if checksum is available
@@ -270,17 +263,11 @@ class Photograph(models.Model):
         # If extension not provided, try to get it from original file
         if extension is None:
             _, original_ext = os.path.splitext(original_file_path)
-            if original_ext and original_ext.lower() in [
-                ".jpg",
-                ".jpeg",
-                ".png",
-                ".gif",
-                ".bmp",
-                ".tiff",
-                ".tif",
-                ".webp",
-            ]:
-                extension = original_ext.lower()
+            if (
+                original_ext
+                and normalize_extension(original_ext) in RASTER_IMAGE_EXTENSIONS
+            ):
+                extension = normalize_extension(original_ext)
                 if extension == ".jpeg":
                     extension = ".jpg"
             else:

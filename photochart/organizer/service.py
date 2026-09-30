@@ -9,6 +9,8 @@ from datetime import timedelta
 from pathlib import PurePosixPath
 from typing import Callable, Iterable
 
+from photochart.media_extensions import normalize_extensions
+
 from .collision import resolve_collision
 from .config import OrganizerConfig
 from .domain import DateResult, MediaObject, OperationResult, OperationStatus
@@ -44,7 +46,7 @@ class Organizer:
         return DateResult(media.modified_time, "filesystem_modified_time")
 
     def discover(self) -> Iterable[MediaObject]:
-        extensions = set(self.config.media_extensions)
+        extensions = set(normalize_extensions(self.config.media_extensions))
         for media in self.adapter.list_objects(self.config.source):
             if PurePosixPath(media.name).suffix.lower() in extensions:
                 yield media

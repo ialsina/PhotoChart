@@ -1,21 +1,10 @@
 from django.db import models
 
+from photochart.media_extensions import DEFAULT_ORGANIZER_MEDIA_EXTENSIONS
+
 
 def default_media_extensions():
-    return [
-        ".jpg",
-        ".jpeg",
-        ".heic",
-        ".heif",
-        ".png",
-        ".tif",
-        ".tiff",
-        ".nef",
-        ".dng",
-        ".mp4",
-        ".mov",
-        ".m4v",
-    ]
+    return list(DEFAULT_ORGANIZER_MEDIA_EXTENSIONS)
 
 
 def default_date_priority():

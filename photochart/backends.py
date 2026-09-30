@@ -1,7 +1,7 @@
 """Image backends for processing different image file formats.
 
 This module provides a backend system for handling various image formats,
-including RAW formats like NEF (Nikon RAW) that require special processing.
+including RAW formats that require special processing via rawpy.
 """
 
 import os
@@ -9,6 +9,8 @@ import io
 from pathlib import Path
 from typing import Optional, Protocol, Dict, Type
 from logging import Logger
+
+from photochart.media_extensions import RAW_IMAGE_EXTENSIONS
 
 from .log import get_logger
 
@@ -52,16 +54,15 @@ class ImageBackend(Protocol):
         ...
 
 
-class NEFBackend:
-    """Backend for processing Nikon NEF (RAW) files.
+class RawPyBackend:
+    """Backend for camera RAW files supported by rawpy.
 
-    This backend uses rawpy to extract embedded JPEG previews from NEF files
-    or convert them to standard image formats. The embedded preview is preferred
-    as it's faster and doesn't require full RAW processing.
+    Uses rawpy to extract embedded JPEG previews or convert RAW data to a
+    standard image format. The embedded preview is preferred when available.
     """
 
     def __init__(self, logger: Logger = LOGGER):
-        """Initialize the NEF backend.
+        """Initialize the RAW backend.
 
         Args:
             logger: Logger instance for error reporting
@@ -81,7 +82,7 @@ class NEFBackend:
             return True
         except ImportError:
             self.logger.warning(
-                "rawpy is not available. NEF file processing will be disabled. "
+                "rawpy is not available. RAW file processing will be disabled. "
                 "Install it with: pip install rawpy"
             )
             return False
@@ -93,13 +94,13 @@ class NEFBackend:
             file_path: Path to the image file
 
         Returns:
-            True if the file is a NEF file and rawpy is available, False otherwise
+            True if the file is a supported RAW format and rawpy is available
         """
         if not self._rawpy_available:
             return False
 
         path = Path(file_path)
-        return path.suffix.lower() == ".nef" and os.path.exists(file_path)
+        return path.suffix.lower() in RAW_IMAGE_EXTENSIONS and os.path.exists(file_path)
 
     def process_to_standard_format(
         self,
@@ -107,14 +108,14 @@ class NEFBackend:
         output_format: str = "JPEG",
         resolution: Optional[tuple[int, int]] = None,
     ) -> Optional[io.BytesIO]:
-        """Process a NEF file and return it as a standard format.
+        """Process a RAW file and return it as a standard format.
 
-        This method first tries to extract the embedded JPEG preview from the NEF file,
+        This method first tries to extract the embedded JPEG preview from the file,
         which is faster and doesn't require full RAW processing. If that fails,
         it falls back to processing the RAW data.
 
         Args:
-            file_path: Path to the NEF file
+            file_path: Path to the RAW file
             output_format: Desired output format (default: "JPEG")
             resolution: Optional target resolution as (width, height) tuple
 
@@ -123,12 +124,12 @@ class NEFBackend:
         """
         if not self._rawpy_available:
             self.logger.error(
-                "rawpy is not available for processing NEF file: %s", file_path
+                "rawpy is not available for processing RAW file: %s", file_path
             )
             return None
 
         if not os.path.exists(file_path):
-            self.logger.error("NEF file does not exist: %s", file_path)
+            self.logger.error("RAW file does not exist: %s", file_path)
             return None
 
         try:
@@ -136,44 +137,34 @@ class NEFBackend:
             from PIL import Image
 
             with rawpy.imread(file_path) as raw:
-                # First, try to extract the embedded JPEG preview
-                # This is much faster than processing the RAW data
                 try:
-                    # Try to get the embedded JPEG preview
                     thumb = raw.extract_thumb()
                     if thumb.format == rawpy.ThumbFormat.JPEG:
-                        # Embedded JPEG preview found
                         preview_data = thumb.data
                         image = Image.open(io.BytesIO(preview_data))
                         self.logger.debug(
-                            "Extracted embedded JPEG preview from NEF file: %s",
+                            "Extracted embedded JPEG preview from RAW file: %s",
                             file_path,
                         )
                     else:
-                        # Preview is in a different format, process it
                         image = Image.fromarray(thumb.data)
                         self.logger.debug(
-                            "Extracted embedded preview (non-JPEG) from NEF file: %s",
+                            "Extracted embedded preview (non-JPEG) from RAW file: %s",
                             file_path,
                         )
                 except Exception as preview_error:
-                    # If preview extraction fails, process the RAW data
                     self.logger.debug(
-                        "Could not extract preview from NEF file %s: %s. "
+                        "Could not extract preview from RAW file %s: %s. "
                         "Processing RAW data instead.",
                         file_path,
                         preview_error,
                     )
-                    # Process the RAW data with default settings
                     rgb_array = raw.postprocess()
                     image = Image.fromarray(rgb_array)
 
-                # Convert to the desired output format
                 output_buffer = io.BytesIO()
                 if output_format.upper() == "JPEG":
-                    # Convert RGBA to RGB if necessary for JPEG
                     if image.mode in ("RGBA", "LA", "P"):
-                        # Create a white background for transparency
                         rgb_image = Image.new("RGB", image.size, (255, 255, 255))
                         if image.mode == "P":
                             image = image.convert("RGBA")
@@ -185,20 +176,16 @@ class NEFBackend:
                     elif image.mode not in ("RGB", "L"):
                         image = image.convert("RGB")
 
-                # Resize image if resolution is specified
                 if resolution:
                     target_width, target_height = resolution
-                    # Maintain aspect ratio
                     original_width, original_height = image.size
                     aspect_ratio = original_width / original_height
                     target_aspect = target_width / target_height
 
                     if aspect_ratio > target_aspect:
-                        # Image is wider - fit to width
                         new_width = target_width
                         new_height = int(target_width / aspect_ratio)
                     else:
-                        # Image is taller - fit to height
                         new_height = target_height
                         new_width = int(target_height * aspect_ratio)
 
@@ -219,13 +206,16 @@ class NEFBackend:
                     image.save(output_buffer, format=output_format)
 
                 output_buffer.seek(0)
-                self.logger.info("Successfully processed NEF file: %s", file_path)
+                self.logger.info("Successfully processed RAW file: %s", file_path)
                 return output_buffer
 
         except Exception as exc:
-            self.logger.error("Failed to process NEF file %s: %s", file_path, exc)
+            self.logger.error("Failed to process RAW file %s: %s", file_path, exc)
             return None
 
+
+# Backwards-compatible alias
+NEFBackend = RawPyBackend
 
 # Backend registry
 _BACKENDS: Dict[str, Type[ImageBackend]] = {}
@@ -238,7 +228,9 @@ def register_backend(extension: str, backend_class: Type[ImageBackend]) -> None:
         extension: File extension (e.g., ".nef") - should include the dot
         backend_class: Backend class that implements the ImageBackend protocol
     """
-    _BACKENDS[extension.lower()] = backend_class
+    from photochart.media_extensions import normalize_extension
+
+    _BACKENDS[normalize_extension(extension)] = backend_class
 
 
 def get_backend(file_path: str) -> Optional[ImageBackend]:
@@ -286,12 +278,10 @@ def process_image_file(
     """
     backend = get_backend(file_path)
     if backend is None:
-        # No backend available for this file type
-        # Return None to indicate it should be handled by default methods
         return None
 
     return backend.process_to_standard_format(file_path, output_format, resolution)
 
 
-# Register the NEF backend
-register_backend(".nef", NEFBackend)
+for _raw_extension in RAW_IMAGE_EXTENSIONS:
+    register_backend(_raw_extension, RawPyBackend)

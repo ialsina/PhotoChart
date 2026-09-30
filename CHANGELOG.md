@@ -2,6 +2,24 @@
 
 All notable changes to PhotoChart are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Central `photochart.media_extensions` module listing raster, RAW, HEIC/HEIF,
+  and video extensions, with shared organizer defaults.
+- `RawPyBackend` for all registered RAW extensions (replacing NEF-only
+  processing), using embedded previews or full RAW conversion via rawpy.
+
+### Changed
+
+- Media file extensions are normalized to lowercase with a leading dot in
+  organizer configuration, discovery, YAML loading, and related checks; matching
+  is case-insensitive everywhere extensions are compared.
+- Metadata date correction accepts the same image extension set as ingestion.
+- Organizer and Django default `media_extensions` now include common RAW formats
+  in addition to prior raster and video types.
+
 ## [v0.3.0] - 2026-09-30
 
 ### Added
