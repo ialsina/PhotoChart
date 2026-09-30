@@ -25,7 +25,7 @@ def sanitize_label(label: str) -> str:
     """Sanitize a device label by decoding escape sequences.
 
     Handles:
-    - Hex escape sequences: \x20, \x0A, etc.
+    - Hex escape sequences: \x20, \x0a, etc.
     - Octal escape sequences: \040, \011, etc.
     - URL encoding (via urllib.parse.unquote)
     """
