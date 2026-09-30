@@ -11,18 +11,20 @@ from backend.permissions import IsPhotoChartOperator
 
 from .models import (
     DuplicateGroup,
+    DuplicateScan,
     OrganizerConfiguration,
     OrganizerJob,
     OrganizerOperation,
 )
 from .serializers import (
     DuplicateGroupSerializer,
+    DuplicateScanSerializer,
     OrganizerConfigurationSerializer,
     OrganizerJobSerializer,
     OrganizerJobSummarySerializer,
     OrganizerOperationSerializer,
 )
-from .tasks import execute_job_task
+from .tasks import execute_job_task, scan_duplicates as scan_duplicates_task
 
 
 @api_view(["GET"])
@@ -73,6 +75,21 @@ class OrganizerConfigurationViewSet(viewsets.ModelViewSet):
         transaction.on_commit(lambda: execute_job_task.delay(job.pk))
         return Response(
             OrganizerJobSerializer(job).data,
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+    @action(detail=True, methods=["post"], url_path="scan-duplicates")
+    def scan_duplicates(self, request, pk=None):
+        configuration = self.get_object()
+        if not configuration.enabled:
+            return Response(
+                {"detail": "Organizer configuration is disabled."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        scan = DuplicateScan.objects.create(configuration=configuration)
+        transaction.on_commit(lambda: scan_duplicates_task.delay(scan.pk))
+        return Response(
+            DuplicateScanSerializer(scan).data,
             status=status.HTTP_202_ACCEPTED,
         )
 
@@ -146,3 +163,14 @@ class OrganizerOperationViewSet(viewsets.ReadOnlyModelViewSet):
 class DuplicateGroupViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = DuplicateGroup.objects.all()
     serializer_class = DuplicateGroupSerializer
+    filterset_fields = ["configuration", "scan", "checksum"]
+
+
+class DuplicateScanViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = (
+        DuplicateScan.objects.select_related("configuration")
+        .annotate(group_count=Count("groups"))
+        .order_by("-created_at")
+    )
+    serializer_class = DuplicateScanSerializer
+    filterset_fields = ["configuration", "status"]

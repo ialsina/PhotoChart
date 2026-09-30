@@ -58,13 +58,17 @@ def _catalog_local_result(result) -> None:
     )
 
 
-def _retry_media(job: OrganizerJob, organizer: Organizer):
-    if not job.retry_of_id:
+def _job_media(job: OrganizerJob, organizer: Organizer):
+    sources = job.source_paths
+    if job.retry_of_id:
+        sources = list(
+            job.retry_of.operations.filter(status="failed").values_list(
+                "source", flat=True
+            )
+        )
+    if not sources:
         return None
-    failed_sources = job.retry_of.operations.filter(status="failed").values_list(
-        "source", flat=True
-    )
-    return [organizer.adapter.get_object_info(source) for source in failed_sources]
+    return [organizer.adapter.get_object_info(source) for source in sources]
 
 
 def execute_job(
@@ -83,11 +87,21 @@ def execute_job(
         failed = False
         for result in organizer.iter_once(
             dry_run=job.dry_run,
-            media_objects=_retry_media(job, organizer),
+            media_objects=_job_media(job, organizer),
         ):
             job.refresh_from_db(fields=["cancel_requested_at"])
             if job.cancel_requested_at:
                 raise JobCancelled("Cancellation requested")
+            catalog_status = "not_applicable"
+            if not job.dry_run and result.status in {
+                OperationStatus.COPIED,
+                OperationStatus.MOVED,
+            }:
+                if config.adapter in {"local", "pcloud_drive"}:
+                    _catalog_local_result(result)
+                    catalog_status = "cataloged"
+                else:
+                    catalog_status = "manual_required"
             OrganizerOperation.objects.create(
                 job=job,
                 status=result.status.value,
@@ -98,9 +112,8 @@ def execute_job(
                 date_source=(result.date_result.source if result.date_result else ""),
                 detail=result.detail or "",
                 verified=result.verified,
+                catalog_status=catalog_status,
             )
-            if not job.dry_run and config.adapter in {"local", "pcloud_drive"}:
-                _catalog_local_result(result)
             failed = failed or result.status == OperationStatus.FAILED
             job.heartbeat_at = timezone.now()
             job.save(update_fields=["heartbeat_at"])

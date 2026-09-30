@@ -7,8 +7,11 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
-from .models import OrganizerJob, OrganizerLease
-from .services import execute_job
+from photochart.organizer.adapters import build_adapter
+from photochart.organizer.reports import find_duplicates
+
+from .models import DuplicateGroup, DuplicateScan, OrganizerJob, OrganizerLease
+from .services import _core_config, execute_job
 
 
 def _lease_deadline():
@@ -84,3 +87,39 @@ def recover_stale_jobs() -> int:
         release_lease(job)
         recovered += 1
     return recovered
+
+
+@shared_task(bind=True, name="organizer.scan_duplicates")
+def scan_duplicates(self, scan_id: int) -> str:
+    scan = DuplicateScan.objects.select_related("configuration").get(pk=scan_id)
+    scan.status = DuplicateScan.Status.RUNNING
+    scan.task_id = self.request.id or ""
+    scan.started_at = timezone.now()
+    scan.error = ""
+    scan.save(update_fields=["status", "task_id", "started_at", "error"])
+    try:
+        probe_job = OrganizerJob(configuration=scan.configuration)
+        config = _core_config(probe_job)
+        groups = find_duplicates(build_adapter(config), config.source)
+        with transaction.atomic():
+            DuplicateGroup.objects.filter(configuration=scan.configuration).delete()
+            DuplicateGroup.objects.bulk_create(
+                [
+                    DuplicateGroup(
+                        configuration=scan.configuration,
+                        scan=scan,
+                        checksum=group.checksum,
+                        size=group.size,
+                        paths=list(group.paths),
+                        wasted_bytes=group.wasted_bytes,
+                    )
+                    for group in groups
+                ]
+            )
+        scan.status = DuplicateScan.Status.COMPLETED
+    except Exception as error:
+        scan.status = DuplicateScan.Status.FAILED
+        scan.error = str(error)
+    scan.finished_at = timezone.now()
+    scan.save(update_fields=["status", "error", "finished_at"])
+    return scan.status

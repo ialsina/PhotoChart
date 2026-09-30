@@ -1,5 +1,7 @@
 import json
 from datetime import timedelta
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from django.contrib.auth.models import Permission, User
@@ -8,13 +10,15 @@ from django.test import TestCase
 from django.utils import timezone
 
 from .models import (
+    DuplicateGroup,
+    DuplicateScan,
     OrganizerConfiguration,
     OrganizerJob,
     OrganizerOperation,
 )
 from .serializers import OrganizerConfigurationSerializer
 from .services import _core_config
-from .tasks import acquire_lease, recover_stale_jobs
+from .tasks import acquire_lease, recover_stale_jobs, scan_duplicates
 
 
 class OrganizerModelTests(TestCase):
@@ -218,3 +222,24 @@ class OrganizerModelTests(TestCase):
 
         assert "operations" not in jobs[0]
         assert {operation["source"] for operation in operations} == {"/in/failed.jpg"}
+
+    def test_duplicate_scan_populates_persistent_groups(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "one.jpg").write_bytes(b"same")
+            (root / "two.jpg").write_bytes(b"same")
+            configuration = OrganizerConfiguration.objects.create(
+                name="duplicates",
+                source=str(root),
+                destination=str(root / "organized"),
+            )
+            scan = DuplicateScan.objects.create(configuration=configuration)
+
+            status = scan_duplicates(scan.pk)
+
+        scan.refresh_from_db()
+        group = DuplicateGroup.objects.get(configuration=configuration)
+        assert status == DuplicateScan.Status.COMPLETED
+        assert scan.status == DuplicateScan.Status.COMPLETED
+        assert len(group.paths) == 2
+        assert group.scan == scan

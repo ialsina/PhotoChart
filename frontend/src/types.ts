@@ -80,6 +80,8 @@ export interface PlannedAction {
   id: number;
   action_type: string;
   photograph: number;
+  status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED";
+  error: string;
   created_at: string;
   updated_at: string;
 }
@@ -116,6 +118,7 @@ export interface OrganizerOperation {
   date_source: string;
   detail: string;
   verified: boolean;
+  catalog_status: "not_applicable" | "cataloged" | "manual_required";
 }
 
 export interface OrganizerJob {

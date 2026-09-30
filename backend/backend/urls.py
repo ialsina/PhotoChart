@@ -34,6 +34,7 @@ from album.views import AlbumViewSet
 from planner.views import PlannedActionViewSet
 from organizer.views import (
     DuplicateGroupViewSet,
+    DuplicateScanViewSet,
     OrganizerConfigurationViewSet,
     OrganizerJobViewSet,
     OrganizerOperationViewSet,
@@ -65,6 +66,7 @@ router.register(
     basename="organizer-operation",
 )
 router.register(r"duplicate-groups", DuplicateGroupViewSet, basename="duplicate-group")
+router.register(r"duplicate-scans", DuplicateScanViewSet, basename="duplicate-scan")
 
 urlpatterns = [
     path("admin/", admin.site.urls),

@@ -8,6 +8,7 @@ from photochart.organizer.config import (
 
 from .models import (
     DuplicateGroup,
+    DuplicateScan,
     OrganizerConfiguration,
     OrganizerJob,
     OrganizerOperation,
@@ -81,6 +82,7 @@ class OrganizerOperationSerializer(serializers.ModelSerializer):
             "date_source",
             "detail",
             "verified",
+            "catalog_status",
             "created_at",
         ]
 
@@ -119,4 +121,21 @@ class DuplicateGroupSerializer(serializers.ModelSerializer):
             "paths",
             "wasted_bytes",
             "scanned_at",
+        ]
+
+
+class DuplicateScanSerializer(serializers.ModelSerializer):
+    group_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = DuplicateScan
+        fields = "__all__"
+        read_only_fields = [
+            "id",
+            "status",
+            "task_id",
+            "error",
+            "started_at",
+            "finished_at",
+            "created_at",
         ]

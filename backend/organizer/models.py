@@ -107,6 +107,7 @@ class OrganizerJob(models.Model):
         blank=True,
         related_name="retry_jobs",
     )
+    source_paths = models.JSONField(default=list, blank=True)
     task_id = models.CharField(max_length=255, blank=True)
     worker_id = models.CharField(max_length=255, blank=True)
     error = models.TextField(blank=True)
@@ -149,6 +150,7 @@ class OrganizerOperation(models.Model):
     date_source = models.CharField(max_length=255, blank=True)
     detail = models.TextField(blank=True)
     verified = models.BooleanField(default=False)
+    catalog_status = models.CharField(max_length=30, default="not_applicable")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -159,7 +161,46 @@ class OrganizerOperation(models.Model):
         ]
 
 
+class DuplicateScan(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        RUNNING = "RUNNING", "Running"
+        COMPLETED = "COMPLETED", "Completed"
+        FAILED = "FAILED", "Failed"
+
+    configuration = models.ForeignKey(
+        OrganizerConfiguration,
+        on_delete=models.CASCADE,
+        related_name="duplicate_scans",
+    )
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING
+    )
+    task_id = models.CharField(max_length=255, blank=True)
+    error = models.TextField(blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
 class DuplicateGroup(models.Model):
+    configuration = models.ForeignKey(
+        OrganizerConfiguration,
+        on_delete=models.CASCADE,
+        related_name="duplicate_groups",
+        null=True,
+        blank=True,
+    )
+    scan = models.ForeignKey(
+        DuplicateScan,
+        on_delete=models.CASCADE,
+        related_name="groups",
+        null=True,
+        blank=True,
+    )
     checksum = models.CharField(max_length=64, db_index=True)
     size = models.BigIntegerField()
     paths = models.JSONField(default=list)

@@ -38,6 +38,7 @@ Endpoint                                      Purpose
 ``organizer-jobs/{id}/retry/``                Create a retry job
 ``organizer-operations/``                     Filterable operation audit
 ``duplicate-groups/``                         Duplicate report records
+``duplicate-scans/``                          Duplicate scan status and provenance
 ``photographs/`` and ``photo-paths/``         Existing catalog API
 ``albums/``                                   Album management
 ``planned-actions/``                          Planner intents
@@ -62,6 +63,13 @@ objects from the selected job; pending or running jobs can be cancelled.
 All API routes require a Django session except liveness/readiness endpoints.
 Real runs, retries, cancellation, planned actions, and configuration mutations
 require the ``organizer.operate_organizer`` permission.
+
+``POST /api/organizer-configurations/<id>/scan-duplicates/`` queues a
+provider-backed duplicate scan and replaces that configuration's persisted
+groups transactionally. Planned actions are also queued and retain
+pending/running/completed/failed/cancelled state plus an idempotency key.
+Remote organizer results explicitly report ``catalog_status=manual_required``;
+filesystem-backed results are cataloged by the worker.
 
 Operation filtering
 -------------------
