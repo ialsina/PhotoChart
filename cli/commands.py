@@ -117,6 +117,11 @@ def cmd_organize(args: argparse.Namespace) -> int:
             organizer_config = replace(organizer_config, **overrides)
 
         organizer = Organizer(build_adapter(organizer_config), organizer_config)
+        if args.organize_action == "scan":
+            organizer.adapter.healthcheck()
+            for media in organizer.discover():
+                print(json.dumps(asdict(media), default=str, sort_keys=True))
+            return 0
         batches = (
             organizer.watch(dry_run=args.dry_run)
             if args.organize_action == "watch"

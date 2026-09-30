@@ -79,8 +79,12 @@ class OrganizerConfig:
             raise ValueError("mode must be 'copy' or 'move'")
         if self.collision not in {"suffix", "fail", "quarantine"}:
             raise ValueError("unsupported collision policy")
-        if self.workers < 1:
-            raise ValueError("workers must be at least one")
+        if self.collision == "quarantine" and not self.quarantine:
+            raise ValueError("collision quarantine requires a quarantine path")
+        if self.duplicate_detection != "size_then_hash":
+            raise ValueError("duplicate_detection must be 'size_then_hash'")
+        if self.workers != 1:
+            raise ValueError("parallel workers are not supported; workers must be 1")
         if not 0 <= self.day_starts_at < 24:
             raise ValueError("day_starts_at must be between 0 and 24")
 

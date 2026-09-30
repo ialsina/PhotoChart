@@ -48,6 +48,11 @@ class OrganizerConfigurationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def run(self, request, pk=None):
         configuration = self.get_object()
+        if not configuration.enabled:
+            return Response(
+                {"detail": "Organizer configuration is disabled."},
+                status=status.HTTP_409_CONFLICT,
+            )
         job = OrganizerJob.objects.create(
             configuration=configuration,
             dry_run=bool(request.data.get("dry_run", True)),
@@ -68,6 +73,11 @@ class OrganizerJobViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=["post"])
     def retry(self, request, pk=None):
         previous = self.get_object()
+        if not previous.configuration.enabled:
+            return Response(
+                {"detail": "Organizer configuration is disabled."},
+                status=status.HTTP_409_CONFLICT,
+            )
         job = OrganizerJob.objects.create(
             configuration=previous.configuration,
             dry_run=previous.dry_run,

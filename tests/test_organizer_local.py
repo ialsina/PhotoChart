@@ -110,3 +110,32 @@ def test_move_retains_source_and_cleans_corrupt_destination(
     assert "Verification failed" in (result.detail or "")
     assert photo.read_bytes() == b"photo"
     assert not (destination / "2026Q3" / "20260928" / "photo.jpg").exists()
+
+
+def test_collision_can_quarantine_source(tmp_path: Path) -> None:
+    source = tmp_path / "PhotoUpload"
+    destination = tmp_path / "Photos"
+    quarantine = tmp_path / "Quarantine"
+    source.mkdir()
+    existing = destination / "2026Q3" / "20260928" / "photo.jpg"
+    existing.parent.mkdir(parents=True)
+    existing.write_bytes(b"existing")
+    photo = source / "photo.jpg"
+    photo.write_bytes(b"incoming")
+    set_date(photo)
+    config = OrganizerConfig(
+        source=str(source),
+        destination=str(destination),
+        quarantine=str(quarantine),
+        collision="quarantine",
+        pattern="%YQ%Q/%Y%M%D",
+        stability=config_stability(),
+    )
+
+    result = Organizer(LocalFilesystemAdapter(), config).run_once()[0]
+
+    assert result.status == OperationStatus.QUARANTINED
+    assert result.destination is not None
+    assert Path(result.destination).read_bytes() == b"incoming"
+    assert existing.read_bytes() == b"existing"
+    assert not photo.exists()

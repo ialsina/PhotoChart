@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import posixpath
 import time
+from dataclasses import replace
 from datetime import timedelta
 from pathlib import PurePosixPath
 from typing import Callable, Iterable
@@ -51,7 +52,10 @@ class Organizer:
     def run_once(self, dry_run: bool = False) -> list[OperationResult]:
         self.adapter.healthcheck()
         return [
-            self._process_with_policy(media, dry_run=dry_run)
+            replace(
+                self._process_with_policy(media, dry_run=dry_run),
+                object_id=media.object_id,
+            )
             for media in self.discover()
         ]
 

@@ -65,6 +65,7 @@ class OperationResult:
     date_result: Optional[DateResult] = None
     detail: Optional[str] = None
     verified: bool = False
+    object_id: str = ""
 
 
 class OrganizerError(RuntimeError):

@@ -1,6 +1,42 @@
 from django.db import models
 
 
+def default_media_extensions():
+    return [
+        ".jpg",
+        ".jpeg",
+        ".heic",
+        ".heif",
+        ".png",
+        ".tif",
+        ".tiff",
+        ".nef",
+        ".dng",
+        ".mp4",
+        ".mov",
+        ".m4v",
+    ]
+
+
+def default_date_priority():
+    return [
+        "DateTimeOriginal",
+        "SubSecDateTimeOriginal",
+        "CreateDate",
+        "MediaCreateDate",
+        "TrackCreateDate",
+        "ModifyDate",
+    ]
+
+
+def default_stability():
+    return {"interval_seconds": 30, "checks": 2}
+
+
+def default_retry():
+    return {"attempts": 4, "initial_seconds": 5, "multiplier": 3}
+
+
 class OrganizerConfiguration(models.Model):
     name = models.CharField(max_length=255, unique=True)
     adapter = models.CharField(max_length=50, default="local")
@@ -16,6 +52,26 @@ class OrganizerConfiguration(models.Model):
         blank=True,
         help_text="Non-secret options and names of environment variables containing secrets",
     )
+    timezone = models.CharField(max_length=64, default="UTC")
+    collision = models.CharField(
+        max_length=20,
+        choices=[
+            ("suffix", "Suffix"),
+            ("fail", "Fail"),
+            ("quarantine", "Quarantine"),
+        ],
+        default="suffix",
+    )
+    duplicate_detection = models.CharField(max_length=30, default="size_then_hash")
+    workers = models.PositiveSmallIntegerField(default=1)
+    scan_interval_seconds = models.FloatField(default=60)
+    process_after = models.DateTimeField(null=True, blank=True)
+    include_first = models.BooleanField(default=True)
+    day_starts_at = models.FloatField(default=0)
+    media_extensions = models.JSONField(default=default_media_extensions)
+    date_priority = models.JSONField(default=default_date_priority)
+    stability = models.JSONField(default=default_stability)
+    retry = models.JSONField(default=default_retry)
     enabled = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

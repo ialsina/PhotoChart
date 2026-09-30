@@ -91,7 +91,20 @@ export interface OrganizerConfiguration {
   source: string;
   destination: string;
   pattern: string;
+  quarantine: string | null;
   mode: "copy" | "move";
+  timezone: string;
+  collision: "suffix" | "fail" | "quarantine";
+  duplicate_detection: "size_then_hash";
+  workers: 1;
+  scan_interval_seconds: number;
+  process_after: string | null;
+  include_first: boolean;
+  day_starts_at: number;
+  media_extensions: string[];
+  date_priority: string[];
+  stability: { interval_seconds: number; checks: number };
+  retry: { attempts: number; initial_seconds: number; multiplier: number };
   enabled: boolean;
 }
 

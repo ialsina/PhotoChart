@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pytest
 
-from photochart.organizer.config import config_from_mapping
+from photochart.organizer.config import OrganizerConfig, config_from_mapping
 from photochart.organizer.patterns import ClassificationPattern
 
 
@@ -43,3 +43,22 @@ def test_configuration_loads_nested_shape() -> None:
     assert config.adapter == "webdav"
     assert config.pattern == "%YQ%Q/%Y%M%D"
     assert config.stability.checks == 3
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ({"workers": 2}, "workers must be 1"),
+        (
+            {"duplicate_detection": "size_only"},
+            "duplicate_detection must be 'size_then_hash'",
+        ),
+        (
+            {"collision": "quarantine"},
+            "collision quarantine requires a quarantine path",
+        ),
+    ],
+)
+def test_configuration_rejects_unavailable_behavior(overrides, message):
+    with pytest.raises(ValueError, match=message):
+        OrganizerConfig(source="/in", destination="/out", **overrides)

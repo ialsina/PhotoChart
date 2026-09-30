@@ -1,7 +1,11 @@
 from django.utils import timezone
 
 from photochart.organizer.adapters import build_adapter
-from photochart.organizer.config import OrganizerConfig
+from photochart.organizer.config import (
+    OrganizerConfig,
+    RetryConfig,
+    StabilityConfig,
+)
 from photochart.organizer.domain import OperationStatus
 from photochart.organizer.service import Organizer
 
@@ -18,6 +22,18 @@ def _core_config(job: OrganizerJob) -> OrganizerConfig:
         pattern=stored.pattern,
         quarantine=stored.quarantine,
         mode=stored.mode,
+        timezone=stored.timezone,
+        collision=stored.collision,
+        duplicate_detection=stored.duplicate_detection,
+        workers=stored.workers,
+        scan_interval_seconds=stored.scan_interval_seconds,
+        process_after=stored.process_after,
+        include_first=stored.include_first,
+        day_starts_at=stored.day_starts_at,
+        media_extensions=tuple(stored.media_extensions),
+        date_priority=tuple(stored.date_priority),
+        stability=StabilityConfig(**stored.stability),
+        retry=RetryConfig(**stored.retry),
     )
 
 
@@ -42,6 +58,8 @@ def execute_job(job: OrganizerJob) -> OrganizerJob:
     job.error = ""
     job.save(update_fields=["status", "started_at", "error"])
     try:
+        if not job.configuration.enabled:
+            raise ValueError("Organizer configuration is disabled")
         config = _core_config(job)
         results = Organizer(build_adapter(config), config).run_once(dry_run=job.dry_run)
         operations = []
@@ -52,6 +70,7 @@ def execute_job(job: OrganizerJob) -> OrganizerJob:
                     status=result.status.value,
                     source=result.source,
                     destination=result.destination,
+                    object_id=result.object_id,
                     capture_date=(
                         result.date_result.value if result.date_result else None
                     ),
