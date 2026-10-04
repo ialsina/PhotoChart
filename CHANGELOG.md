@@ -80,6 +80,10 @@ All notable changes to PhotoChart are documented in this file.
 - Docker-backed ingest honors Docker Compose's multi-file `COMPOSE_FILE` value
   so API-triggered one-shot containers use the same Compose topology as the
   worker.
+- Ingest thumbnails under `MEDIA_ROOT` use a two-level directory tree
+  (`photographs/ab/cd/...`) instead of three (`photographs/ab/cd/ef/...`) via
+  `photograph_upload_path` in `backend/photograph/models.py`; existing stored
+  paths are unchanged until thumbnails are written again.
 
 ### Fixed
 

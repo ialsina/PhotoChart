@@ -24,8 +24,8 @@ def photograph_upload_path(instance, filename):
 
     Creates a tree structure based on checksum (if available) or ID to prevent
     directory bloat. Structure examples:
-    - With checksum: photographs/ab/cd/ef/abcdef1234567890...jpg
-    - Without checksum: photographs/00/01/23/photo_12345.jpg
+    - With checksum: photographs/ab/cd/abcdef1234567890...jpg
+    - Without checksum: photographs/00/01/photo_12345.jpg
 
     Args:
         instance: The Photograph instance being saved
@@ -40,15 +40,12 @@ def photograph_upload_path(instance, filename):
         ext = ".jpg"
 
     # Use checksum-based structure if checksum is available
-    if instance.checksum and len(instance.checksum) >= 6:
-        # Split first 6 characters into 3 directory levels (2 chars each)
-        # e.g., "abcdef" -> ["ab", "cd", "ef"]
-        checksum_prefix = instance.checksum[:6]
-        # Keep variable names stable in returned path parts
-        hash_prefix = checksum_prefix
-        dir1 = hash_prefix[0:2]
-        dir2 = hash_prefix[2:4]
-        dir3 = hash_prefix[4:6]
+    if instance.checksum and len(instance.checksum) >= 4:
+        # Split first 4 characters into 2 directory levels (2 chars each)
+        # e.g., "abcd" -> ["ab", "cd"]
+        checksum_prefix = instance.checksum[:4]
+        dir1 = checksum_prefix[0:2]
+        dir2 = checksum_prefix[2:4]
 
         # Use full checksum as filename (or first 16 chars for shorter paths)
         file_checksum = (
@@ -56,29 +53,27 @@ def photograph_upload_path(instance, filename):
             if len(instance.checksum) >= 16
             else instance.checksum
         )
-        return f"photographs/{dir1}/{dir2}/{dir3}/{file_checksum}{ext}"
+        return f"photographs/{dir1}/{dir2}/{file_checksum}{ext}"
 
     # Fallback to ID-based structure if no checksum
     if instance.pk:
         # Convert ID to string and pad with zeros
         id_str = str(instance.pk).zfill(8)
-        # Split into 3 directory levels: 00/01/23
+        # Split into 2 directory levels: 00/01
         dir1 = id_str[0:2]
         dir2 = id_str[2:4]
-        dir3 = id_str[4:6]
-        return f"photographs/{dir1}/{dir2}/{dir3}/photo_{instance.pk}{ext}"
+        return f"photographs/{dir1}/{dir2}/photo_{instance.pk}{ext}"
 
     # Last resort: use timestamp-based structure
     # This should rarely happen, but provides a fallback
     timestamp = instance.created_at if instance.created_at else timezone.now()
     timestamp_str = timestamp.strftime("%Y%m%d")
-    # Use first 6 chars of timestamp for directory structure
+    # Use first 4 chars of timestamp for directory structure
     dir1 = timestamp_str[0:2]
     dir2 = timestamp_str[2:4]
-    dir3 = timestamp_str[4:6]
     # Generate a unique filename using microseconds
     unique_id = timestamp.strftime("%H%M%S_%f")
-    return f"photographs/{dir1}/{dir2}/{dir3}/photo_{unique_id}{ext}"
+    return f"photographs/{dir1}/{dir2}/photo_{unique_id}{ext}"
 
 
 class Photograph(models.Model):
