@@ -1,6 +1,8 @@
 # Opt-in topology for running the UI in Docker while PostgreSQL and pchart
-# commands run on the host. This file includes docker/compose.yaml and applies
-# host-PostgreSQL overrides. From the repository root:
+# commands run on the host. Bind-mount the host MEDIA_ROOT from .env (same tree
+# host pchart ingest writes); PHOTOCHART_MEDIA_PATH is a legacy fallback only.
+# This file includes docker/compose.yaml and applies host-PostgreSQL overrides.
+# From the repository root:
 #   docker compose --project-directory . -f docker/compose.host-postgres.yaml up -d
 # Equivalent:
 #   docker compose --project-directory . -f docker/compose.yaml \
@@ -19,7 +21,7 @@ x-host-postgres-app: &host-postgres-app
     DATABASE_URL: postgresql://${POSTGRES_USER:-photochart}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@host.docker.internal:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-photochart}
     MEDIA_ROOT: /app/backend/media
   volumes:
-    - ${PHOTOCHART_MEDIA_PATH:-./backend/media}:/app/backend/media
+    - ${MEDIA_ROOT:-${PHOTOCHART_MEDIA_PATH:-./backend/media}}:/app/backend/media
 
 services:
   # Disabled in this topology unless explicitly requested with
@@ -52,4 +54,4 @@ services:
 
   gateway:
     volumes:
-      - ${PHOTOCHART_MEDIA_PATH:-./backend/media}:/srv/media:ro
+      - ${MEDIA_ROOT:-${PHOTOCHART_MEDIA_PATH:-./backend/media}}:/srv/media:ro

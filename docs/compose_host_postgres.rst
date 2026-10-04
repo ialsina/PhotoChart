@@ -19,7 +19,7 @@ Data flow
    host pchart / manage.py  --->  127.0.0.1:5432  --->  host PostgreSQL
    compose web / worker     --->  host.docker.internal:5432  ---^
 
-   host pchart thumbnails   --->  PHOTOCHART_MEDIA_PATH
+   host pchart thumbnails   --->  MEDIA_ROOT (from .env)
    compose web / gateway    --->  bind mount of the same directory
 
 Why two different hostnames?
@@ -267,9 +267,16 @@ Troubleshooting
    Expected: ``pg_isready`` does not authenticate as ``photochart``.  Fix
    ``pg_hba.conf`` as above; rely on the script, not ``pg_isready`` alone.
 
-``thumbnails are missing``
-   Align ``MEDIA_ROOT`` for host commands with ``PHOTOCHART_MEDIA_PATH`` and
-   restart the stack so app containers and the gateway use the same bind mount.
+``thumbnails are missing`` or ``/media/...`` returns **404**
+   Host ingest must write thumbnails under the ``MEDIA_ROOT`` path from ``.env``.
+   The overlay bind-mounts that directory into ``web`` and ``gateway`` (nginx
+   serves files via ``X-Accel-Redirect``).  If ``PHOTOCHART_MEDIA_PATH`` still
+   points at a different folder, remove it or set it equal to ``MEDIA_ROOT``,
+   then recreate the stack:
+
+   .. code-block:: console
+
+      docker compose --project-directory . -f docker/compose.host-postgres.yaml up -d --force-recreate web gateway
 
 ``migrate`` / ``photochart-migrate-1`` did not complete successfully
    After ``scripts/check-host-postgres.sh`` passes, recreate the one-shot migrate

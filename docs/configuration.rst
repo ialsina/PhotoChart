@@ -164,9 +164,9 @@ The Django application reads:
    ``host.docker.internal``.
 
 ``PHOTOCHART_MEDIA_PATH``
-   Host directory bind-mounted as container media storage by the host
-   PostgreSQL overlay.  Keep this aligned with host ``MEDIA_ROOT`` when running
-   host-native ``pchart ingest``.
+   Legacy fallback when ``MEDIA_ROOT`` is unset.  The host PostgreSQL overlay
+   bind-mounts host ``MEDIA_ROOT`` into app containers and the gateway; keep
+   that path the same one host ``pchart ingest`` uses for thumbnails.
 
 ``COMPOSE_FILE``
    Docker Compose's colon-separated file list.  For the host PostgreSQL
