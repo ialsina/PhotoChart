@@ -76,6 +76,11 @@ In another terminal:
    npm --prefix frontend install
    npm --prefix frontend run dev
 
+Open the UI at ``http://localhost:5173``. Vite proxies ``/api`` and ``/media`` to
+``http://127.0.0.1:8000`` so login uses same-origin session cookies. Keep
+``python backend/manage.py runserver`` running on port 8000. Create a user with
+``python backend/manage.py createsuperuser`` before signing in.
+
 The Organizer tab displays configurations, dry-run controls, recent jobs, and
 operation details. The readiness endpoint is
 ``http://localhost:8000/api/organizer-health/``.

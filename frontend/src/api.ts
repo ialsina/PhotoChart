@@ -33,13 +33,26 @@ function getCookie(name: string): string | undefined {
     ?.slice(name.length + 1);
 }
 
+async function apiErrorMessage(response: Response): Promise<string> {
+  let message = `API error: ${response.status} ${response.statusText}`;
+  try {
+    const data = (await response.json()) as { detail?: unknown };
+    if (typeof data.detail === "string") {
+      message = data.detail;
+    }
+  } catch {
+    // Non-JSON or empty body — keep status line.
+  }
+  return message;
+}
+
 async function fetchAPI<T>(endpoint: string): Promise<T> {
   try {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       credentials: "same-origin",
     });
     if (!response.ok) {
-      throw new Error(`API error: ${response.status} ${response.statusText}`);
+      throw new Error(await apiErrorMessage(response));
     }
     return response.json();
   } catch (err) {
@@ -68,7 +81,7 @@ async function fetchAPIMethod<T>(
       body: body ? JSON.stringify(body) : undefined,
     });
     if (!response.ok) {
-      throw new Error(`API error: ${response.status} ${response.statusText}`);
+      throw new Error(await apiErrorMessage(response));
     }
     // Handle 204 No Content responses
     if (response.status === 204) {
@@ -102,7 +115,7 @@ async function fetchAllPages<T>(
     while (nextUrl) {
       const response = await fetch(nextUrl, { credentials: "same-origin" });
       if (!response.ok) {
-        throw new Error(`API error: ${response.status} ${response.statusText}`);
+        throw new Error(await apiErrorMessage(response));
       }
       const data: PaginatedResponse<T> = await response.json();
       allItems.push(...data.results);

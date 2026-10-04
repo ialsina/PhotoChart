@@ -43,6 +43,16 @@ All notable changes to PhotoChart are documented in this file.
   `photochart.fs.protocols`, and related modules).
 - CLI `pchart ingest` routes through `choose_and_run_ingest` so host-visible and
   Docker-backed external paths use the same code path as Celery ingest jobs.
+- README and `docs/getting_started.rst` describe local development with
+  `runserver` on port 8000, Vite on `:5173`, and `createsuperuser` before sign-in.
+- Frontend API client surfaces Django `detail` messages on failed HTTP
+  responses (for example invalid login credentials).
+
+### Fixed
+
+- Vite dev server proxies `/api` and `/media` to Django on `127.0.0.1:8000`
+  so the React app at `http://localhost:5173` can authenticate without Docker
+  or a manual `VITE_API_BASE_URL` (`frontend/vite.config.ts`).
 
 ## [v0.3.2] - 2026-10-04
 

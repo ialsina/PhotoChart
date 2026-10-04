@@ -105,9 +105,13 @@ Metadata correction is a dry-run by default and retains ExifTool backups unless
 ## Web application
 
 ```bash
+python backend/manage.py migrate
+python backend/manage.py createsuperuser
 python backend/manage.py runserver
 npm --prefix frontend run dev
 ```
+
+Open `http://localhost:5173` (Vite proxies `/api` to Django on port 8000).
 
 Organizer configurations, dry-run execution, jobs, and operation history are
 available through `/api/organizer-*` and the Organizer frontend tab. Readiness
