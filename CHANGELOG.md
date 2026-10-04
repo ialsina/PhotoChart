@@ -2,6 +2,43 @@
 
 All notable changes to PhotoChart are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Removable-media and host-path workflows: `scripts/compose-organize.sh` (device →
+  library organize), `scripts/compose-ingest.sh` (one-shot catalog ingest with
+  tight read-only bind-mounts), and `scripts/compose-run.sh` (generic
+  `docker compose run` wrapper with `--from-path` / `--mount` for any `pchart`
+  command).
+- `photochart.fs.mounts` and `photochart.ingest.runner` for path validation,
+  mount-root resolution, stable device labels, and local vs one-shot Docker
+  ingest dispatch (`choose_and_run_ingest`, `run_ingest_docker`).
+- Optional API-driven ingest from paths outside the worker namespace:
+  `IngestJob` model, Celery `run_ingest_job` task, and `POST/GET
+  /api/ingest-jobs/` (operators create; authenticated users read status).
+- Django settings `INGEST_DOCKER_ENABLED`, `INGEST_ALLOWED_PATH_PREFIXES`,
+  `INGEST_ALWAYS_ALLOWED_PREFIXES`, `INGEST_HOST_ROOT`, `INGEST_COMPOSE_FILE`,
+  and `COMPOSE_PROJECT_NAME`, documented in `.env.example` and deployment docs.
+- `pchart ingest --device` for a stable `PhotoPath.device` label on bind-mounted
+  external drives.
+- Compose `ingest` one-shot service (`tools` profile) and
+  `organizer.removable-inbox.example.yaml` for host-native organize.
+- `get_mount_point_from_file` and `device_label_for_path` in
+  `photochart.fs.device` for host mount tables and shared label logic.
+- Operations, CLI, deployment, Django API, and development docs for the
+  organize → ingest playbook, command matrix, and `compose.override.yaml`
+  Docker-socket ingest setup.
+
+### Changed
+
+- Reorganized the `photochart` package into `common/`, `fs/`, `media/`,
+  `imaging/`, and `ingest/` subpackages; imports updated across backend, CLI,
+  organizer, and tests (`photochart.ingest.photos`, `photochart.media.extensions`,
+  `photochart.fs.protocols`, and related modules).
+- CLI `pchart ingest` routes through `choose_and_run_ingest` so host-visible and
+  Docker-backed external paths use the same code path as Celery ingest jobs.
+
 ## [v0.3.2] - 2026-10-04
 
 ### Fixed
