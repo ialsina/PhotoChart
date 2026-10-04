@@ -2,6 +2,13 @@
 
 All notable changes to PhotoChart are documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- Gateway Nginx `root` for the built frontend so `/` serves the SPA instead of
+  looping on `try_files` and returning 500.
+
 ## [v0.3.1] - 2026-09-30
 
 ### Added
