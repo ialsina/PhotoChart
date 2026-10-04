@@ -44,7 +44,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             return 2
         parser.print_help()
         return 2
-    if args.command == "ingest":
+    if args.command in ("ingest", "resize-thumbnails"):
         _setup_django()
     return int(args.func(args))
 

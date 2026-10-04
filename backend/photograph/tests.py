@@ -415,3 +415,81 @@ class IngestRetryThumbnailsTest(TestCase):
                     assert PhotoPath.objects.count() == 0
                     assert result["count"] == 0
                     assert result["success"] is True
+
+
+# ---------------------------------------------------------------------------
+# Resize stored thumbnails
+# ---------------------------------------------------------------------------
+
+
+class ResizeStoredThumbnailTest(TestCase):
+    def _minimal_jpeg_bytes(self) -> bytes:
+        return (
+            b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+            b"\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c"
+            b"\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c"
+            b"\x1c $.\x27 ,#\x1c\x1c(7),01444\x1f\x27=9=82<.342\xff\xc0\x00\x0b\x08"
+            b"\x00\x01\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01"
+            b"\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06"
+            b"\x07\x08\t\n\x0b\xff\xc4\x00\xb5\x10\x00\x02\x01\x03\x03\x02\x04\x03\x05"
+            b"\x05\x04\x04\x00\x00\x01}\x01\x02\x03\x00\x04\x11\x05\x12!1A\x06\x13Qa"
+            b'\x07"q\x142\x81\x91\xa1\x08#B\xb1\xc1\x15R\xd1\xf0$3br\x82\t\n\x16\x17'
+            b"\x18\x19\x1a%&'()*456789:CDEFGHIJSTUVWXYZcdefghijstuvwxyz\x83\x84\x85"
+            b"\x86\x87\x88\x89\x8a\x92\x93\x94\x95\x96\x97\x98\x99\x9a\xa2\xa3\xa4\xa5"
+            b"\xa6\xa7\xa8\xa9\xaa\xb2\xb3\xb4\xb5\xb6\xb7\xb8\xb9\xba\xc2\xc3\xc4\xc5"
+            b"\xc6\xc7\xc8\xc9\xca\xd2\xd3\xd4\xd5\xd6\xd7\xd8\xd9\xda\xe1\xe2\xe3\xe4"
+            b"\xe5\xe6\xe7\xe8\xe9\xea\xf1\xf2\xf3\xf4\xf5\xf6\xf7\xf8\xf9\xfa\xff\xda"
+            b"\x00\x08\x01\x01\x00\x00?\x00\xfb\xd5\x7f\xff\xd9"
+        )
+
+    def test_resize_stored_thumbnail_scales_image(self) -> None:
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with self.settings(MEDIA_ROOT=media_root):
+                photograph = Photograph.objects.create()
+                photograph.thumbnail.save(
+                    "large.jpg",
+                    SimpleUploadedFile("large.jpg", self._minimal_jpeg_bytes()),
+                    save=True,
+                )
+                assert photograph.resize_stored_thumbnail((32, 32)) is True
+                photograph.refresh_from_db()
+                with Image.open(photograph.thumbnail.path) as img:
+                    assert max(img.size) <= 32
+
+    def test_resize_all_thumbnails_respects_max_size(self) -> None:
+        from photochart.catalog.resize_thumbnails import resize_all_thumbnails
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with self.settings(MEDIA_ROOT=media_root):
+                small = Photograph.objects.create()
+                small.thumbnail.save(
+                    "small.jpg",
+                    SimpleUploadedFile("small.jpg", b"x" * 100),
+                    save=True,
+                )
+                large = Photograph.objects.create()
+                large.thumbnail.save(
+                    "large.jpg",
+                    SimpleUploadedFile(
+                        "large.jpg", self._minimal_jpeg_bytes() + (b"\x00" * 900_000)
+                    ),
+                    save=True,
+                )
+
+                with (
+                    patch(
+                        "photochart.catalog.resize_thumbnails._thumbnail_byte_size",
+                        side_effect=lambda p: 100 if p.pk == small.pk else 900_000,
+                    ),
+                    patch.object(
+                        Photograph, "resize_stored_thumbnail", return_value=True
+                    ) as mock_resize,
+                ):
+                    result = resize_all_thumbnails("thumbnail", max_size="800K")
+
+                assert result["success"] is True
+                assert result["skipped_too_small"] == 1
+                assert result["resized"] == 1
+                assert mock_resize.call_count == 1

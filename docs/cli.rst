@@ -96,6 +96,22 @@ path and device label) whose photograph has no thumbnail; only those files are
 processed and reflected in the progress bar. ``--no-store-images`` is ignored
 in this mode.
 
+Resize stored thumbnails
+------------------------
+
+Re-scale every photograph that already has a thumbnail in ``MEDIA_ROOT`` (the
+command does not read original files from catalogued paths):
+
+.. code-block:: console
+
+   pchart resize-thumbnails --resolution medium
+   pchart resize-thumbnails --resolution 800x600 --max-size 800K
+
+``--resolution`` is required (preset name or ``WIDTHxHEIGHT``; see
+``pchart list-resolutions``). ``--max-size`` is optional: thumbnails whose
+stored file size is **below** the limit are left unchanged; only thumbnails at
+or above the limit are resized.
+
 Metadata inspection and conversion
 ----------------------------------
 
@@ -130,6 +146,11 @@ table below to choose the right invocation for each command and source type:
      - ``docker compose exec web pchart ingest /photos/…``
        or ``./scripts/compose-ingest.sh /photos/…``
      - ``./scripts/compose-ingest.sh /mnt/camera/…``
+   * - ``resize-thumbnails``
+     - Yes
+     - ``docker compose exec web pchart resize-thumbnails --resolution medium``
+     - Host-native ``pchart resize-thumbnails …`` when Django DB and
+       ``MEDIA_ROOT`` are configured locally
    * - ``duplicates``
      - No
      - ``docker compose exec web pchart duplicates /photos/…``

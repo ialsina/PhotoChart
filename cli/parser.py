@@ -25,6 +25,7 @@ from .commands import (
     cmd_organize,
     cmd_duplicates,
     cmd_metadata_date,
+    cmd_resize_thumbnails,
     HAS_RICH,
 )
 
@@ -170,6 +171,33 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p_ing.set_defaults(func=cmd_ingest)
+
+    p_resize = sub.add_parser(
+        "resize-thumbnails",
+        help="Resize stored catalog thumbnails",
+        description=(
+            "Resize all photographs that have a stored thumbnail in the media "
+            "volume to fit within the given resolution."
+        ),
+    )
+    p_resize.add_argument(
+        "--resolution",
+        required=True,
+        help=(
+            "Target resolution. Can be explicit (e.g., '1920x1080') "
+            "or a preset name (e.g., 'low', 'medium', 'high', 'thumbnail'). "
+            "Use 'pchart list-resolutions' to see all available presets."
+        ),
+    )
+    p_resize.add_argument(
+        "--max-size",
+        default=None,
+        help=(
+            "Optional minimum stored thumbnail size to process (e.g. '800K', '10M', "
+            "'1G'). Thumbnails smaller than this are left unchanged."
+        ),
+    )
+    p_resize.set_defaults(func=cmd_resize_thumbnails)
 
     # convert
     p_conv = sub.add_parser(

@@ -452,6 +452,69 @@ class Photograph(models.Model):
             )
             return False
 
+    def resize_stored_thumbnail(self, resolution) -> bool:
+        """Resize the stored thumbnail file to fit within *resolution*.
+
+        Reads the existing ``thumbnail`` in media storage, scales it with the
+        same aspect-preserving fit used by :meth:`get_image_from_file`, and
+        saves a new JPEG.
+
+        Args:
+            resolution: Target resolution as ``(width, height)`` or a string
+                accepted by :func:`photochart.media.resolution.parse_resolution`.
+
+        Returns:
+            True if the thumbnail was resized, False otherwise.
+        """
+        if not self.thumbnail:
+            return False
+
+        try:
+            from PIL import Image
+
+            from photochart.imaging.resize import (
+                fit_within_resolution,
+                image_to_jpeg_buffer,
+            )
+            from photochart.media.resolution import parse_resolution
+
+            resolution_tuple = None
+            if isinstance(resolution, str):
+                resolution_tuple = parse_resolution(resolution)
+            elif isinstance(resolution, tuple) and len(resolution) == 2:
+                resolution_tuple = resolution
+
+            if not resolution_tuple:
+                return False
+
+            with self.thumbnail.open("rb") as thumb_file:
+                image = Image.open(thumb_file)
+                image.load()
+
+            image = fit_within_resolution(image, resolution_tuple)
+            output_buffer = image_to_jpeg_buffer(image)
+
+            old_name = self.thumbnail.name
+            filename = self._generate_timestamp_filename(
+                self.thumbnail.name or "thumbnail.jpg", extension=".jpg"
+            )
+            self.thumbnail.save(filename, File(output_buffer), save=True)
+
+            if old_name and old_name != self.thumbnail.name:
+                self.thumbnail.storage.delete(old_name)
+
+            return True
+        except Exception as exc:
+            self.has_errors = True
+            self.save(update_fields=["has_errors"])
+            LOGGER.warning(
+                "Failed to resize stored thumbnail for photograph %s: %s",
+                self.pk,
+                exc,
+                exc_info=True,
+            )
+            return False
+
 
 class PhotoPath(models.Model):
     """Photo path model tracking file locations across devices.

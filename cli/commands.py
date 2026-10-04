@@ -112,6 +112,36 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_resize_thumbnails(args: argparse.Namespace) -> int:
+    """Resize stored catalog thumbnails to a target resolution."""
+    from photochart.catalog.resize_thumbnails import resize_all_thumbnails
+
+    result = resize_all_thumbnails(
+        resolution=args.resolution,
+        max_size=getattr(args, "max_size", None),
+    )
+
+    if not result["success"]:
+        for err in result.get("errors", []):
+            print(f"Error: {err}", file=sys.stderr)
+        return 1
+
+    print(f"Resized {result['resized']} thumbnail(s).")
+    if result.get("skipped_too_small", 0):
+        print(
+            f"Skipped {result['skipped_too_small']} thumbnail(s) below --max-size threshold."
+        )
+    if result.get("skipped_no_thumbnail", 0):
+        print(f"Skipped {result['skipped_no_thumbnail']} row(s) with no thumbnail.")
+    if result.get("failed", 0):
+        for err in result.get("errors", []):
+            print(f"Warning: {err}", file=sys.stderr)
+        print(f"Failed to resize {result['failed']} thumbnail(s).", file=sys.stderr)
+        return 1
+
+    return 0
+
+
 def cmd_organize(args: argparse.Namespace) -> int:
     """Run the storage-independent organizer once."""
     from photochart.organizer.adapters import build_adapter
