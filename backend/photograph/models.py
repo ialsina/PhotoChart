@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.db import models
 from django.core.files import File
 from django.core.validators import RegexValidator
@@ -736,3 +737,117 @@ class PhotoPath(models.Model):
 
         # Call the parent save method
         super().save(*args, **kwargs)
+
+
+class IngestJob(models.Model):
+    """Tracks a catalog-ingestion run, whether local or via a Docker one-shot container.
+
+    Mirrors the ``DuplicateScan`` pattern so the same Celery + REST patterns apply.
+    Operators create an ``IngestJob`` via ``POST /api/ingest-jobs/``; the Celery
+    worker calls ``photochart.ingest_runner.choose_and_run_ingest`` and updates
+    status fields as it proceeds.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        RUNNING = "RUNNING", "Running"
+        COMPLETED = "COMPLETED", "Completed"
+        FAILED = "FAILED", "Failed"
+
+    # ---- Source specification ----
+    path = models.CharField(
+        max_length=2048,
+        help_text=(
+            "Absolute path to ingest.  Must be visible inside the container "
+            "(e.g. /photos/...) or, when INGEST_DOCKER_ENABLED is True, a host "
+            "path that will be bind-mounted into a one-shot container."
+        ),
+    )
+    mount_root = models.CharField(
+        max_length=2048,
+        blank=True,
+        help_text=(
+            "Mount root to bind into the one-shot container (read-only).  "
+            "Leave blank to auto-resolve via findmnt at task execution time.  "
+            "Ignored when path is already visible locally."
+        ),
+    )
+    device = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text=(
+            "Device label to record in PhotoPath.device instead of the "
+            "auto-detected value.  Useful for giving a stable name to a USB "
+            "drive across remounts."
+        ),
+    )
+
+    # ---- Ingest options ----
+    recursive = models.BooleanField(
+        default=True,
+        help_text="Recurse into subdirectories (default True).",
+    )
+    calculate_checksum = models.BooleanField(
+        default=True,
+        help_text="Calculate and store checksums (default True).",
+    )
+    store_images = models.BooleanField(
+        default=True,
+        help_text="Copy thumbnails into the media volume (default True).",
+    )
+    resolution = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="Optional resolution preset or WxH string for thumbnail storage.",
+    )
+
+    # ---- Job tracking ----
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    task_id = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Celery task ID.",
+    )
+    error = models.TextField(
+        blank=True,
+        help_text="Error message if the job failed.",
+    )
+    count = models.PositiveIntegerField(
+        default=0,
+        help_text="Number of photos ingested.",
+    )
+    checksums_calculated = models.PositiveIntegerField(
+        default=0,
+        help_text="Number of checksums calculated.",
+    )
+    images_stored = models.PositiveIntegerField(
+        default=0,
+        help_text="Number of thumbnails stored in the media volume.",
+    )
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    requested_by = models.ForeignKey(
+        get_user_model(),
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="ingest_jobs",
+        help_text="User who requested this job.",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Ingest Job"
+        verbose_name_plural = "Ingest Jobs"
+        indexes = [
+            models.Index(fields=["status"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"IngestJob({self.pk}) {self.path} [{self.status}]"

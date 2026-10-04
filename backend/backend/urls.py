@@ -22,7 +22,7 @@ from django.conf.urls.static import static
 from backend.auth_views import session, session_login, session_logout
 from backend.health import liveness, metrics, protected_media, readiness
 from rest_framework.routers import DefaultRouter
-from photograph.views import PhotographViewSet, PhotoPathViewSet
+from photograph.views import PhotographViewSet, PhotoPathViewSet, IngestJobViewSet
 from catalog.views import (
     HashViewSet,
     ChecksumViewSet,
@@ -67,6 +67,7 @@ router.register(
 )
 router.register(r"duplicate-groups", DuplicateGroupViewSet, basename="duplicate-group")
 router.register(r"duplicate-scans", DuplicateScanViewSet, basename="duplicate-scan")
+router.register(r"ingest-jobs", IngestJobViewSet, basename="ingest-job")
 
 urlpatterns = [
     path("admin/", admin.site.urls),

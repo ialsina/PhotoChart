@@ -3,12 +3,15 @@
 import re
 from datetime import datetime
 from django.utils import timezone
-from rest_framework import viewsets
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
 from rest_framework.response import Response
+from django.db import transaction
 from django.db.models import Q
-from .models import Photograph, PhotoPath
-from .serializers import PhotographSerializer, PhotoPathSerializer
+from .models import Photograph, PhotoPath, IngestJob
+from .serializers import PhotographSerializer, PhotoPathSerializer, IngestJobSerializer
+from backend.permissions import IsPhotoChartOperator
 
 
 class PhotographViewSet(viewsets.ModelViewSet):
@@ -465,3 +468,58 @@ class PhotoPathViewSet(viewsets.ModelViewSet):
         context = super().get_serializer_context()
         context["request"] = self.request
         return context
+
+
+class IngestJobViewSet(viewsets.ReadOnlyModelViewSet):
+    """Create and track catalog ingest jobs.
+
+    * ``GET  /api/ingest-jobs/``         – list jobs (authenticated users).
+    * ``GET  /api/ingest-jobs/<id>/``    – detail (authenticated users).
+    * ``POST /api/ingest-jobs/``         – create & queue a new job
+                                           (operators only).
+
+    The POST body maps directly to ``IngestJob`` writable fields::
+
+        {
+          "path":               "/photos/Photos",          // required
+          "mount_root":         "",                        // optional
+          "device":             "MyDisk (/mnt/camera)",   // optional
+          "recursive":          true,
+          "calculate_checksum": true,
+          "store_images":       true,
+          "resolution":         ""
+        }
+
+    The job is queued asynchronously via Celery.  Poll the returned ``id``
+    for status updates.
+
+    Operator permission (``organizer.operate_organizer``) is required to
+    create jobs.  Any authenticated user can read job status.
+    """
+
+    queryset = IngestJob.objects.all().order_by("-created_at")
+    serializer_class = IngestJobSerializer
+    filterset_fields = ["status"]
+
+    def get_permissions(self):
+        permission = (
+            IsPhotoChartOperator
+            if self.request.method not in SAFE_METHODS
+            else IsAuthenticated
+        )
+        return [permission()]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        job = serializer.save(requested_by=request.user)
+
+        from .tasks import run_ingest_job
+
+        transaction.on_commit(lambda: run_ingest_job.delay(job.pk))
+
+        return Response(
+            self.get_serializer(job).data,
+            status=status.HTTP_202_ACCEPTED,
+        )

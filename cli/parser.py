@@ -138,6 +138,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Do not store image files in the database media directory. By default, images are stored. If --resolution is specified, images will be resized accordingly.",
     )
     p_ing.add_argument(
+        "--device",
+        default=None,
+        help=(
+            "Device label to record in PhotoPath.device instead of the auto-detected "
+            "filesystem/hostname value.  Use this when ingesting a bind-mounted "
+            "external drive so the label is stable across remounts, e.g. "
+            "'MyDisk (/mnt/camera)'.  Scripts/compose-ingest.sh sets this "
+            "automatically from findmnt."
+        ),
+    )
+    p_ing.add_argument(
         "--log",
         default=None,
         help=(

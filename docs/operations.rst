@@ -151,3 +151,93 @@ Cron alternative
 The supported production stack uses Celery and database leases. Do not run
 these legacy schedulers alongside the Compose worker, cron, or watch mode
 against the same source.
+
+Ingest from removable media
+----------------------------
+
+The default Compose stack mounts only ``${PHOTO_LIBRARY_PATH}`` (→ ``/photos``)
+into ``web`` and ``worker``.  USB drives, SD cards, and other host volumes are
+not visible inside those containers.  There are three ways to bring photos from
+external sources into the catalog:
+
+**Workflow A – host wrapper (recommended for interactive use)**
+
+``scripts/compose-ingest.sh`` is the simplest path.  Run it from the repo root
+with the Compose stack already running:
+
+.. code-block:: console
+
+   ./scripts/compose-ingest.sh /mnt/camera/DCIM
+   ./scripts/compose-ingest.sh /run/media/$USER/EOS_DIGITAL/DCIM --no-store-images
+
+The script:
+
+1. Resolves the absolute path and rejects dangerous system roots.
+2. Uses ``findmnt -T`` to find the device's filesystem mount root.
+3. Builds a stable device label (``"LABEL (/mnt/camera)"``).
+4. Launches a one-shot container that bind-mounts only the device root
+   (read-only) alongside the existing ``media`` volume::
+
+     docker compose run --rm --no-deps \
+       -v /mnt/camera:/mnt/camera:ro \
+       web pchart ingest /mnt/camera/DCIM --device "EOS_DIGITAL (/mnt/camera)"
+
+The long-running ``web`` and ``worker`` services are not restarted.  Thumbnails
+are written to the shared ``media`` volume, so the UI works immediately after
+the container exits.
+
+**Workflow B – direct ``docker compose run`` without the script**
+
+When you know the mount root and device label already:
+
+.. code-block:: console
+
+   docker compose run --rm --no-deps \
+     -v /mnt/sd:/mnt/sd:ro \
+     web pchart ingest /mnt/sd/DCIM --device "MyCard (/mnt/sd)"
+
+Or, for a path already inside the library mount (no extra bind needed):
+
+.. code-block:: console
+
+   docker compose exec web pchart ingest /photos/Photos
+
+**Workflow C – API / Celery (automated pipelines)**
+
+Operators can POST to ``/api/ingest-jobs/`` to queue a job:
+
+.. code-block:: console
+
+   # For a library path (already visible in the worker):
+   curl -X POST /api/ingest-jobs/ \
+     -H "Content-Type: application/json" \
+     -d '{"path": "/photos/Photos"}'
+
+   # For an external path (requires INGEST_DOCKER_ENABLED=true in .env):
+   curl -X POST /api/ingest-jobs/ \
+     -H "Content-Type: application/json" \
+     -d '{"path": "/mnt/camera/DCIM",
+          "mount_root": "/mnt/camera",
+          "device": "EOS_DIGITAL (/mnt/camera)"}'
+
+When ``INGEST_DOCKER_ENABLED=true``, the Celery worker spawns the same one-shot
+container pattern described above.  This requires:
+
+1. ``/var/run/docker.sock`` mounted into the ``worker`` service (see
+   ``compose.override.yaml`` example in ``docs/deployment.rst``).
+2. ``INGEST_ALLOWED_PATH_PREFIXES`` set to the host roots the worker is allowed
+   to bind-mount (e.g. ``INGEST_ALLOWED_PATH_PREFIXES=/mnt,/media``).
+
+.. note::
+   Files on the host that are not permanently bind-mounted will not be served
+   as originals through the UI after the ingest container exits.  Set
+   ``store_images: true`` (the default) to copy thumbnails into the ``media``
+   volume so the Photographs grid works even when the device is disconnected.
+
+**Device labels and reconnecting**
+
+``PhotoPath.device`` stores the label produced at ingest time.  For a USB drive
+ingested as ``"EOS_DIGITAL (/mnt/camera)"``, the Photo Paths tab will show that
+device name.  If you plug the same drive in later at a different mount point,
+run ingest again with the same ``--device`` value to link new shots to the
+same device in the catalog.

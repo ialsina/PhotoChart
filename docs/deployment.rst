@@ -82,6 +82,25 @@ Mount source, destination, quarantine, and media explicitly. A container using
 pCloud Drive generally needs the host mount passed through; API/WebDAV/SFTP/S3
 adapters do not require a virtual filesystem.
 
+To ingest from removable media (USB drives, SD cards) without restarting the
+stack, use ``scripts/compose-ingest.sh`` (see "Ingest from removable media" in
+``docs/operations.rst``).  If you want the Celery worker to spawn ingest
+containers automatically, add a ``compose.override.yaml``:
+
+.. code-block:: yaml
+
+   # compose.override.yaml – enables API-driven Docker ingest
+   # WARNING: mounting the Docker socket grants the worker effective root access
+   #          to the host.  Use only in trusted environments.
+   services:
+     worker:
+       volumes:
+         - /var/run/docker.sock:/var/run/docker.sock
+       environment:
+         INGEST_DOCKER_ENABLED: "true"
+         INGEST_ALLOWED_PATH_PREFIXES: "/mnt,/media,/run/media"
+         COMPOSE_PROJECT_NAME: photochart
+
 ExifTool must be installed in the runtime image for comprehensive metadata.
 Install only optional Python extras needed by enabled providers.
 

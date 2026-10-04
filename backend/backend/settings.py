@@ -239,6 +239,27 @@ ORGANIZER_STALE_JOB_SECONDS = config(
 )
 METRICS_TOKEN = config("METRICS_TOKEN", default="")
 
+# ---------------------------------------------------------------------------
+# Ingest runner settings
+# ---------------------------------------------------------------------------
+
+# Set to true to allow the Celery worker to spawn one-shot Docker containers
+# for ingesting paths not visible in the container namespace.
+# Requires /var/run/docker.sock mounted into the worker (see compose.override.yaml).
+INGEST_DOCKER_ENABLED = config("INGEST_DOCKER_ENABLED", default=False, cast=bool)
+
+# Comma-separated absolute path prefixes that are allowed for Docker-backed
+# ingest (i.e. paths the Celery worker cannot see directly but can bind-mount).
+# Example: INGEST_ALLOWED_PATH_PREFIXES=/mnt,/media,/run/media
+# Leave empty to deny all Docker-path ingest (only locally-visible paths work).
+INGEST_ALLOWED_PATH_PREFIXES = config("INGEST_ALLOWED_PATH_PREFIXES", default="")
+
+# Path to compose.yaml inside the container, used by run_ingest_docker.
+INGEST_COMPOSE_FILE = config("INGEST_COMPOSE_FILE", default="/app/compose.yaml")
+
+# Docker Compose project name.  Detected automatically if left empty.
+COMPOSE_PROJECT_NAME = config("COMPOSE_PROJECT_NAME", default="")
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,

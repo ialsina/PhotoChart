@@ -1,7 +1,7 @@
 """Serializers for the photograph app."""
 
 from rest_framework import serializers
-from .models import Photograph, PhotoPath
+from .models import Photograph, PhotoPath, IngestJob
 
 
 class PhotoPathSerializer(serializers.ModelSerializer):
@@ -166,3 +166,63 @@ class PhotographSerializer(serializers.ModelSerializer):
             }
             for album in albums
         ]
+
+
+class IngestJobSerializer(serializers.ModelSerializer):
+    """Serializer for IngestJob – create and read ingest jobs."""
+
+    requested_by_username = serializers.SerializerMethodField()
+
+    class Meta:
+        model = IngestJob
+        fields = [
+            "id",
+            "path",
+            "mount_root",
+            "device",
+            "recursive",
+            "calculate_checksum",
+            "store_images",
+            "resolution",
+            "status",
+            "task_id",
+            "error",
+            "count",
+            "checksums_calculated",
+            "images_stored",
+            "started_at",
+            "finished_at",
+            "created_at",
+            "requested_by",
+            "requested_by_username",
+        ]
+        read_only_fields = [
+            "id",
+            "status",
+            "task_id",
+            "error",
+            "count",
+            "checksums_calculated",
+            "images_stored",
+            "started_at",
+            "finished_at",
+            "created_at",
+            "requested_by",
+            "requested_by_username",
+        ]
+
+    def get_requested_by_username(self, obj):
+        if obj.requested_by:
+            return obj.requested_by.username
+        return None
+
+    def validate_path(self, value: str) -> str:
+        """Reject obviously dangerous or empty paths early (full validation is
+        deferred to ``choose_and_run_ingest`` at task-execution time so that
+        settings-based prefix rules are applied consistently)."""
+        from photochart.ingest_runner import validate_ingest_path
+
+        try:
+            return validate_ingest_path(value, allowed_prefixes=None)
+        except ValueError as exc:
+            raise serializers.ValidationError(str(exc)) from exc

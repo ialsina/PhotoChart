@@ -77,6 +77,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         calculate_checksum=getattr(args, "checksum", True),
         recursive=not getattr(args, "no_recursive", False),
         store_images=getattr(args, "store_images", True),
+        device=getattr(args, "device", None),
         log_path=log_path,
     )
 

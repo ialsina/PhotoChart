@@ -71,6 +71,51 @@ pending/running/completed/failed/cancelled state plus an idempotency key.
 Remote organizer results explicitly report ``catalog_status=manual_required``;
 filesystem-backed results are cataloged by the worker.
 
+Ingest jobs
+-----------
+
+``POST /api/ingest-jobs/`` queues a catalog ingest run (operator only).
+``GET /api/ingest-jobs/`` and ``GET /api/ingest-jobs/<id>/`` read job status
+(any authenticated user).  Filter by ``?status=PENDING|RUNNING|COMPLETED|FAILED``.
+
+Request body (all fields except ``path`` are optional):
+
+.. code-block:: json
+
+   {
+     "path":               "/photos/Photos",
+     "mount_root":         "",
+     "device":             "MyDisk (/mnt/camera)",
+     "recursive":          true,
+     "calculate_checksum": true,
+     "store_images":       true,
+     "resolution":         ""
+   }
+
+Response (202 Accepted):
+
+.. code-block:: json
+
+   {
+     "id": 1,
+     "path": "/photos/Photos",
+     "status": "PENDING",
+     "count": 0,
+     "checksums_calculated": 0,
+     "images_stored": 0,
+     "created_at": "2026-10-04T12:00:00Z"
+   }
+
+- If ``path`` is already visible inside the worker container (e.g. ``/photos/...``),
+  ingest runs directly in the Celery worker process.
+- If ``path`` is not visible locally and ``INGEST_DOCKER_ENABLED=true``, the
+  worker spawns a one-shot ``docker compose run`` container that bind-mounts
+  ``mount_root`` read-only.  See ``docs/deployment.rst`` for the required
+  ``compose.override.yaml``.
+- Dangerous paths (``/proc``, ``/sys``, ``/dev``, ``/``) are rejected with 400.
+- Paths not matching ``INGEST_ALLOWED_PATH_PREFIXES`` are rejected at task time
+  and the job transitions to FAILED with an actionable error message.
+
 Operation filtering
 -------------------
 
