@@ -135,7 +135,13 @@ The Django application reads:
    Required and unique when ``DEBUG=false``.
 
 ``ALLOWED_HOSTS``, ``CORS_ALLOWED_ORIGINS``, ``CSRF_TRUSTED_ORIGINS``
-   Comma-separated HTTP security settings.
+   Comma-separated HTTP security settings. ``CSRF_TRUSTED_ORIGINS`` must
+   include the scheme, host, and port used in the browser (for example
+   ``http://127.0.0.1:8080``).
+
+``SESSION_COOKIE_SECURE``, ``CSRF_COOKIE_SECURE``
+   When ``DEBUG=false``, default to secure cookies. Set both to ``false`` only
+   for local HTTP testing; use ``true`` when the site is served over HTTPS.
 
 ``DATABASE_URL``
    PostgreSQL or another URL supported by ``dj-database-url``. When absent,

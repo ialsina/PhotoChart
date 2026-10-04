@@ -8,6 +8,9 @@ All notable changes to PhotoChart are documented in this file.
 
 - Gateway Nginx `root` for the built frontend so `/` serves the SPA instead of
   looping on `try_files` and returning 500.
+- Docker Compose login over HTTP when `DEBUG=false`: configurable
+  `SESSION_COOKIE_SECURE` and `CSRF_COOKIE_SECURE`, default trusted CSRF
+  origins from `PHOTOCHART_PORT`, and documentation for production HTTPS.
 
 ## [v0.3.1] - 2026-09-30
 

@@ -73,6 +73,11 @@ Nginx gateway. Start it only after creating a mode-``0600`` ``.env`` from
    docker compose up -d
    docker compose exec web python backend/manage.py createsuperuser
 
+Compose defaults ``CSRF_TRUSTED_ORIGINS`` from ``PHOTOCHART_PORT`` and disables
+secure session/CSRF cookies for local HTTP login. Behind HTTPS in production,
+set ``SESSION_COOKIE_SECURE=true``, ``CSRF_COOKIE_SECURE=true``, and
+``CSRF_TRUSTED_ORIGINS`` to your public origin(s) in ``.env``.
+
 Mount source, destination, quarantine, and media explicitly. A container using
 pCloud Drive generally needs the host mount passed through; API/WebDAV/SFTP/S3
 adapters do not require a virtual filesystem.
