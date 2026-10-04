@@ -87,6 +87,14 @@ All notable changes to PhotoChart are documented in this file.
 
 ### Fixed
 
+- Host PostgreSQL Compose overlay bind-mounts host ``MEDIA_ROOT`` from ``.env``
+  (with ``PHOTOCHART_MEDIA_PATH`` as fallback) into ``web``, worker, and gateway
+  so nginx ``X-Accel-Redirect`` serves the same thumbnail tree as host
+  ``pchart ingest``; troubleshooting docs cover stale binds after recreating the
+  media directory (``findmnt`` ``//deleted`` → recreate media-mounted services).
+- Nginx gateway forwards ``$http_host`` (including port) as ``Host`` and
+  ``X-Forwarded-Host`` so API ``image_url`` values match the published gateway
+  URL (for example ``http://localhost:8090/media/...``).
 - Vite dev server proxies `/api` and `/media` to Django on `127.0.0.1:8000`
   so the React app at `http://localhost:5173` can authenticate without Docker
   or a manual `VITE_API_BASE_URL` (`frontend/vite.config.ts`).

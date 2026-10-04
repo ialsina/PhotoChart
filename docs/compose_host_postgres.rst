@@ -278,6 +278,16 @@ Troubleshooting
 
       docker compose --project-directory . -f docker/compose.host-postgres.yaml up -d --force-recreate web gateway
 
+   If files exist on the host under ``MEDIA_ROOT`` but containers still return
+   **404**, the bind mount may be stale (common after removing and recreating
+   the media directory).  Inside a running ``web`` container, check::
+
+      findmnt -T /app/backend/media
+
+   If the source path ends with ``//deleted``, recreate ``web``, ``gateway``, and
+   any other service that bind-mounts media so Docker attaches the current host
+   directory.
+
 ``migrate`` / ``photochart-migrate-1`` did not complete successfully
    After ``scripts/check-host-postgres.sh`` passes, recreate the one-shot migrate
    job:
