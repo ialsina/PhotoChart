@@ -84,7 +84,9 @@ first-class host PostgreSQL overlay documented in
 bundled database behavior unchanged, but with
 ``COMPOSE_FILE=docker/compose.yaml:docker/compose.host-postgres.yaml`` the app containers use
 ``host.docker.internal`` and the bundled ``db`` service is disabled unless its
-profile is explicitly enabled.
+profile is explicitly enabled.  Host PostgreSQL must allow connections from
+Docker bridge addresses in ``pg_hba.conf``; use ``scripts/check-host-postgres.sh``
+to verify host and container access before relying on the stack.
 
 Mount source, destination, quarantine, and media explicitly. A container using
 pCloud Drive generally needs the host mount passed through; API/WebDAV/SFTP/S3

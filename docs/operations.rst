@@ -269,7 +269,9 @@ catalog:
 * **Host PostgreSQL**: set
   ``COMPOSE_FILE=docker/compose.yaml:docker/compose.host-postgres.yaml`` and point host
   ``DATABASE_URL`` at ``127.0.0.1:5432``.  Containers use
-  ``host.docker.internal:5432``.  See :doc:`compose_host_postgres`.
+  ``host.docker.internal:5432``.  Configure ``pg_hba.conf`` for Docker client
+  subnets (not only ``127.0.0.1``), then run ``scripts/check-host-postgres.sh``
+  before ``docker compose up``.  See :doc:`compose_host_postgres`.
 
 Do not mix these: host PostgreSQL on ``127.0.0.1:5432`` and the bundled
 Compose ``db`` service are separate PostgreSQL servers unless all clients are
