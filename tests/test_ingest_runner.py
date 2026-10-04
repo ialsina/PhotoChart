@@ -155,12 +155,15 @@ class TestRunIngestDocker:
         "Stored 3 image(s) in database.\n"
     )
 
-    def _patched_settings(self, compose_file="/app/compose.yaml", project="photochart"):
+    def _patched_settings(
+        self, compose_file="/app/compose.yaml", project="photochart", compose_files=""
+    ):
         """Return a context manager that patches django.conf.settings attributes."""
         import django.conf
 
         class _FakeSettings:
             INGEST_COMPOSE_FILE = compose_file
+            COMPOSE_FILE = compose_files
             COMPOSE_PROJECT_NAME = project
 
         return patch.object(django.conf, "settings", _FakeSettings())
@@ -253,6 +256,28 @@ class TestRunIngestDocker:
         cmd = mock_run.call_args[0][0]
         assert "--no-recursive" in cmd
 
+    def test_compose_file_list_expands_to_multiple_file_flags(self) -> None:
+        with self._patched_settings(
+            compose_files="/app/compose.yaml:/app/compose.host-postgres.yaml"
+        ):
+            with patch(
+                "photochart.ingest.runner.subprocess.run",
+                return_value=MagicMock(
+                    returncode=0, stdout="Ingested 0 photo(s) from '/x'.", stderr=""
+                ),
+            ) as mock_run:
+                run_ingest_docker(path="/x", mount_root="/x")
+
+        cmd = mock_run.call_args[0][0]
+        assert cmd[:6] == [
+            "docker",
+            "compose",
+            "-f",
+            "/app/compose.yaml",
+            "-f",
+            "/app/compose.host-postgres.yaml",
+        ]
+
 
 # ---------------------------------------------------------------------------
 # choose_and_run_ingest
@@ -267,6 +292,7 @@ def _fake_django_settings(**kwargs):
         INGEST_DOCKER_ENABLED=False,
         INGEST_ALLOWED_PATH_PREFIXES="",
         INGEST_COMPOSE_FILE="/app/compose.yaml",
+        COMPOSE_FILE="",
         COMPOSE_PROJECT_NAME="photochart",
     )
     defaults.update(kwargs)

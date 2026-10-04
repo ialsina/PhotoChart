@@ -1,0 +1,46 @@
+# Opt-in topology for running the UI in Docker while PostgreSQL and pchart
+# commands run on the host. Use with:
+#   COMPOSE_FILE=compose.yaml:compose.host-postgres.yaml docker compose up -d
+
+x-host-postgres-app: &host-postgres-app
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  environment:
+    COMPOSE_DATABASE_HOST: host.docker.internal
+    DATABASE_URL: postgresql://${POSTGRES_USER:-photochart}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@host.docker.internal:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-photochart}
+    MEDIA_ROOT: /app/backend/media
+  volumes:
+    - ${PHOTOCHART_MEDIA_PATH:-./backend/media}:/app/backend/media
+
+services:
+  # Disabled in this topology unless explicitly requested with
+  # --profile container-postgres. App services use host PostgreSQL instead.
+  db:
+    profiles: ["container-postgres"]
+
+  init-volumes:
+    <<: *host-postgres-app
+
+  ingest:
+    <<: *host-postgres-app
+
+  migrate:
+    <<: *host-postgres-app
+
+  web:
+    <<: *host-postgres-app
+
+  worker:
+    <<: *host-postgres-app
+    environment:
+      COMPOSE_DATABASE_HOST: host.docker.internal
+      DATABASE_URL: postgresql://${POSTGRES_USER:-photochart}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@host.docker.internal:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-photochart}
+      MEDIA_ROOT: /app/backend/media
+      COMPOSE_FILE: /app/compose.yaml:/app/compose.host-postgres.yaml
+
+  beat:
+    <<: *host-postgres-app
+
+  gateway:
+    volumes:
+      - ${PHOTOCHART_MEDIA_PATH:-./backend/media}:/srv/media:ro

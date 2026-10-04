@@ -30,6 +30,7 @@ API, WebDAV, Nextcloud, SFTP, and S3-compatible object storage.
 
    architecture
    django_api
+   compose_host_postgres
    deployment
    development
    reference

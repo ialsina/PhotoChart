@@ -153,3 +153,23 @@ The Django application reads:
 
 ``MEDIA_ROOT``, ``LOG_DIR``
    Thumbnail/media storage and default ingestion log location.
+
+``POSTGRES_DB``, ``POSTGRES_USER``, ``POSTGRES_PASSWORD``, ``POSTGRES_PORT``
+   PostgreSQL connection pieces used by Docker Compose to build the container
+   ``DATABASE_URL``.  ``POSTGRES_PASSWORD`` is required for Compose.
+
+``COMPOSE_DATABASE_HOST``
+   PostgreSQL hostname used inside containers.  The default is ``db`` for the
+   bundled Compose database; ``compose.host-postgres.yaml`` sets it to
+   ``host.docker.internal``.
+
+``PHOTOCHART_MEDIA_PATH``
+   Host directory bind-mounted as container media storage by the host
+   PostgreSQL overlay.  Keep this aligned with host ``MEDIA_ROOT`` when running
+   host-native ``pchart ingest``.
+
+``COMPOSE_FILE``
+   Docker Compose's colon-separated file list.  For the host PostgreSQL
+   topology use ``compose.yaml:compose.host-postgres.yaml`` on the host.  The
+   worker also uses this setting when spawning API-triggered one-shot ingest
+   containers.

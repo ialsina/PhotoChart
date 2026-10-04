@@ -152,6 +152,8 @@ The supported production stack uses Celery and database leases. Do not run
 these legacy schedulers alongside the Compose worker, cron, or watch mode
 against the same source.
 
+.. _operations:Removable media and host paths:
+
 Removable media and host paths
 ------------------------------
 
@@ -248,13 +250,28 @@ CLI commands entirely on the host without any Docker interaction:
    pchart organize once examples/organizer/organizer.removable-inbox.example.yaml --dry-run
    pchart organize once examples/organizer/organizer.removable-inbox.example.yaml --copy
 
-   # Catalog the library (needs DATABASE_URL pointing at the Compose Postgres):
-   DATABASE_URL=postgres://photochart:photochart@localhost:5432/photochart \
-     MEDIA_ROOT=./photos/media \
+   # Catalog the library through the same PostgreSQL server the UI uses:
+   DATABASE_URL=postgresql://photochart:photochart@127.0.0.1:5432/photochart \
+     MEDIA_ROOT=./backend/media \
      pchart ingest ./photos/Photos
 
 See ``examples/organizer/organizer.removable-inbox.example.yaml`` for a
 fully-annotated host-path configuration.
+
+There are two supported ways for host ``pchart`` and the Compose UI to share a
+catalog:
+
+* **Bundled PostgreSQL** (default ``compose.yaml``): publish the ``db`` service
+  to a host port, then point host ``DATABASE_URL`` at that published port.  The
+  UI still uses ``db:5432`` inside Docker.
+* **Host PostgreSQL**: set
+  ``COMPOSE_FILE=compose.yaml:compose.host-postgres.yaml`` and point host
+  ``DATABASE_URL`` at ``127.0.0.1:5432``.  Containers use
+  ``host.docker.internal:5432``.  See :doc:`compose_host_postgres`.
+
+Do not mix these: host PostgreSQL on ``127.0.0.1:5432`` and the bundled
+Compose ``db`` service are separate PostgreSQL servers unless all clients are
+intentionally pointed at one of them.
 
 .. note::
    Do **not** run a host ``pchart organize watch`` and the Compose **worker**

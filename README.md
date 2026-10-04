@@ -122,6 +122,15 @@ trusted origins, and either `DATABASE_URL` for PostgreSQL or `DATABASE_PATH` for
 SQLite. Run the organizer under a single-worker systemd service or timer first;
 increase concurrency only after provider acceptance tests.
 
+Docker Compose supports two PostgreSQL topologies:
+
+- Default `compose.yaml`: bundled PostgreSQL in the `db` service and Docker
+  volume.
+- Host PostgreSQL with Docker UI: use
+  `COMPOSE_FILE=compose.yaml:compose.host-postgres.yaml` so host `.venv`
+  commands and Compose services share the same host database and media path.
+  See `docs/compose_host_postgres.rst`.
+
 ## Migration from PhotoClassify
 
 PhotoClassify's copy/classification, collision suffixing, duplicate/missing-copy

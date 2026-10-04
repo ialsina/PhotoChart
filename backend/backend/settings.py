@@ -272,6 +272,10 @@ INGEST_HOST_ROOT = config("INGEST_HOST_ROOT", default="")
 # Path to compose.yaml inside the container, used by run_ingest_docker.
 INGEST_COMPOSE_FILE = config("INGEST_COMPOSE_FILE", default="/app/compose.yaml")
 
+# Docker Compose's native colon-separated file list.  When set, it takes
+# precedence over INGEST_COMPOSE_FILE for Docker-backed ingest jobs.
+COMPOSE_FILE = config("COMPOSE_FILE", default="")
+
 # Docker Compose project name.  Detected automatically if left empty.
 COMPOSE_PROJECT_NAME = config("COMPOSE_PROJECT_NAME", default="")
 

@@ -62,10 +62,10 @@ version.
 Containers
 ----------
 
-The supported production topology is defined by ``compose.yaml``:
-PostgreSQL, Redis, a migration job, Gunicorn, Celery worker and beat, and an
-Nginx gateway. Start it only after creating a mode-``0600`` ``.env`` from
-``.env.example`` and mounting the intended photo library:
+The default production topology is defined by ``compose.yaml``: PostgreSQL,
+Redis, a migration job, Gunicorn, Celery worker and beat, and an Nginx gateway.
+Start it only after creating a mode-``0600`` ``.env`` from ``.env.example`` and
+mounting the intended photo library:
 
 .. code-block:: console
 
@@ -77,6 +77,14 @@ Compose defaults ``CSRF_TRUSTED_ORIGINS`` from ``PHOTOCHART_PORT`` and disables
 secure session/CSRF cookies for local HTTP login. Behind HTTPS in production,
 set ``SESSION_COOKIE_SECURE=true``, ``CSRF_COOKIE_SECURE=true``, and
 ``CSRF_TRUSTED_ORIGINS`` to your public origin(s) in ``.env``.
+
+If PostgreSQL should run on the host while the UI runs in Compose, use the
+first-class host PostgreSQL overlay documented in
+:doc:`compose_host_postgres`.  That topology keeps ``docker compose up``'s
+bundled database behavior unchanged, but with
+``COMPOSE_FILE=compose.yaml:compose.host-postgres.yaml`` the app containers use
+``host.docker.internal`` and the bundled ``db`` service is disabled unless its
+profile is explicitly enabled.
 
 Mount source, destination, quarantine, and media explicitly. A container using
 pCloud Drive generally needs the host mount passed through; API/WebDAV/SFTP/S3

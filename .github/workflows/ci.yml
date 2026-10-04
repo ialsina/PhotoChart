@@ -49,3 +49,17 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
+
+  compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate default Compose config
+        run: docker compose -f compose.yaml config --quiet
+        env:
+          POSTGRES_PASSWORD: ci-password
+      - name: Validate host PostgreSQL Compose config
+        run: docker compose -f compose.yaml -f compose.host-postgres.yaml config --quiet
+        env:
+          POSTGRES_PASSWORD: ci-password

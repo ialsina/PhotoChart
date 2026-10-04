@@ -6,7 +6,7 @@ x-app: &app
     target: app
   env_file: .env
   environment:
-    DATABASE_URL: postgresql://photochart:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/photochart
+    DATABASE_URL: postgresql://${POSTGRES_USER:-photochart}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@${COMPOSE_DATABASE_HOST:-db}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-photochart}
     CELERY_BROKER_URL: redis://redis:6379/0
     CELERY_RESULT_BACKEND: redis://redis:6379/1
     DEBUG: "false"
@@ -23,8 +23,8 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: photochart
-      POSTGRES_USER: photochart
+      POSTGRES_DB: ${POSTGRES_DB:-photochart}
+      POSTGRES_USER: ${POSTGRES_USER:-photochart}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
     volumes:
       - postgres:/var/lib/postgresql/data
@@ -67,10 +67,10 @@ services:
 
   migrate:
     <<: *app
-    command: python backend/manage.py migrate --noinput
+    command: >
+      sh -c "python backend/manage.py wait_for_database --timeout ${DATABASE_WAIT_TIMEOUT:-60}
+      && python backend/manage.py migrate --noinput"
     depends_on:
-      db:
-        condition: service_healthy
       init-volumes:
         condition: service_completed_successfully
     restart: "no"
