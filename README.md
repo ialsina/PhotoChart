@@ -33,7 +33,8 @@ as fallbacks.
 
 ## Organize local media
 
-Copy `organizer.example.yaml`, adjust the paths, and preview:
+Copy `examples/organizer/organizer.example.yaml` to `organizer.yaml`, adjust
+the paths, and preview:
 
 ```bash
 pchart organize once organizer.yaml --dry-run

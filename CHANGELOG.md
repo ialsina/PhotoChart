@@ -22,8 +22,9 @@ All notable changes to PhotoChart are documented in this file.
   and `COMPOSE_PROJECT_NAME`, documented in `.env.example` and deployment docs.
 - `pchart ingest --device` for a stable `PhotoPath.device` label on bind-mounted
   external drives.
-- Compose `ingest` one-shot service (`tools` profile) and
-  `organizer.removable-inbox.example.yaml` for host-native organize.
+- Compose `ingest` one-shot service (`tools` profile) and example organizer
+  YAML under `examples/organizer/` (including removable-inbox) for host-native
+  organize.
 - `get_mount_point_from_file` and `device_label_for_path` in
   `photochart.fs.device` for host mount tables and shared label logic.
 - Operations, CLI, deployment, Django API, and development docs for the
@@ -32,6 +33,10 @@ All notable changes to PhotoChart are documented in this file.
 
 ### Changed
 
+- Example organizer YAML (`organizer.example.yaml`,
+  `organizer.removable-inbox.example.yaml`) moved from the repository root to
+  `examples/organizer/`; README, `docs/configuration.rst`, `docs/getting_started.rst`,
+  `docs/cli.rst`, and `docs/operations.rst` updated to point operators there.
 - Reorganized the `photochart` package into `common/`, `fs/`, `media/`,
   `imaging/`, and `ingest/` subpackages; imports updated across backend, CLI,
   organizer, and tests (`photochart.ingest.photos`, `photochart.media.extensions`,

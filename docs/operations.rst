@@ -244,16 +244,16 @@ CLI commands entirely on the host without any Docker interaction:
 
 .. code-block:: console
 
-   # Edit organizer.removable-inbox.example.yaml to set real paths, then:
-   pchart organize once organizer.removable-inbox.example.yaml --dry-run
-   pchart organize once organizer.removable-inbox.example.yaml --copy
+   # Edit examples/organizer/organizer.removable-inbox.example.yaml, then:
+   pchart organize once examples/organizer/organizer.removable-inbox.example.yaml --dry-run
+   pchart organize once examples/organizer/organizer.removable-inbox.example.yaml --copy
 
    # Catalog the library (needs DATABASE_URL pointing at the Compose Postgres):
    DATABASE_URL=postgres://photochart:photochart@localhost:5432/photochart \
      MEDIA_ROOT=./photos/media \
      pchart ingest ./photos/Photos
 
-See ``organizer.removable-inbox.example.yaml`` in the project root for a
+See ``examples/organizer/organizer.removable-inbox.example.yaml`` for a
 fully-annotated host-path configuration.
 
 .. note::

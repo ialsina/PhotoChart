@@ -38,11 +38,11 @@ The extras are:
 First local dry-run
 -------------------
 
-Copy the supplied example:
+Copy the supplied example from ``examples/organizer/``:
 
 .. code-block:: console
 
-   cp organizer.example.yaml organizer.yaml
+   cp examples/organizer/organizer.example.yaml organizer.yaml
 
 Set the source and destination to disposable test directories. Then preview:
 

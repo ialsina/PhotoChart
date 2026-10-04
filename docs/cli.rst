@@ -7,6 +7,10 @@ The installed executable is ``pchart``. In a source checkout,
 Organization
 ------------
 
+Start from an example in ``examples/organizer/`` (for example
+``organizer.example.yaml``), copy it to a working file such as
+``organizer.yaml``, and edit paths before running the commands below.
+
 Preview one scan:
 
 .. code-block:: console

@@ -4,9 +4,13 @@ Configuration
 Organizer YAML
 --------------
 
+Example organizer configurations live in ``examples/organizer/`` at the
+repository root. Copy one of those files (or start from
+``organizer.example.yaml``) and adjust paths for your environment.
+
 The complete local example is:
 
-.. literalinclude:: ../organizer.example.yaml
+.. literalinclude:: ../examples/organizer/organizer.example.yaml
    :language: yaml
 
 Source and destination

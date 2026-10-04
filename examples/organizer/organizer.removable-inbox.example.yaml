@@ -1,4 +1,4 @@
-# organizer.removable-inbox.example.yaml
+# examples/organizer/organizer.removable-inbox.example.yaml
 #
 # Example organizer configuration for importing photos from a removable
 # device (USB drive, SD card, CF card, …) into the shared library on the
@@ -7,8 +7,8 @@
 # Use this config with Model 1 (host-native), where pchart is installed on
 # the host and you want to avoid Docker for the organize step:
 #
-#   pchart organize once organizer.removable-inbox.example.yaml --dry-run
-#   pchart organize once organizer.removable-inbox.example.yaml --copy
+#   pchart organize once examples/organizer/organizer.removable-inbox.example.yaml --dry-run
+#   pchart organize once examples/organizer/organizer.removable-inbox.example.yaml --copy
 #
 # After organize, catalog new files with (if Compose stack is running):
 #   ./scripts/compose-ingest.sh /path/to/host/photos/Photos
