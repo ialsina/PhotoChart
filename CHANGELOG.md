@@ -2,7 +2,7 @@
 
 All notable changes to PhotoChart are documented in this file.
 
-## [Unreleased]
+## [v0.3.2] - 2026-10-04
 
 ### Fixed
 
