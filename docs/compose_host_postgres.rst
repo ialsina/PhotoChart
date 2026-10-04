@@ -94,15 +94,20 @@ Run migrations once, either on the host:
    python backend/manage.py migrate
    python backend/manage.py createsuperuser
 
-or through Compose:
+or through Compose (single overlay file; it includes ``docker/compose.yaml``):
+
+.. code-block:: console
+
+   docker compose --project-directory . -f docker/compose.host-postgres.yaml up -d
+   docker compose --project-directory . -f docker/compose.host-postgres.yaml exec web \
+     python backend/manage.py createsuperuser
+
+Alternatively, pass both Compose files explicitly:
 
 .. code-block:: console
 
    COMPOSE_FILE=docker/compose.yaml:docker/compose.host-postgres.yaml \
      docker compose --project-directory . up -d
-   docker compose --project-directory . -f docker/compose.yaml \
-     -f docker/compose.host-postgres.yaml exec web \
-     python backend/manage.py createsuperuser
 
 When this overlay is active, the bundled ``db`` service is assigned to the
 ``container-postgres`` profile and is not started by default.

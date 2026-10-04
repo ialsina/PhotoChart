@@ -71,6 +71,8 @@ All notable changes to PhotoChart are documented in this file.
   `-f docker/compose.yaml` (host PostgreSQL: add `-f docker/compose.host-postgres.yaml`
   or set `COMPOSE_FILE` as documented).  Helper scripts source
   `scripts/lib/compose.sh` for the same flags.
+- ``docker/compose.host-postgres.yaml`` includes the base stack via Compose
+  ``include``, so host PostgreSQL can be started with a single ``-f`` file.
 - Compose database settings are parameterized with `POSTGRES_DB`,
   `POSTGRES_USER`, `POSTGRES_PORT`, and `COMPOSE_DATABASE_HOST`, and migrations
   now wait for the configured database instead of depending directly on the

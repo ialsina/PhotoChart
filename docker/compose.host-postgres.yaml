@@ -1,7 +1,15 @@
 # Opt-in topology for running the UI in Docker while PostgreSQL and pchart
-# commands run on the host. Use with:
-#   COMPOSE_FILE=docker/compose.yaml:docker/compose.host-postgres.yaml \
-#   docker compose --project-directory . up -d
+# commands run on the host. This file includes docker/compose.yaml and applies
+# host-PostgreSQL overrides. From the repository root:
+#   docker compose --project-directory . -f docker/compose.host-postgres.yaml up -d
+# Equivalent:
+#   docker compose --project-directory . -f docker/compose.yaml \
+#     -f docker/compose.host-postgres.yaml up -d
+
+include:
+  - path: docker/compose.yaml
+    project_directory: .
+    env_file: .env
 
 x-host-postgres-app: &host-postgres-app
   extra_hosts:
