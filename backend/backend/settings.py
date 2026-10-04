@@ -263,6 +263,21 @@ INGEST_ALWAYS_ALLOWED_PREFIXES = config(
     "INGEST_ALWAYS_ALLOWED_PREFIXES", default="/photos"
 )
 
+# Retries when reading source files during thumbnail storage (cloud/FUSE mounts).
+INGEST_READ_RETRY_ATTEMPTS = config("INGEST_READ_RETRY_ATTEMPTS", default=4, cast=int)
+INGEST_READ_RETRY_INITIAL_SECONDS = config(
+    "INGEST_READ_RETRY_INITIAL_SECONDS", default=1.0, cast=float
+)
+INGEST_READ_RETRY_MULTIPLIER = config(
+    "INGEST_READ_RETRY_MULTIPLIER", default=2.0, cast=float
+)
+INGEST_READ_STABILITY_CHECKS = config(
+    "INGEST_READ_STABILITY_CHECKS", default=2, cast=int
+)
+INGEST_READ_STABILITY_INTERVAL_SECONDS = config(
+    "INGEST_READ_STABILITY_INTERVAL_SECONDS", default=0.25, cast=float
+)
+
 # When the Celery worker has the host root bind-mounted read-only
 # (compose.override.yaml: volumes: - /:/host:ro), set this to the bind target
 # (e.g. /host).  The runner uses it to resolve mount roots and device labels

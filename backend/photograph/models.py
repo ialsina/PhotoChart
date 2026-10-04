@@ -5,6 +5,7 @@ including file hashes and image references, as well as tracking
 photo paths across different devices.
 """
 
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
@@ -13,10 +14,18 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import models
 from django.core.files import File
+from django.core.files.base import ContentFile
 from django.core.validators import RegexValidator
 from django.utils import timezone
 
 from photochart.media.extensions import RASTER_IMAGE_EXTENSIONS, normalize_extension
+from photochart.fs.io import (
+    get_read_retry_config,
+    read_bytes_with_retry,
+    with_read_retry,
+)
+
+LOGGER = logging.getLogger(__name__)
 
 
 def photograph_upload_path(instance, filename):
@@ -287,8 +296,10 @@ class Photograph(models.Model):
         Returns:
             True if the image was successfully loaded, False otherwise
         """
-        if not file_path or not os.path.exists(file_path):
+        if not file_path:
             return False
+
+        read_retry_config = get_read_retry_config()
 
         try:
             # Parse resolution if it's a string
@@ -304,8 +315,11 @@ class Photograph(models.Model):
             # Try to process through backend first (for special formats like NEF)
             from photochart.imaging.backends import process_image_file
 
-            processed_image = process_image_file(
-                file_path, output_format="JPEG", resolution=resolution_tuple
+            processed_image = with_read_retry(
+                lambda: process_image_file(
+                    file_path, output_format="JPEG", resolution=resolution_tuple
+                ),
+                config=read_retry_config,
             )
 
             if processed_image:
@@ -345,10 +359,13 @@ class Photograph(models.Model):
             # Fallback to direct file copy for standard formats
             # If resolution is specified, we need to process even standard formats
             if resolution_tuple:
+                import io
+
                 from PIL import Image
 
+                file_data = read_bytes_with_retry(file_path, config=read_retry_config)
                 # Open and resize the image
-                image = Image.open(file_path)
+                image = Image.open(io.BytesIO(file_data))
                 target_width, target_height = resolution_tuple
 
                 # Maintain aspect ratio
@@ -396,8 +413,8 @@ class Photograph(models.Model):
                 # No resolution specified, just copy the file directly
                 # Generate timestamp-based filename preserving original extension
                 filename = self._generate_timestamp_filename(file_path, extension=None)
-                with open(file_path, "rb") as f:
-                    self.thumbnail.save(filename, File(f), save=True)
+                file_data = read_bytes_with_retry(file_path, config=read_retry_config)
+                self.thumbnail.save(filename, ContentFile(file_data), save=True)
 
             # Extract and set EXIF data (datetime and model) if not already set
             exif_data = self._extract_exif_data(file_path)
@@ -423,11 +440,16 @@ class Photograph(models.Model):
                     self.save(update_fields=update_fields)
 
             return True
-        except Exception as e:
-            # Mark as error and return False
+        except Exception as exc:
             self.has_errors = True
             self.save(update_fields=["has_errors"])
-            # Log error if needed (you might want to add logging here)
+            LOGGER.warning(
+                "Failed to load thumbnail from %s after %s read attempt(s): %s",
+                file_path,
+                read_retry_config.attempts,
+                exc,
+                exc_info=True,
+            )
             return False
 
 

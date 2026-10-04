@@ -87,6 +87,9 @@ All notable changes to PhotoChart are documented in this file.
 
 ### Fixed
 
+- Ingest thumbnail storage retries transient reads from flaky mounts (e.g. pCloud
+  Drive FUSE): buffered reads with size checks, optional stability wait, and
+  configurable ``INGEST_READ_RETRY_*`` settings.
 - Host PostgreSQL Compose overlay bind-mounts host ``MEDIA_ROOT`` from ``.env``
   (with ``PHOTOCHART_MEDIA_PATH`` as fallback) into ``web``, worker, and gateway
   so nginx ``X-Accel-Redirect`` serves the same thumbnail tree as host
