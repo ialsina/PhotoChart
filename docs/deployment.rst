@@ -62,16 +62,16 @@ version.
 Containers
 ----------
 
-The default production topology is defined by ``compose.yaml``: PostgreSQL,
+The default production topology is defined by ``docker/compose.yaml``: PostgreSQL,
 Redis, a migration job, Gunicorn, Celery worker and beat, and an Nginx gateway.
 Start it only after creating a mode-``0600`` ``.env`` from ``.env.example`` and
 mounting the intended photo library:
 
 .. code-block:: console
 
-   docker compose build
-   docker compose up -d
-   docker compose exec web python backend/manage.py createsuperuser
+   docker compose --project-directory . -f docker/compose.yaml build
+   docker compose --project-directory . -f docker/compose.yaml up -d
+   docker compose --project-directory . -f docker/compose.yaml exec web python backend/manage.py createsuperuser
 
 Compose defaults ``CSRF_TRUSTED_ORIGINS`` from ``PHOTOCHART_PORT`` and disables
 secure session/CSRF cookies for local HTTP login. Behind HTTPS in production,
@@ -82,7 +82,7 @@ If PostgreSQL should run on the host while the UI runs in Compose, use the
 first-class host PostgreSQL overlay documented in
 :doc:`compose_host_postgres`.  That topology keeps ``docker compose up``'s
 bundled database behavior unchanged, but with
-``COMPOSE_FILE=compose.yaml:compose.host-postgres.yaml`` the app containers use
+``COMPOSE_FILE=docker/compose.yaml:docker/compose.host-postgres.yaml`` the app containers use
 ``host.docker.internal`` and the bundled ``db`` service is disabled unless its
 profile is explicitly enabled.
 
@@ -139,7 +139,7 @@ Release checklist
 #. ``make verify``
 #. ``make check-deploy``
 #. ``make package``
-#. ``docker compose build``
+#. ``docker compose --project-directory . -f docker/compose.yaml build``
 #. ``make linkcheck``
 #. backup database and configuration;
 #. migrate;

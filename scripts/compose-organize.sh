@@ -48,6 +48,9 @@ set -euo pipefail
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=scripts/lib/mounts.sh
 source "${SCRIPTS_DIR}/lib/mounts.sh"
+# shellcheck source=scripts/lib/compose.sh
+source "${SCRIPTS_DIR}/lib/compose.sh"
+photochart_compose_init
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -246,7 +249,7 @@ BIND_FLAGS=(
 # ---------------------------------------------------------------------------
 # Run
 # ---------------------------------------------------------------------------
-docker compose run --rm --no-deps \
+docker compose "${PHOTOCHART_COMPOSE_ARGS[@]}" run --rm --no-deps \
   "${BIND_FLAGS[@]}" \
   web \
   pchart organize once "$CONTAINER_YAML" \

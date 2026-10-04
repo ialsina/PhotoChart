@@ -36,6 +36,12 @@ All notable changes to PhotoChart are documented in this file.
   directory without changing the default bundled-PostgreSQL stack.
 - `scripts/check-host-postgres.sh` to verify PostgreSQL is reachable from both
   the host and a Docker container.
+- First-class host PostgreSQL + Docker UI topology via
+  `docker/compose.host-postgres.yaml`, documented in `docs/compose_host_postgres.rst`,
+  so host `.venv` commands and Compose services share one database and media
+  directory without changing the default bundled-PostgreSQL stack.
+- `scripts/check-host-postgres.sh` to verify PostgreSQL is reachable from both
+  the host and a Docker container.
 
 ### Changed
 
@@ -53,6 +59,18 @@ All notable changes to PhotoChart are documented in this file.
   `runserver` on port 8000, Vite on `:5173`, and `createsuperuser` before sign-in.
 - Frontend API client surfaces Django `detail` messages on failed HTTP
   responses (for example invalid login credentials).
+- Compose database settings are parameterized with `POSTGRES_DB`,
+  `POSTGRES_USER`, `POSTGRES_PORT`, and `COMPOSE_DATABASE_HOST`, and migrations
+  now wait for the configured database instead of depending directly on the
+  bundled `db` service.
+- Docker-backed ingest honors Docker Compose's multi-file `COMPOSE_FILE` value
+  so API-triggered one-shot containers use the same Compose topology as the
+  worker.
+- Docker Compose files and the application `Dockerfile` live under `docker/`.
+  Run Compose from the repository root with `--project-directory .` and
+  `-f docker/compose.yaml` (host PostgreSQL: add `-f docker/compose.host-postgres.yaml`
+  or set `COMPOSE_FILE` as documented).  Helper scripts source
+  `scripts/lib/compose.sh` for the same flags.
 - Compose database settings are parameterized with `POSTGRES_DB`,
   `POSTGRES_USER`, `POSTGRES_PORT`, and `COMPOSE_DATABASE_HOST`, and migrations
   now wait for the configured database instead of depending directly on the

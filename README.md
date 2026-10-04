@@ -124,10 +124,11 @@ increase concurrency only after provider acceptance tests.
 
 Docker Compose supports two PostgreSQL topologies:
 
-- Default `compose.yaml`: bundled PostgreSQL in the `db` service and Docker
+- Default `docker/compose.yaml`: bundled PostgreSQL in the `db` service and Docker
   volume.
 - Host PostgreSQL with Docker UI: use
-  `COMPOSE_FILE=compose.yaml:compose.host-postgres.yaml` so host `.venv`
+  `COMPOSE_FILE=docker/compose.yaml:docker/compose.host-postgres.yaml` (with
+  `docker compose --project-directory .`) so host `.venv`
   commands and Compose services share the same host database and media path.
   See `docs/compose_host_postgres.rst`.
 

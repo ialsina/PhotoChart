@@ -29,6 +29,9 @@ set -euo pipefail
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=scripts/lib/mounts.sh
 source "${SCRIPTS_DIR}/lib/mounts.sh"
+# shellcheck source=scripts/lib/compose.sh
+source "${SCRIPTS_DIR}/lib/compose.sh"
+photochart_compose_init
 
 # ---------------------------------------------------------------------------
 # Arguments
@@ -99,7 +102,7 @@ echo ""
 # ---------------------------------------------------------------------------
 # Run
 # ---------------------------------------------------------------------------
-exec docker compose run --rm --no-deps \
+exec docker compose "${PHOTOCHART_COMPOSE_ARGS[@]}" run --rm --no-deps \
   -v "${MOUNT_ROOT}:${MOUNT_ROOT}:ro" \
   web \
   pchart ingest "$ABS_PATH" --device "$DEVICE_LABEL" "$@"

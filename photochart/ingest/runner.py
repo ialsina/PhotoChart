@@ -222,12 +222,12 @@ def run_ingest_docker(
     compose_file = (
         compose_file
         or getattr(django_settings, "COMPOSE_FILE", "")
-        or getattr(django_settings, "INGEST_COMPOSE_FILE", "/app/compose.yaml")
+        or getattr(django_settings, "INGEST_COMPOSE_FILE", "/app/docker/compose.yaml")
     )
     project_name = project_name or getattr(django_settings, "COMPOSE_PROJECT_NAME", "")
 
     # Build the docker compose command
-    cmd: list[str] = ["docker", "compose"]
+    cmd: list[str] = ["docker", "compose", "--project-directory", "/app"]
     for file_name in compose_file.split(os.pathsep):
         if file_name:
             cmd += ["-f", file_name]

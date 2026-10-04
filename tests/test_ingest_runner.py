@@ -156,7 +156,10 @@ class TestRunIngestDocker:
     )
 
     def _patched_settings(
-        self, compose_file="/app/compose.yaml", project="photochart", compose_files=""
+        self,
+        compose_file="/app/docker/compose.yaml",
+        project="photochart",
+        compose_files="",
     ):
         """Return a context manager that patches django.conf.settings attributes."""
         import django.conf
@@ -258,7 +261,7 @@ class TestRunIngestDocker:
 
     def test_compose_file_list_expands_to_multiple_file_flags(self) -> None:
         with self._patched_settings(
-            compose_files="/app/compose.yaml:/app/compose.host-postgres.yaml"
+            compose_files="/app/docker/compose.yaml:/app/docker/compose.host-postgres.yaml"
         ):
             with patch(
                 "photochart.ingest.runner.subprocess.run",
@@ -269,13 +272,15 @@ class TestRunIngestDocker:
                 run_ingest_docker(path="/x", mount_root="/x")
 
         cmd = mock_run.call_args[0][0]
-        assert cmd[:6] == [
+        assert cmd[:8] == [
             "docker",
             "compose",
+            "--project-directory",
+            "/app",
             "-f",
-            "/app/compose.yaml",
+            "/app/docker/compose.yaml",
             "-f",
-            "/app/compose.host-postgres.yaml",
+            "/app/docker/compose.host-postgres.yaml",
         ]
 
 
@@ -291,7 +296,7 @@ def _fake_django_settings(**kwargs):
     defaults = dict(
         INGEST_DOCKER_ENABLED=False,
         INGEST_ALLOWED_PATH_PREFIXES="",
-        INGEST_COMPOSE_FILE="/app/compose.yaml",
+        INGEST_COMPOSE_FILE="/app/docker/compose.yaml",
         COMPOSE_FILE="",
         COMPOSE_PROJECT_NAME="photochart",
     )

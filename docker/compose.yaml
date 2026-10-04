@@ -3,6 +3,7 @@ name: photochart
 x-app: &app
   build:
     context: .
+    dockerfile: docker/Dockerfile
     target: app
   env_file: .env
   environment:
@@ -56,9 +57,9 @@ services:
   # One-shot ingest helper.  Use scripts/compose-ingest.sh for the full
   # host-side workflow (findmnt, permission check, bind-mount resolution).
   # Or call directly when the source path is already visible in the stack:
-  #   docker compose run --rm ingest /photos/Photos
+  #   docker compose --project-directory . -f docker/compose.yaml run --rm ingest /photos/Photos
   # To ingest from a host path not in the library:
-  #   docker compose run --rm -v /mnt/camera:/mnt/camera:ro ingest /mnt/camera/DCIM
+  #   docker compose --project-directory . -f docker/compose.yaml run --rm -v /mnt/camera:/mnt/camera:ro ingest /mnt/camera/DCIM
   ingest:
     <<: *app
     entrypoint: ["pchart", "ingest"]
@@ -109,6 +110,7 @@ services:
   gateway:
     build:
       context: .
+      dockerfile: docker/Dockerfile
       target: gateway
     ports:
       - "${PHOTOCHART_PORT:-8080}:8080"

@@ -1,6 +1,7 @@
 # Opt-in topology for running the UI in Docker while PostgreSQL and pchart
 # commands run on the host. Use with:
-#   COMPOSE_FILE=compose.yaml:compose.host-postgres.yaml docker compose up -d
+#   COMPOSE_FILE=docker/compose.yaml:docker/compose.host-postgres.yaml \
+#   docker compose --project-directory . up -d
 
 x-host-postgres-app: &host-postgres-app
   extra_hosts:
@@ -36,7 +37,7 @@ services:
       COMPOSE_DATABASE_HOST: host.docker.internal
       DATABASE_URL: postgresql://${POSTGRES_USER:-photochart}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@host.docker.internal:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-photochart}
       MEDIA_ROOT: /app/backend/media
-      COMPOSE_FILE: /app/compose.yaml:/app/compose.host-postgres.yaml
+      COMPOSE_FILE: /app/docker/compose.yaml:/app/docker/compose.host-postgres.yaml
 
   beat:
     <<: *host-postgres-app

@@ -56,10 +56,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Validate default Compose config
-        run: docker compose -f compose.yaml config --quiet
+        run: docker compose --project-directory . -f docker/compose.yaml config --quiet
         env:
           POSTGRES_PASSWORD: ci-password
       - name: Validate host PostgreSQL Compose config
-        run: docker compose -f compose.yaml -f compose.host-postgres.yaml config --quiet
+        run: docker compose --project-directory . -f docker/compose.yaml -f docker/compose.host-postgres.yaml config --quiet
         env:
           POSTGRES_PASSWORD: ci-password

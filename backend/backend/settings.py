@@ -269,8 +269,8 @@ INGEST_ALWAYS_ALLOWED_PREFIXES = config(
 # for host paths that are not otherwise visible inside the container.
 INGEST_HOST_ROOT = config("INGEST_HOST_ROOT", default="")
 
-# Path to compose.yaml inside the container, used by run_ingest_docker.
-INGEST_COMPOSE_FILE = config("INGEST_COMPOSE_FILE", default="/app/compose.yaml")
+# Path to the main Compose file inside the container, used by run_ingest_docker.
+INGEST_COMPOSE_FILE = config("INGEST_COMPOSE_FILE", default="/app/docker/compose.yaml")
 
 # Docker Compose's native colon-separated file list.  When set, it takes
 # precedence over INGEST_COMPOSE_FILE for Docker-backed ingest jobs.

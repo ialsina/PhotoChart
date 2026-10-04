@@ -177,7 +177,9 @@ keep everything inside Docker.
 Track 1 – Compose scripts (no host Python required)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-All three scripts call ``docker compose run --rm --no-deps`` internally and
+All three scripts call ``docker compose run --rm --no-deps`` internally (via
+``scripts/lib/compose.sh``, which passes ``--project-directory`` and
+``-f docker/compose.yaml``) and
 share path-validation logic from ``scripts/lib/mounts.sh``.
 
 **Step 1 – Organize into the library**
@@ -261,11 +263,11 @@ fully-annotated host-path configuration.
 There are two supported ways for host ``pchart`` and the Compose UI to share a
 catalog:
 
-* **Bundled PostgreSQL** (default ``compose.yaml``): publish the ``db`` service
+* **Bundled PostgreSQL** (default ``docker/compose.yaml``): publish the ``db`` service
   to a host port, then point host ``DATABASE_URL`` at that published port.  The
   UI still uses ``db:5432`` inside Docker.
 * **Host PostgreSQL**: set
-  ``COMPOSE_FILE=compose.yaml:compose.host-postgres.yaml`` and point host
+  ``COMPOSE_FILE=docker/compose.yaml:docker/compose.host-postgres.yaml`` and point host
   ``DATABASE_URL`` at ``127.0.0.1:5432``.  Containers use
   ``host.docker.internal:5432``.  See :doc:`compose_host_postgres`.
 

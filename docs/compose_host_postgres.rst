@@ -6,9 +6,10 @@ Docker Compose while PostgreSQL and host ``pchart`` commands run directly on
 the host.  Use it when you already maintain a local PostgreSQL server or want
 host-native CLI commands and the Docker UI to share one catalog.
 
-The default ``docker compose up`` topology is unchanged: it still starts the
+The default stack (``docker/compose.yaml`` with ``docker compose --project-directory .``)
+is unchanged: it still starts the
 bundled ``db`` service and stores PostgreSQL data in the ``postgres`` Docker
-volume.  Host PostgreSQL is opt-in through ``compose.host-postgres.yaml``.
+volume.  Host PostgreSQL is opt-in through ``docker/compose.host-postgres.yaml``.
 
 Data flow
 ---------
@@ -75,9 +76,9 @@ Set the shared PostgreSQL credentials and media path in ``.env``:
    PHOTOCHART_MEDIA_PATH=./backend/media
 
    # Opt in to the host-PostgreSQL Compose overlay.
-   COMPOSE_FILE=compose.yaml:compose.host-postgres.yaml
+   COMPOSE_FILE=docker/compose.yaml:docker/compose.host-postgres.yaml
 
-``compose.host-postgres.yaml`` points containers at
+``docker/compose.host-postgres.yaml`` points containers at
 ``host.docker.internal:5432``.  On Linux it also adds
 ``host.docker.internal:host-gateway`` to app containers.  Docker Desktop for
 macOS and Windows provides that name automatically, but the explicit mapping is
@@ -97,8 +98,11 @@ or through Compose:
 
 .. code-block:: console
 
-   COMPOSE_FILE=compose.yaml:compose.host-postgres.yaml docker compose up -d
-   docker compose exec web python backend/manage.py createsuperuser
+   COMPOSE_FILE=docker/compose.yaml:docker/compose.host-postgres.yaml \
+     docker compose --project-directory . up -d
+   docker compose --project-directory . -f docker/compose.yaml \
+     -f docker/compose.host-postgres.yaml exec web \
+     python backend/manage.py createsuperuser
 
 When this overlay is active, the bundled ``db`` service is assigned to the
 ``container-postgres`` profile and is not started by default.
@@ -125,14 +129,17 @@ Check that host and container code see the same rows:
 .. code-block:: console
 
    psql "$DATABASE_URL" -c 'select count(*) from photograph_photograph;'
-   docker compose exec web python backend/manage.py shell -c \
+   docker compose --project-directory . -f docker/compose.yaml \
+     -f docker/compose.host-postgres.yaml exec web \
+     python backend/manage.py shell -c \
      "from photograph.models import Photograph; print(Photograph.objects.count())"
 
 Check which database URL the web container uses:
 
 .. code-block:: console
 
-   docker compose exec web printenv DATABASE_URL
+   docker compose --project-directory . -f docker/compose.yaml \
+     -f docker/compose.host-postgres.yaml exec web printenv DATABASE_URL
 
 It should contain ``host.docker.internal``, not ``@db``.
 
@@ -145,9 +152,10 @@ Troubleshooting
 
 ``UI is empty, host PostgreSQL has rows``
    The containers are probably still using the bundled ``db`` service.  Confirm
-   ``docker compose exec web printenv DATABASE_URL`` contains
+   ``docker compose --project-directory . -f docker/compose.yaml \
+     -f docker/compose.host-postgres.yaml exec web printenv DATABASE_URL`` contains
    ``host.docker.internal`` and that ``COMPOSE_FILE`` includes
-   ``compose.host-postgres.yaml``.
+   ``docker/compose.host-postgres.yaml``.
 
 ``connection refused``
    PostgreSQL is not listening on an address reachable from the Docker bridge,

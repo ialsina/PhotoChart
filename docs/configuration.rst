@@ -160,7 +160,7 @@ The Django application reads:
 
 ``COMPOSE_DATABASE_HOST``
    PostgreSQL hostname used inside containers.  The default is ``db`` for the
-   bundled Compose database; ``compose.host-postgres.yaml`` sets it to
+   bundled Compose database; ``docker/compose.host-postgres.yaml`` sets it to
    ``host.docker.internal``.
 
 ``PHOTOCHART_MEDIA_PATH``
@@ -170,6 +170,6 @@ The Django application reads:
 
 ``COMPOSE_FILE``
    Docker Compose's colon-separated file list.  For the host PostgreSQL
-   topology use ``compose.yaml:compose.host-postgres.yaml`` on the host.  The
+   topology use ``docker/compose.yaml:docker/compose.host-postgres.yaml`` on the host.  The
    worker also uses this setting when spawning API-triggered one-shot ingest
    containers.
