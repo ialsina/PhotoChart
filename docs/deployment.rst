@@ -82,10 +82,24 @@ Mount source, destination, quarantine, and media explicitly. A container using
 pCloud Drive generally needs the host mount passed through; API/WebDAV/SFTP/S3
 adapters do not require a virtual filesystem.
 
-To ingest from removable media (USB drives, SD cards) without restarting the
-stack, use ``scripts/compose-ingest.sh`` (see "Ingest from removable media" in
-``docs/operations.rst``).  If you want the Celery worker to spawn ingest
-containers automatically, add a ``compose.override.yaml``:
+Removable media and host paths
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For the full organize → library → catalog workflow with USB drives, SD cards,
+or any host directory, see :ref:`Removable media and host paths <operations:Removable media and host paths>`
+in ``docs/operations.rst``.  Key points:
+
+* ``scripts/compose-organize.sh SOURCE --dry-run`` then ``--copy`` or ``--move``
+  to import files into the library.
+* ``scripts/compose-run.sh --from-path … web pchart duplicates …`` for any
+  other ``pchart`` command against external paths.
+* ``scripts/compose-ingest.sh /photos/Photos`` to catalog after organize.
+* The UI organizer (OrganizerConfiguration) only supports paths visible to the
+  ``worker`` container (i.e. ``/photos/…``).  Use CLI scripts for removable-
+  media inboxes.
+
+If you want the Celery worker to spawn ingest containers automatically,
+add a ``compose.override.yaml``:
 
 .. code-block:: yaml
 

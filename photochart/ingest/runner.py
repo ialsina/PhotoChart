@@ -31,123 +31,49 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-logger = logging.getLogger(__name__)
-
-# Paths that are never safe to bind-mount into a container as ingest sources.
-_DANGEROUS_PREFIXES: tuple[str, ...] = (
-    "/proc",
-    "/sys",
-    "/dev",
-    "/run/docker.sock",
-    "/var/run/docker.sock",
+from photochart.fs.mounts import (
+    validate_host_path,
+    resolve_mount_root,
+    collect_mount_roots,  # noqa: F401 – re-exported for callers that import from here
+    docker_bind_flags,  # noqa: F401
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Path validation
+# Path validation (thin wrapper kept for backward compatibility)
 # ---------------------------------------------------------------------------
 
 
 def validate_ingest_path(
-    path: str, allowed_prefixes: Optional[list[str]] = None
+    path: str,
+    allowed_prefixes: Optional[list[str]] = None,
+    always_allowed: Optional[list[str]] = None,
 ) -> str:
     """Return the normalised absolute path or raise ``ValueError``.
 
+    Delegates to :func:`photochart.fs.mounts.validate_host_path`.  The
+    *always_allowed* argument controls which prefixes bypass the
+    *allowed_prefixes* check (defaults to ``["/photos"]``).
+
     Args:
-        path: Raw path supplied by the caller.
-        allowed_prefixes: If non-empty, the resolved path must start with at
-            least one of these prefixes.  An empty list disables the check.
+        path:             Raw path supplied by the caller.
+        allowed_prefixes: If non-empty, the resolved path must start with
+                          at least one of these *or* one of *always_allowed*.
+        always_allowed:   Prefixes that are always valid (default ``["/photos"]``).
 
     Returns:
         Resolved absolute path string.
 
     Raises:
-        ValueError: If the path contains traversal sequences, resolves to a
-            dangerous root, or does not match the allowed prefix list.
+        ValueError: Path is invalid, dangerous, or outside allowed prefixes.
     """
-    if not path or not path.strip():
-        raise ValueError("Ingest path must not be empty.")
-
-    # Reject literal traversal sequences before any resolution
-    if ".." in Path(path).parts:
-        raise ValueError(f"Path traversal detected in ingest path: {path!r}")
-
-    resolved = os.path.realpath(os.path.abspath(path.strip()))
-
-    for dangerous in _DANGEROUS_PREFIXES:
-        if resolved == dangerous or resolved.startswith(dangerous + "/"):
-            raise ValueError(
-                f"Ingest path {resolved!r} is inside a restricted system path "
-                f"({dangerous!r}). Bind-mounting this path is not allowed."
-            )
-
-    if resolved == "/":
-        raise ValueError("Ingest path must not be the filesystem root '/'.")
-
-    if allowed_prefixes:
-        if not any(
-            resolved == p.rstrip("/") or resolved.startswith(p.rstrip("/") + "/")
-            for p in allowed_prefixes
-        ):
-            raise ValueError(
-                f"Ingest path {resolved!r} is not under any allowed prefix. "
-                f"Allowed: {allowed_prefixes}. "
-                f"Set INGEST_ALLOWED_PATH_PREFIXES to include this path."
-            )
-
-    return resolved
-
-
-# ---------------------------------------------------------------------------
-# Mount-point discovery (Linux)
-# ---------------------------------------------------------------------------
-
-
-def resolve_mount_root(path: str) -> str:
-    """Return the filesystem mount root that contains *path*.
-
-    Uses ``findmnt -T`` when available (Linux), falls back to the
-    ``photochart.fs.device`` proc-mounts reader, then to the path's own
-    directory.
-
-    Args:
-        path: Absolute path to a file or directory.
-
-    Returns:
-        Absolute path of the nearest mount point (never ``"/"``; falls back
-        to the path's own parent directory in that case so the bind-mount
-        is still as tight as possible).
-    """
-    # Try findmnt (reliable on modern Linux, usually installed with util-linux)
-    try:
-        result = subprocess.run(
-            ["findmnt", "-T", path, "--output", "TARGET", "--noheadings", "--raw"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            mount = result.stdout.strip()
-            if mount and mount != "/":
-                return mount
-    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
-        pass
-
-    # Fall back to /proc/mounts reader already in the codebase
-    try:
-        from photochart.fs.device import get_mount_point
-
-        mount = get_mount_point(path)
-        if mount and mount != "/":
-            return mount
-    except Exception:
-        pass
-
-    # Last resort: tightest parent that actually exists
-    p = Path(os.path.realpath(path))
-    if p.is_file():
-        p = p.parent
-    return str(p)
+    return validate_host_path(
+        path,
+        allowed_prefixes=allowed_prefixes,
+        always_allowed=always_allowed,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -448,8 +374,21 @@ def choose_and_run_ingest(
         if p.strip()
     ]
 
+    # Paths under INGEST_ALWAYS_ALLOWED_PREFIXES (default: /photos) bypass the
+    # INGEST_ALLOWED_PATH_PREFIXES check so the library volume is always reachable
+    # even when external-device prefixes are also configured.
+    always_allowed: list[str] = [
+        p.strip()
+        for p in getattr(
+            django_settings, "INGEST_ALWAYS_ALLOWED_PREFIXES", "/photos"
+        ).split(",")
+        if p.strip()
+    ]
+
     try:
-        path = validate_ingest_path(path, allowed_prefixes or None)
+        path = validate_ingest_path(
+            path, allowed_prefixes or None, always_allowed=always_allowed
+        )
     except ValueError as exc:
         return {
             "success": False,

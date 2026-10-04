@@ -26,6 +26,10 @@
 #
 set -euo pipefail
 
+SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=scripts/lib/mounts.sh
+source "${SCRIPTS_DIR}/lib/mounts.sh"
+
 # ---------------------------------------------------------------------------
 # Arguments
 # ---------------------------------------------------------------------------
@@ -42,8 +46,8 @@ Docker Compose stack.  The script:
      /proc/mounts entry for device detection).
   3. Builds a stable device label (e.g. "MyDisk (/mnt/camera)").
   4. Launches a one-shot container:
-       docker compose run --rm --no-deps \\
-         -v <mount_root>:<mount_root>:ro \\
+       docker compose run --rm --no-deps \
+         -v <mount_root>:<mount_root>:ro \
          web pchart ingest <PATH> --device "<label>" [options]
 
 Options forwarded to pchart ingest:
@@ -61,64 +65,15 @@ INGEST_PATH="$1"
 shift  # remaining args are forwarded to pchart ingest
 
 # ---------------------------------------------------------------------------
-# Resolve absolute path
+# Validate and resolve absolute path
 # ---------------------------------------------------------------------------
-ABS_PATH="$(realpath -m -- "$INGEST_PATH")"
-
-# Reject dangerous roots
-for DANGEROUS in /proc /sys /dev /run/docker.sock /var/run/docker.sock; do
-  if [[ "$ABS_PATH" == "$DANGEROUS" || "$ABS_PATH" == "$DANGEROUS/"* ]]; then
-    echo "ERROR: Refusing to ingest from restricted system path: $ABS_PATH" >&2
-    exit 1
-  fi
-done
-if [[ "$ABS_PATH" == "/" ]]; then
-  echo "ERROR: Refusing to ingest from the filesystem root '/'." >&2
-  exit 1
-fi
+ABS_PATH="$(pchart_validate_host_path "$INGEST_PATH")"
 
 # ---------------------------------------------------------------------------
-# Resolve mount root via findmnt
+# Resolve mount root and device label (via lib/mounts.sh helpers)
 # ---------------------------------------------------------------------------
-MOUNT_ROOT=""
-if command -v findmnt &>/dev/null; then
-  MOUNT_ROOT="$(findmnt -T "$ABS_PATH" --output TARGET --noheadings --raw 2>/dev/null || true)"
-  # Reject root filesystem – use the path's own directory in that case
-  if [[ "$MOUNT_ROOT" == "/" ]]; then
-    MOUNT_ROOT=""
-  fi
-fi
-
-if [[ -z "$MOUNT_ROOT" ]]; then
-  # Fall back to the path itself (or its parent if it's a file)
-  if [[ -f "$ABS_PATH" ]]; then
-    MOUNT_ROOT="$(dirname "$ABS_PATH")"
-  else
-    MOUNT_ROOT="$ABS_PATH"
-  fi
-fi
-
-# ---------------------------------------------------------------------------
-# Build device label
-# ---------------------------------------------------------------------------
-DEVICE_LABEL=""
-if command -v findmnt &>/dev/null; then
-  FINDMNT_OUT="$(findmnt -T "$ABS_PATH" --output LABEL,TARGET --noheadings --raw 2>/dev/null || true)"
-  if [[ -n "$FINDMNT_OUT" ]]; then
-    LABEL_PART="$(echo "$FINDMNT_OUT" | awk '{print $1}')"
-    TARGET_PART="$(echo "$FINDMNT_OUT" | awk '{print $2}')"
-    if [[ -n "$LABEL_PART" && "$LABEL_PART" != "-" ]]; then
-      DEVICE_LABEL="${LABEL_PART} (${TARGET_PART})"
-    elif [[ -n "$TARGET_PART" && "$TARGET_PART" != "/" ]]; then
-      DEVICE_LABEL="$TARGET_PART"
-    fi
-  fi
-fi
-
-if [[ -z "$DEVICE_LABEL" ]]; then
-  # Use the mount root name as a minimal label
-  DEVICE_LABEL="$(basename "$MOUNT_ROOT")"
-fi
+MOUNT_ROOT="$(pchart_resolve_mount_root "$ABS_PATH")"
+DEVICE_LABEL="$(pchart_build_device_label "$ABS_PATH")"
 
 # ---------------------------------------------------------------------------
 # Accessibility check

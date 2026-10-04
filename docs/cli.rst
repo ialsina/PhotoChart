@@ -94,6 +94,54 @@ Metadata inspection and conversion
    pchart convert IMG_1234.NEF --format JPEG --resolution 1080p
    pchart list-resolutions
 
+Running CLI commands against removable or host paths
+------------------------------------------------------
+
+Most ``pchart`` commands work on any absolute path, but the default Docker
+Compose stack only mounts ``/photos`` into ``web`` and ``worker``.  Use the
+table below to choose the right invocation for each command and source type:
+
+.. list-table:: Command execution matrix
+   :header-rows: 1
+   :widths: 20 20 30 30
+
+   * - Command
+     - Needs Django DB?
+     - Path inside ``/photos``
+     - Path on removable / host
+   * - ``organize once/watch``
+     - No
+     - ``docker compose exec web pchart organize once …``
+     - ``./scripts/compose-organize.sh SOURCE …``
+       or host-native ``pchart organize once …``
+   * - ``ingest``
+     - Yes
+     - ``docker compose exec web pchart ingest /photos/…``
+       or ``./scripts/compose-ingest.sh /photos/…``
+     - ``./scripts/compose-ingest.sh /mnt/camera/…``
+   * - ``duplicates``
+     - No
+     - ``docker compose exec web pchart duplicates /photos/…``
+     - ``./scripts/compose-run.sh --from-path /mnt/… web pchart duplicates /mnt/…``
+   * - ``metadata-date``
+     - No
+     - ``docker compose exec web pchart metadata-date /photos/… DATE``
+     - ``./scripts/compose-run.sh --mount /mnt/…:/mnt/…:rw web pchart metadata-date …``
+   * - ``info``
+     - No
+     - ``docker compose exec web pchart info /photos/IMG.NEF``
+     - ``./scripts/compose-run.sh --from-path /mnt/… web pchart info /mnt/…/IMG.NEF``
+   * - ``convert``
+     - No
+     - ``docker compose exec web pchart convert /photos/IMG.NEF --format JPEG``
+     - ``./scripts/compose-run.sh --from-path /mnt/… web pchart convert /mnt/…/IMG.NEF …``
+
+For the UI organizer (Photographs → Organizer tab) the source **must** be
+inside ``/photos/…`` because it runs inside the long-lived Celery ``worker``.
+Use the CLI scripts above for all removable-media or host-path workflows.
+
+See :doc:`operations` for the full two-step organize → ingest playbook.
+
 Exit status
 -----------
 

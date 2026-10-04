@@ -1,0 +1,82 @@
+# organizer.removable-inbox.example.yaml
+#
+# Example organizer configuration for importing photos from a removable
+# device (USB drive, SD card, CF card, …) into the shared library on the
+# HOST filesystem.
+#
+# Use this config with Model 1 (host-native), where pchart is installed on
+# the host and you want to avoid Docker for the organize step:
+#
+#   pchart organize once organizer.removable-inbox.example.yaml --dry-run
+#   pchart organize once organizer.removable-inbox.example.yaml --copy
+#
+# After organize, catalog new files with (if Compose stack is running):
+#   ./scripts/compose-ingest.sh /path/to/host/photos/Photos
+#   # or, inside the container:
+#   docker compose exec web pchart ingest /photos/Photos
+#
+# For the Docker-backed workflow (Model 2) you do not need this file;
+# scripts/compose-organize.sh generates an equivalent YAML on the fly.
+#
+# Adjust the paths below to match your system.
+# -----------------------------------------------------------------------
+
+adapter:
+  type: local
+
+source:
+  # Absolute path to the inbox on the removable device.
+  # Common locations on Linux:
+  #   /run/media/$USER/<LABEL>/DCIM     (udisks2 automount)
+  #   /media/$USER/<LABEL>/DCIM         (older automount)
+  #   /mnt/<LABEL>/DCIM                 (manual mount)
+  path: /run/media/user/EOS_DIGITAL/DCIM
+
+destination:
+  # Must point to the SAME directory tree that the Compose stack's
+  # ${PHOTO_LIBRARY_PATH} maps to on the host (i.e. ./photos/Photos when
+  # the default bind ./photos → /photos is used).
+  path: /home/user/photochart/photos/Photos
+  pattern: "%Y/%YQ%Q/%Y%M%D"
+
+quarantine:
+  # Files that fail to organize land here for inspection.
+  path: /home/user/photochart/photos/OrganizerQuarantine
+
+# Use "copy" to keep the source intact (recommended until you verify results).
+# Switch to "move" once you are satisfied to free up device space.
+mode: copy
+
+workers: 1
+
+scan:
+  interval_seconds: 60
+
+stability:
+  # Wait for file writes to settle before processing.
+  interval_seconds: 30
+  checks: 2
+
+metadata:
+  date_priority:
+    - DateTimeOriginal
+    - SubSecDateTimeOriginal
+    - CreateDate
+    - MediaCreateDate
+    - TrackCreateDate
+    - ModifyDate
+
+timezone:
+  # Adjust to your camera's timezone if it stores local time without offset.
+  default: Europe/Madrid
+
+collision:
+  mode: suffix
+
+duplicate_detection:
+  mode: size_then_hash
+
+retry:
+  attempts: 4
+  initial_seconds: 5
+  multiplier: 3

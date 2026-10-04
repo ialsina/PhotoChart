@@ -1,3 +1,4 @@
+import os
 import socket
 from pathlib import Path
 from typing import Optional
@@ -50,6 +51,100 @@ def sanitize_label(label: str) -> str:
     label = re.sub(r"\\([0-7]{3})", replace_octal, label)
 
     return label
+
+
+def get_mount_point_from_file(
+    path: str, proc_mounts_path: str = "/proc/mounts"
+) -> Optional[str]:
+    """Find the mount point for *path* by reading *proc_mounts_path* directly.
+
+    Unlike :func:`get_mount_point`, the path does **not** need to exist in the
+    current process namespace – useful when the caller needs to inspect the
+    host's mount table via an ``INGEST_HOST_ROOT`` bind
+    (e.g. ``/host/proc/mounts``) for paths that are only visible on the host.
+
+    Mount-point selection uses longest-prefix matching on normalised strings,
+    consistent with how the kernel chooses mount points.
+
+    Args:
+        path:             Absolute path in the namespace described by
+                          *proc_mounts_path* (e.g. ``/mnt/camera/DCIM``).
+        proc_mounts_path: Path to the mounts file to read (default
+                          ``/proc/mounts``).
+
+    Returns:
+        Mount point string (e.g. ``"/mnt/camera"``), or ``None`` if not found
+        or the path maps to the root filesystem.
+    """
+    try:
+        path_norm = os.path.normpath(path)
+        mount_points: list[str] = []
+        with open(proc_mounts_path) as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 2:
+                    mount = unescape_mounts_path(parts[1])
+                    if mount not in ("/", ""):
+                        mount_points.append(mount)
+        # Longest (most-specific) mount point first
+        mount_points.sort(key=len, reverse=True)
+        for mount in mount_points:
+            if path_norm == mount or path_norm.startswith(mount + "/"):
+                return mount
+    except (OSError, IOError):
+        pass
+    return None
+
+
+def device_label_for_path(path: str) -> str:
+    """Return a stable device label for *path* using ``findmnt`` then :func:`get_device_name`.
+
+    This consolidates the label logic so both
+    ``photochart.ingest.runner.build_device_label`` and callers in the fs layer
+    share a single implementation.  The runner helper delegates here for
+    locally-visible paths.
+
+    Label format mirrors ``get_device_name``:
+    ``"LABEL (/mnt/target)"`` when a filesystem label is available, otherwise
+    the mount target path or a hostname-based fallback.
+
+    Args:
+        path: Absolute path to a file or directory on the device.
+
+    Returns:
+        Device label string (e.g. ``"MyDisk (/mnt/camera)"``).
+    """
+    import subprocess as _subprocess
+
+    try:
+        result = _subprocess.run(
+            [
+                "findmnt",
+                "-T",
+                path,
+                "--output",
+                "LABEL,TARGET",
+                "--noheadings",
+                "--raw",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            line = result.stdout.strip()
+            if line:
+                parts = line.split(None, 1)
+                if len(parts) == 2:
+                    label, target = parts[0].strip(), parts[1].strip()
+                    if label and label not in ("-", ""):
+                        return f"{label} ({target})"
+                    if target and target != "/":
+                        return target
+    except (FileNotFoundError, _subprocess.TimeoutExpired, OSError):
+        pass
+
+    return get_device_name(path)
 
 
 def get_mount_point(file_path: str) -> Optional[str]:

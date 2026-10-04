@@ -254,6 +254,21 @@ INGEST_DOCKER_ENABLED = config("INGEST_DOCKER_ENABLED", default=False, cast=bool
 # Leave empty to deny all Docker-path ingest (only locally-visible paths work).
 INGEST_ALLOWED_PATH_PREFIXES = config("INGEST_ALLOWED_PATH_PREFIXES", default="")
 
+# Container-internal paths that are always allowed for local ingest regardless
+# of INGEST_ALLOWED_PATH_PREFIXES.  Typically the library volume mount point
+# (/photos in the default Compose setup).  Comma-separated.
+# These paths bypass the Docker bind requirement – they are already visible in
+# the worker/web container namespace.
+INGEST_ALWAYS_ALLOWED_PREFIXES = config(
+    "INGEST_ALWAYS_ALLOWED_PREFIXES", default="/photos"
+)
+
+# When the Celery worker has the host root bind-mounted read-only
+# (compose.override.yaml: volumes: - /:/host:ro), set this to the bind target
+# (e.g. /host).  The runner uses it to resolve mount roots and device labels
+# for host paths that are not otherwise visible inside the container.
+INGEST_HOST_ROOT = config("INGEST_HOST_ROOT", default="")
+
 # Path to compose.yaml inside the container, used by run_ingest_docker.
 INGEST_COMPOSE_FILE = config("INGEST_COMPOSE_FILE", default="/app/compose.yaml")
 

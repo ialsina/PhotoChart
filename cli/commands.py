@@ -54,7 +54,7 @@ def resolve_ingest_log_path(raw: Optional[str]) -> str:
 
 def cmd_ingest(args: argparse.Namespace) -> int:
     """Ingest photos from a directory and persist to database."""
-    from photochart.ingest.photos import ingest_photos
+    from photochart.ingest.runner import choose_and_run_ingest
 
     raw_log = getattr(args, "log", None)
     if raw_log is None:
@@ -70,14 +70,15 @@ def cmd_ingest(args: argparse.Namespace) -> int:
             print(f"Error: {err}", file=sys.stderr)
             return 1
 
-    # Call the ingestion function
-    result = ingest_photos(
+    # Dispatch via choose_and_run_ingest so that both local paths and external
+    # device paths (INGEST_DOCKER_ENABLED) are handled uniformly.
+    result = choose_and_run_ingest(
         path=args.path,
-        resolution=getattr(args, "resolution", None),
-        calculate_checksum=getattr(args, "checksum", True),
-        recursive=not getattr(args, "no_recursive", False),
-        store_images=getattr(args, "store_images", True),
         device=getattr(args, "device", None),
+        recursive=not getattr(args, "no_recursive", False),
+        calculate_checksum=getattr(args, "checksum", True),
+        store_images=getattr(args, "store_images", True),
+        resolution=getattr(args, "resolution", None),
         log_path=log_path,
     )
 

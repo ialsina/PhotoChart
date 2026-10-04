@@ -152,68 +152,140 @@ The supported production stack uses Celery and database leases. Do not run
 these legacy schedulers alongside the Compose worker, cron, or watch mode
 against the same source.
 
-Ingest from removable media
-----------------------------
+Removable media and host paths
+------------------------------
 
 The default Compose stack mounts only ``${PHOTO_LIBRARY_PATH}`` (→ ``/photos``)
 into ``web`` and ``worker``.  USB drives, SD cards, and other host volumes are
-not visible inside those containers.  There are three ways to bring photos from
-external sources into the catalog:
+not visible inside those containers.
 
-**Workflow A – host wrapper (recommended for interactive use)**
+The recommended two-step workflow for any external device is:
 
-``scripts/compose-ingest.sh`` is the simplest path.  Run it from the repo root
-with the Compose stack already running:
+1. **Organize** – copy/move files from the device into the shared library.
+2. **Catalog** – ingest the library into the database.
+
+There are two tracks depending on whether you want to run Python on the host or
+keep everything inside Docker.
+
+.. code-block:: text
+
+   USB/SD card  ──organize──▶  ./photos/Photos  ──ingest──▶  Postgres catalog
+   (host mount)                 (Compose bind)                (Photographs UI)
+
+Track 1 – Compose scripts (no host Python required)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+All three scripts call ``docker compose run --rm --no-deps`` internally and
+share path-validation logic from ``scripts/lib/mounts.sh``.
+
+**Step 1 – Organize into the library**
+
+.. code-block:: console
+
+   # Preview (no files moved):
+   ./scripts/compose-organize.sh /run/media/$USER/EOS_DIGITAL/DCIM --dry-run
+
+   # Copy files (source intact):
+   ./scripts/compose-organize.sh /run/media/$USER/EOS_DIGITAL/DCIM --copy
+
+   # Move files (removes source after verified copy – use with caution):
+   ./scripts/compose-organize.sh /run/media/$USER/EOS_DIGITAL/DCIM --move
+
+The script generates a minimal organizer YAML on the fly, bind-mounts the
+device's filesystem root read-only (or read-write for ``--move``), and runs
+``pchart organize once`` in a one-shot container.  Files land in
+``/photos/Photos`` (configurable via ``PHOTO_DEST_PATH``).
+
+**Step 2 – Catalog the library**
+
+.. code-block:: console
+
+   ./scripts/compose-ingest.sh /photos/Photos
+
+``scripts/compose-ingest.sh`` is a convenience wrapper for the common case
+where you want to ingest a path that is not permanently mounted:
 
 .. code-block:: console
 
    ./scripts/compose-ingest.sh /mnt/camera/DCIM
-   ./scripts/compose-ingest.sh /run/media/$USER/EOS_DIGITAL/DCIM --no-store-images
+   ./scripts/compose-ingest.sh /run/media/$USER/SD_CARD --no-store-images
 
-The script:
+**Generic runner for other commands**
 
-1. Resolves the absolute path and rejects dangerous system roots.
-2. Uses ``findmnt -T`` to find the device's filesystem mount root.
-3. Builds a stable device label (``"LABEL (/mnt/camera)"``).
-4. Launches a one-shot container that bind-mounts only the device root
-   (read-only) alongside the existing ``media`` volume::
-
-     docker compose run --rm --no-deps \
-       -v /mnt/camera:/mnt/camera:ro \
-       web pchart ingest /mnt/camera/DCIM --device "EOS_DIGITAL (/mnt/camera)"
-
-The long-running ``web`` and ``worker`` services are not restarted.  Thumbnails
-are written to the shared ``media`` volume, so the UI works immediately after
-the container exits.
-
-**Workflow B – direct ``docker compose run`` without the script**
-
-When you know the mount root and device label already:
+``scripts/compose-run.sh`` adds extra binds for *any* ``pchart`` command:
 
 .. code-block:: console
 
-   docker compose run --rm --no-deps \
-     -v /mnt/sd:/mnt/sd:ro \
-     web pchart ingest /mnt/sd/DCIM --device "MyCard (/mnt/sd)"
+   # Duplicate report: USB card vs library
+   ./scripts/compose-run.sh \
+     --from-path /run/media/$USER/EOS_DIGITAL/DCIM \
+     web pchart duplicates /run/media/$USER/EOS_DIGITAL/DCIM \
+     --missing-against /photos/Photos
 
-Or, for a path already inside the library mount (no extra bind needed):
+   # EXIF date correction (needs write access to card):
+   ./scripts/compose-run.sh \
+     --mount /run/media/$USER/SD_CARD:/run/media/$USER/SD_CARD:rw \
+     web pchart metadata-date /run/media/$USER/SD_CARD/IMG.JPG \
+     "2026-01-01T12:00:00" --apply
+
+   # File info from any host path:
+   ./scripts/compose-run.sh \
+     --from-path /mnt/archive \
+     web pchart info /mnt/archive/IMG_1234.NEF
+
+``--from-path PATH`` auto-detects the device mount root and adds a read-only
+bind.  ``--mount SRC[:DST[:MODE]]`` allows explicit control.
+
+Track 2 – Host-native (pchart installed on the host)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If ``pchart`` is installed in a host virtualenv, you can run organize and most
+CLI commands entirely on the host without any Docker interaction:
 
 .. code-block:: console
 
-   docker compose exec web pchart ingest /photos/Photos
+   # Edit organizer.removable-inbox.example.yaml to set real paths, then:
+   pchart organize once organizer.removable-inbox.example.yaml --dry-run
+   pchart organize once organizer.removable-inbox.example.yaml --copy
 
-**Workflow C – API / Celery (automated pipelines)**
+   # Catalog the library (needs DATABASE_URL pointing at the Compose Postgres):
+   DATABASE_URL=postgres://photochart:photochart@localhost:5432/photochart \
+     MEDIA_ROOT=./photos/media \
+     pchart ingest ./photos/Photos
+
+See ``organizer.removable-inbox.example.yaml`` in the project root for a
+fully-annotated host-path configuration.
+
+.. note::
+   Do **not** run a host ``pchart organize watch`` and the Compose **worker**
+   organizer against the **same source** simultaneously.  Use one or the other.
+
+**UI organizer (OrganizerConfiguration) – library paths only**
+
+The Photographs → Organizer tab creates jobs that run inside the Celery
+``worker`` container.  Source and destination paths must be visible to the
+worker (i.e. under ``/photos/...`` in the default Compose setup).  For
+removable-media inboxes use the CLI scripts above; the UI organizer supports
+library-internal reorganisation only.
+
+.. note::
+   Files on the host that are not permanently bind-mounted will not be served
+   as originals through the UI after the one-shot container exits.  Set
+   ``store_images: true`` (the default) to copy thumbnails into the ``media``
+   volume so the Photographs grid works even when the device is disconnected.
+
+**Catalog ingestion via API / Celery**
 
 Operators can POST to ``/api/ingest-jobs/`` to queue a job:
 
 .. code-block:: console
 
-   # For a library path (already visible in the worker):
+   # Library path (already visible in the worker):
    curl -X POST /api/ingest-jobs/ \
      -H "Content-Type: application/json" \
      -d '{"path": "/photos/Photos"}'
 
-   # For an external path (requires INGEST_DOCKER_ENABLED=true in .env):
+   # External path (requires INGEST_DOCKER_ENABLED=true in .env):
    curl -X POST /api/ingest-jobs/ \
      -H "Content-Type: application/json" \
      -d '{"path": "/mnt/camera/DCIM",
@@ -221,18 +293,14 @@ Operators can POST to ``/api/ingest-jobs/`` to queue a job:
           "device": "EOS_DIGITAL (/mnt/camera)"}'
 
 When ``INGEST_DOCKER_ENABLED=true``, the Celery worker spawns the same one-shot
-container pattern described above.  This requires:
+container pattern used by ``scripts/compose-ingest.sh``.  This requires:
 
 1. ``/var/run/docker.sock`` mounted into the ``worker`` service (see
    ``compose.override.yaml`` example in ``docs/deployment.rst``).
 2. ``INGEST_ALLOWED_PATH_PREFIXES`` set to the host roots the worker is allowed
    to bind-mount (e.g. ``INGEST_ALLOWED_PATH_PREFIXES=/mnt,/media``).
-
-.. note::
-   Files on the host that are not permanently bind-mounted will not be served
-   as originals through the UI after the ingest container exits.  Set
-   ``store_images: true`` (the default) to copy thumbnails into the ``media``
-   volume so the Photographs grid works even when the device is disconnected.
+3. ``INGEST_ALWAYS_ALLOWED_PREFIXES`` (default ``/photos``) ensures library
+   paths always pass validation even when external prefixes are configured.
 
 **Device labels and reconnecting**
 
