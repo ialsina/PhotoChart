@@ -53,6 +53,11 @@ All notable changes to PhotoChart are documented in this file.
 - Vite dev server proxies `/api` and `/media` to Django on `127.0.0.1:8000`
   so the React app at `http://localhost:5173` can authenticate without Docker
   or a manual `VITE_API_BASE_URL` (`frontend/vite.config.ts`).
+- Nginx gateway re-resolves the ``web`` upstream via Docker DNS so API and
+  health checks do not return 502 after the ``web`` container is recreated.
+- Compose defaults ``ALLOWED_HOSTS`` to include ``web`` for internal proxy
+  requests.
+
 
 ## [v0.3.2] - 2026-10-04
 
