@@ -76,7 +76,7 @@ class MetadataExtractor:
             metadata = self._exiftool(local_path)
             if metadata:
                 return metadata
-            from photochart.metadata import extract_metadata
+            from photochart.imaging.extract import extract_metadata
 
             extracted = extract_metadata(local_path)
             return extracted.get("exif", {})

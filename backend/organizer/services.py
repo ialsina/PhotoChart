@@ -48,7 +48,7 @@ def _catalog_local_result(result) -> None:
         return
     if not result.destination:
         return
-    from photochart.ingest import ingest_photos
+    from photochart.ingest.photos import ingest_photos
 
     ingest_photos(
         result.destination,

@@ -4,7 +4,7 @@ from django.contrib.auth.models import Permission, User
 from django.test import TestCase
 
 from photograph.models import Photograph, PhotoPath
-from photochart.protocols import calculate_checksum
+from photochart.fs.protocols import calculate_checksum
 
 from .models import PlannedAction
 from .serializers import PlannedActionSerializer

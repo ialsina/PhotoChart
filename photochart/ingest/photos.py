@@ -15,10 +15,10 @@ from django.conf import settings
 from django.db import transaction
 from tqdm import tqdm
 
-from photochart.media_extensions import IMAGE_EXTENSIONS
-from photochart.protocols import calculate_checksum as calculate_file_checksum
-from photochart.resolution import parse_resolution
-from photochart.device import get_device_name, get_mount_point
+from photochart.fs.device import get_device_name, get_mount_point
+from photochart.fs.protocols import calculate_checksum as calculate_file_checksum
+from photochart.media.extensions import IMAGE_EXTENSIONS
+from photochart.media.resolution import parse_resolution
 
 try:
     from photograph.models import PhotoPath, Photograph

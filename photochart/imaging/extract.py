@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from logging import Logger
 
-from .log import get_logger
-from .backends import get_backend
+from photochart.common.log import get_logger
+from photochart.imaging.backends import get_backend
 
 LOGGER = get_logger(__name__)
 

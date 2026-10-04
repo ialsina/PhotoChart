@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from photochart.protocols import calculate_checksum, cp, mv
+from photochart.fs.protocols import calculate_checksum, cp, mv
 
 
 def test_checksum_is_stable(tmp_path: Path) -> None:

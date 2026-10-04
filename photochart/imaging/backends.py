@@ -10,9 +10,8 @@ from pathlib import Path
 from typing import Optional, Protocol, Dict, Type
 from logging import Logger
 
-from photochart.media_extensions import RAW_IMAGE_EXTENSIONS
-
-from .log import get_logger
+from photochart.common.log import get_logger
+from photochart.media.extensions import RAW_IMAGE_EXTENSIONS
 
 LOGGER = get_logger(__name__)
 
@@ -228,7 +227,7 @@ def register_backend(extension: str, backend_class: Type[ImageBackend]) -> None:
         extension: File extension (e.g., ".nef") - should include the dot
         backend_class: Backend class that implements the ImageBackend protocol
     """
-    from photochart.media_extensions import normalize_extension
+    from photochart.media.extensions import normalize_extension
 
     _BACKENDS[normalize_extension(extension)] = backend_class
 

@@ -220,7 +220,7 @@ class IngestJobSerializer(serializers.ModelSerializer):
         """Reject obviously dangerous or empty paths early (full validation is
         deferred to ``choose_and_run_ingest`` at task-execution time so that
         settings-based prefix rules are applied consistently)."""
-        from photochart.ingest_runner import validate_ingest_path
+        from photochart.ingest.runner import validate_ingest_path
 
         try:
             return validate_ingest_path(value, allowed_prefixes=None)

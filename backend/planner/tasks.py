@@ -6,7 +6,7 @@ from celery import shared_task
 from django.db import transaction
 from django.utils import timezone
 
-from photochart.protocols import calculate_checksum
+from photochart.fs.protocols import calculate_checksum
 
 from organizer.models import OrganizerJob
 from organizer.tasks import execute_job_task

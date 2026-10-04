@@ -7,7 +7,7 @@ catalog running inside Docker Compose.  It provides three entry points:
 * ``validate_ingest_path`` - normalise and security-check a raw path string.
 * ``resolve_mount_root``   - find the filesystem root for any path (Linux only).
 * ``build_device_label``   - produce a stable device label mirroring
-                             ``photochart.device.get_device_name``.
+                             ``photochart.fs.device.get_device_name``.
 * ``run_ingest_local``     - call ``ingest_photos`` directly when the path is
                              already visible in the current process namespace.
 * ``run_ingest_docker``    - launch a one-shot ``docker compose run`` container
@@ -17,7 +17,7 @@ catalog running inside Docker Compose.  It provides three entry points:
 * ``choose_and_run_ingest``- dispatch to local or Docker based on path
                              visibility and ``INGEST_DOCKER_ENABLED``.
 
-All functions return a result dict compatible with ``photochart.ingest.ingest_photos``:
+All functions return a result dict compatible with ``photochart.ingest.photos.ingest_photos``:
     ``{"success": bool, "count": int, "checksums_calculated": int,
        "images_stored": int, "errors": list[str]}``
 """
@@ -107,7 +107,7 @@ def resolve_mount_root(path: str) -> str:
     """Return the filesystem mount root that contains *path*.
 
     Uses ``findmnt -T`` when available (Linux), falls back to the
-    ``photochart.device`` proc-mounts reader, then to the path's own
+    ``photochart.fs.device`` proc-mounts reader, then to the path's own
     directory.
 
     Args:
@@ -135,7 +135,7 @@ def resolve_mount_root(path: str) -> str:
 
     # Fall back to /proc/mounts reader already in the codebase
     try:
-        from photochart.device import get_mount_point
+        from photochart.fs.device import get_mount_point
 
         mount = get_mount_point(path)
         if mount and mount != "/":
@@ -158,7 +158,7 @@ def resolve_mount_root(path: str) -> str:
 def build_device_label(path: str) -> str:
     """Return a stable device label for *path* suitable for ``PhotoPath.device``.
 
-    Mirrors the format produced by ``photochart.device.get_device_name``
+    Mirrors the format produced by ``photochart.fs.device.get_device_name``
     (``"LABEL (/mnt/target)"``).  If ``findmnt`` is unavailable, falls back
     to ``get_device_name``.
 
@@ -198,7 +198,7 @@ def build_device_label(path: str) -> str:
 
     # Fall back to existing device detection
     try:
-        from photochart.device import get_device_name
+        from photochart.fs.device import get_device_name
 
         return get_device_name(path)
     except Exception:
@@ -228,7 +228,7 @@ def run_ingest_local(
     Returns:
         Result dict from ``ingest_photos``.
     """
-    from photochart.ingest import ingest_photos
+    from photochart.ingest.photos import ingest_photos
 
     return ingest_photos(
         path=path,

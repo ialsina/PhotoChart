@@ -1,4 +1,7 @@
-from photochart.fs.protocols import (
+"""Filesystem operations and mount/device helpers."""
+
+from .protocols import (
+    calculate_checksum,
     calculate_hash,
     check_disk_space,
     cp,
@@ -7,6 +10,7 @@ from photochart.fs.protocols import (
 )
 
 __all__ = [
+    "calculate_checksum",
     "calculate_hash",
     "check_disk_space",
     "cp",

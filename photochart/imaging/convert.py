@@ -10,10 +10,10 @@ from pathlib import Path
 from typing import Optional, Tuple
 from logging import Logger
 
-from .log import get_logger
-from .protocols import cp, check_disk_space
-from .backends import process_image_file
-from .resolution import parse_resolution
+from photochart.common.log import get_logger
+from photochart.fs.protocols import check_disk_space, cp
+from photochart.imaging.backends import process_image_file
+from photochart.media.resolution import parse_resolution
 
 LOGGER = get_logger(__name__)
 

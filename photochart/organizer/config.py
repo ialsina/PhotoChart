@@ -9,7 +9,7 @@ from typing import Any, Mapping
 
 import yaml
 
-from photochart.media_extensions import (
+from photochart.media.extensions import (
     DEFAULT_ORGANIZER_MEDIA_EXTENSIONS,
     normalize_extensions,
 )

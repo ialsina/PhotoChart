@@ -153,7 +153,7 @@ class IngestJobTaskTest(TestCase):
             "errors": [],
         }
         with patch(
-            "photochart.ingest_runner.choose_and_run_ingest",
+            "photochart.ingest.runner.choose_and_run_ingest",
             return_value=mock_result,
         ):
             from .tasks import run_ingest_job
@@ -180,7 +180,7 @@ class IngestJobTaskTest(TestCase):
             "errors": ["Path does not exist"],
         }
         with patch(
-            "photochart.ingest_runner.choose_and_run_ingest",
+            "photochart.ingest.runner.choose_and_run_ingest",
             return_value=mock_result,
         ):
             from .tasks import run_ingest_job
@@ -194,7 +194,7 @@ class IngestJobTaskTest(TestCase):
     def test_task_marks_failed_on_exception(self) -> None:
         job = IngestJob.objects.create(path="/photos/Photos")
         with patch(
-            "photochart.ingest_runner.choose_and_run_ingest",
+            "photochart.ingest.runner.choose_and_run_ingest",
             side_effect=RuntimeError("unexpected"),
         ):
             from .tasks import run_ingest_job
@@ -214,7 +214,7 @@ class IngestJobTaskTest(TestCase):
             store_images=False,
         )
         with patch(
-            "photochart.ingest_runner.choose_and_run_ingest",
+            "photochart.ingest.runner.choose_and_run_ingest",
             return_value={
                 "success": True,
                 "count": 0,

@@ -19,7 +19,7 @@ from zlib import crc32
 from logging import Logger
 from typing import Optional
 
-from .log import get_logger
+from photochart.common.log import get_logger
 
 LOGGER = get_logger(__name__)
 

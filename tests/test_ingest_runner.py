@@ -1,4 +1,4 @@
-"""Tests for photochart.ingest_runner.
+"""Tests for photochart.ingest.runner.
 
 Covers path validation, mount-root resolution, device label building,
 and the local/docker dispatch logic – all without touching real
@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from photochart.ingest_runner import (
+from photochart.ingest.runner import (
     build_device_label,
     resolve_mount_root,
     validate_ingest_path,
@@ -78,7 +78,7 @@ class TestResolveMountRoot:
     def test_returns_findmnt_output_when_available(self, tmp_path: Path) -> None:
         fake_stdout = "/mnt/camera\n"
         with patch(
-            "photochart.ingest_runner.subprocess.run",
+            "photochart.ingest.runner.subprocess.run",
             return_value=MagicMock(returncode=0, stdout=fake_stdout),
         ):
             result = resolve_mount_root(str(tmp_path))
@@ -86,11 +86,11 @@ class TestResolveMountRoot:
 
     def test_falls_back_when_findmnt_not_found(self, tmp_path: Path) -> None:
         with patch(
-            "photochart.ingest_runner.subprocess.run",
+            "photochart.ingest.runner.subprocess.run",
             side_effect=FileNotFoundError,
         ):
             with patch(
-                "photochart.device.get_mount_point",
+                "photochart.fs.device.get_mount_point",
                 return_value="/mnt/sd",
             ):
                 result = resolve_mount_root(str(tmp_path))
@@ -99,7 +99,7 @@ class TestResolveMountRoot:
     def test_falls_back_to_path_when_root_returned(self, tmp_path: Path) -> None:
         """When findmnt says '/', fall back to the path itself."""
         with patch(
-            "photochart.ingest_runner.subprocess.run",
+            "photochart.ingest.runner.subprocess.run",
             return_value=MagicMock(returncode=0, stdout="/\n"),
         ):
             result = resolve_mount_root(str(tmp_path))
@@ -115,7 +115,7 @@ class TestResolveMountRoot:
 class TestBuildDeviceLabel:
     def test_uses_label_and_target(self, tmp_path: Path) -> None:
         with patch(
-            "photochart.ingest_runner.subprocess.run",
+            "photochart.ingest.runner.subprocess.run",
             return_value=MagicMock(returncode=0, stdout="MyDisk /mnt/camera\n"),
         ):
             label = build_device_label(str(tmp_path))
@@ -123,7 +123,7 @@ class TestBuildDeviceLabel:
 
     def test_uses_target_when_label_missing(self, tmp_path: Path) -> None:
         with patch(
-            "photochart.ingest_runner.subprocess.run",
+            "photochart.ingest.runner.subprocess.run",
             return_value=MagicMock(returncode=0, stdout="- /mnt/camera\n"),
         ):
             label = build_device_label(str(tmp_path))
@@ -131,11 +131,11 @@ class TestBuildDeviceLabel:
 
     def test_falls_back_to_get_device_name(self, tmp_path: Path) -> None:
         with patch(
-            "photochart.ingest_runner.subprocess.run",
+            "photochart.ingest.runner.subprocess.run",
             side_effect=FileNotFoundError,
         ):
             with patch(
-                "photochart.device.get_device_name",
+                "photochart.fs.device.get_device_name",
                 return_value="fallback-device",
             ):
                 label = build_device_label(str(tmp_path))
@@ -168,7 +168,7 @@ class TestRunIngestDocker:
     def test_success_parses_stdout(self) -> None:
         with self._patched_settings():
             with patch(
-                "photochart.ingest_runner.subprocess.run",
+                "photochart.ingest.runner.subprocess.run",
                 return_value=MagicMock(
                     returncode=0, stdout=self._GOOD_STDOUT, stderr=""
                 ),
@@ -194,7 +194,7 @@ class TestRunIngestDocker:
     def test_nonzero_exit_returns_failure(self) -> None:
         with self._patched_settings():
             with patch(
-                "photochart.ingest_runner.subprocess.run",
+                "photochart.ingest.runner.subprocess.run",
                 return_value=MagicMock(returncode=1, stdout="", stderr="some error"),
             ):
                 result = run_ingest_docker(
@@ -206,7 +206,7 @@ class TestRunIngestDocker:
     def test_timeout_returns_failure(self) -> None:
         with self._patched_settings():
             with patch(
-                "photochart.ingest_runner.subprocess.run",
+                "photochart.ingest.runner.subprocess.run",
                 side_effect=subprocess.TimeoutExpired(cmd=[], timeout=1),
             ):
                 result = run_ingest_docker(
@@ -218,7 +218,7 @@ class TestRunIngestDocker:
     def test_docker_not_found_returns_failure(self) -> None:
         with self._patched_settings():
             with patch(
-                "photochart.ingest_runner.subprocess.run",
+                "photochart.ingest.runner.subprocess.run",
                 side_effect=FileNotFoundError,
             ):
                 result = run_ingest_docker(
@@ -230,7 +230,7 @@ class TestRunIngestDocker:
     def test_no_device_flag_when_device_is_none(self) -> None:
         with self._patched_settings():
             with patch(
-                "photochart.ingest_runner.subprocess.run",
+                "photochart.ingest.runner.subprocess.run",
                 return_value=MagicMock(
                     returncode=0, stdout="Ingested 0 photo(s) from '/x'.", stderr=""
                 ),
@@ -243,7 +243,7 @@ class TestRunIngestDocker:
     def test_no_recursive_flag_forwarded(self) -> None:
         with self._patched_settings():
             with patch(
-                "photochart.ingest_runner.subprocess.run",
+                "photochart.ingest.runner.subprocess.run",
                 return_value=MagicMock(
                     returncode=0, stdout="Ingested 0 photo(s) from '/x'.", stderr=""
                 ),
@@ -291,7 +291,7 @@ class TestChooseAndRunIngest:
         }
         with _fake_django_settings():
             with patch(
-                "photochart.ingest_runner.run_ingest_local", return_value=mock_result
+                "photochart.ingest.runner.run_ingest_local", return_value=mock_result
             ) as mock_local:
                 result = choose_and_run_ingest(str(tmp_path))
 
@@ -327,10 +327,10 @@ class TestChooseAndRunIngest:
             INGEST_ALLOWED_PATH_PREFIXES="/mnt",
         ):
             with patch(
-                "photochart.ingest_runner.run_ingest_docker", return_value=mock_result
+                "photochart.ingest.runner.run_ingest_docker", return_value=mock_result
             ) as mock_docker:
                 with patch(
-                    "photochart.ingest_runner.resolve_mount_root", return_value="/mnt"
+                    "photochart.ingest.runner.resolve_mount_root", return_value="/mnt"
                 ):
                     result = choose_and_run_ingest(
                         "/mnt/camera/DCIM", device="MyDisk (/mnt/camera)"

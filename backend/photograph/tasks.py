@@ -10,7 +10,7 @@ def run_ingest_job(self, job_id: int) -> str:
 
     Mirrors the ``organizer.execute_job`` pattern:
       1. Mark the job RUNNING and record the Celery task ID.
-      2. Call ``photochart.ingest_runner.choose_and_run_ingest``.
+      2. Call ``photochart.ingest.runner.choose_and_run_ingest``.
       3. Update status fields and mark COMPLETED or FAILED.
 
     Args:
@@ -29,7 +29,7 @@ def run_ingest_job(self, job_id: int) -> str:
     job.save(update_fields=["task_id", "status", "started_at", "error"])
 
     try:
-        from photochart.ingest_runner import choose_and_run_ingest
+        from photochart.ingest.runner import choose_and_run_ingest
 
         result = choose_and_run_ingest(
             path=job.path,

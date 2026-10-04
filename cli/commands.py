@@ -28,8 +28,8 @@ except Exception:  # pragma: no cover
     HAS_RICH = False
     _console = None
 
-from photochart.resolution import get_resolution_presets
-from photochart.metadata import extract_metadata
+from photochart.imaging.extract import extract_metadata
+from photochart.media.resolution import get_resolution_presets
 
 
 def resolve_ingest_log_path(raw: Optional[str]) -> str:
@@ -54,7 +54,7 @@ def resolve_ingest_log_path(raw: Optional[str]) -> str:
 
 def cmd_ingest(args: argparse.Namespace) -> int:
     """Ingest photos from a directory and persist to database."""
-    from photochart.ingest import ingest_photos
+    from photochart.ingest.photos import ingest_photos
 
     raw_log = getattr(args, "log", None)
     if raw_log is None:
@@ -195,7 +195,7 @@ def cmd_metadata_date(args: argparse.Namespace) -> int:
 
 def cmd_convert(args: argparse.Namespace) -> int:
     """Convert an image file to a standard format."""
-    from photochart.convert import convert_image
+    from photochart.imaging.convert import convert_image
 
     src = args.source
     output_format = getattr(args, "format", "JPEG").upper()

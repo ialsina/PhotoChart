@@ -4,6 +4,23 @@ Development
 Repository layout
 -----------------
 
+``photochart/common/``
+   Shared utilities (logging).
+
+``photochart/fs/``
+   File operations (checksums, copy/move) and Linux mount/device helpers.
+
+``photochart/media/``
+   Supported extensions and resolution presets.
+
+``photochart/imaging/``
+   Image backends, conversion, EXIF helpers, and full metadata extraction
+   (:mod:`photochart.imaging.extract`).
+
+``photochart/ingest/``
+   Catalog ingestion (:mod:`photochart.ingest.photos`) and host/Docker
+   orchestration (:mod:`photochart.ingest.runner`).
+
 ``photochart/organizer/``
    Provider-independent domain, configuration, patterns, policies, metadata,
    reports, service, and adapter contract.

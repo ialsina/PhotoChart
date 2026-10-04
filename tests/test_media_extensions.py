@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from photochart.ingest import is_image_file
-from photochart.media_extensions import normalize_extension, normalize_extensions
+from photochart.ingest.photos import is_image_file
+from photochart.media.extensions import normalize_extension, normalize_extensions
 from photochart.organizer.adapters import LocalFilesystemAdapter
 from photochart.organizer.config import OrganizerConfig, StabilityConfig
 from photochart.organizer.service import Organizer

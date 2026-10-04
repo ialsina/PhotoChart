@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-from photochart.media_extensions import IMAGE_EXTENSIONS
+from photochart.media.extensions import IMAGE_EXTENSIONS
 
 SUPPORTED_EXTENSIONS = IMAGE_EXTENSIONS
 

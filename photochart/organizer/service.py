@@ -9,7 +9,7 @@ from datetime import timedelta
 from pathlib import PurePosixPath
 from typing import Callable, Iterable
 
-from photochart.media_extensions import normalize_extensions
+from photochart.media.extensions import normalize_extensions
 
 from .collision import resolve_collision
 from .config import OrganizerConfig

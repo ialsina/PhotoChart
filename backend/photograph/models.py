@@ -16,7 +16,7 @@ from django.core.files import File
 from django.core.validators import RegexValidator
 from django.utils import timezone
 
-from photochart.media_extensions import RASTER_IMAGE_EXTENSIONS, normalize_extension
+from photochart.media.extensions import RASTER_IMAGE_EXTENSIONS, normalize_extension
 
 
 def photograph_upload_path(instance, filename):
@@ -85,8 +85,8 @@ class Photograph(models.Model):
     """Photograph model storing photo metadata.
 
     Represents a photograph with optional checksum and thumbnail file.
-    The checksum can be computed using the calculate_checksum function from
-    photochart.protocols.
+    The checksum can be computed using
+    :func:`photochart.fs.protocols.calculate_checksum`.
     """
 
     checksum = models.CharField(
@@ -149,7 +149,7 @@ class Photograph(models.Model):
     def _extract_exif_data(self, file_path):
         """Extract EXIF metadata (datetime and model) from an image file.
 
-        Uses the photochart.exif module to extract both datetime and model
+        Uses :mod:`photochart.imaging.exif` to extract both datetime and model
         in a single image read operation.
 
         Args:
@@ -159,7 +159,7 @@ class Photograph(models.Model):
             Dictionary with 'datetime' and 'model' keys, or None if extraction fails
         """
         try:
-            from photochart.exif import extract_exif, ExifTagName
+            from photochart.imaging.exif import ExifTagName, extract_exif
 
             result = extract_exif(file_path, [ExifTagName.DATETIME, ExifTagName.MODEL])
             return result
@@ -172,14 +172,14 @@ class Photograph(models.Model):
     def compute_checksum_from_image(self):
         """Compute and set the checksum from the image file if available.
 
-        Uses the calculate_checksum function from photochart.protocols.
+        Uses :func:`photochart.fs.protocols.calculate_checksum`.
 
         Returns:
             The computed checksum string, or None if computation fails
         """
         try:
             if self.thumbnail and self.thumbnail.path:
-                from photochart.protocols import calculate_checksum
+                from photochart.fs.protocols import calculate_checksum
 
                 checksum_value = calculate_checksum(self.thumbnail.path)
                 if checksum_value:
@@ -201,7 +201,7 @@ class Photograph(models.Model):
     def compute_checksum_from_file(self, file_path):
         """Compute and set the checksum from an external file path.
 
-        Uses the calculate_checksum function from photochart.protocols.
+        Uses :func:`photochart.fs.protocols.calculate_checksum`.
 
         Args:
             file_path: Path to the file to compute checksum from
@@ -215,7 +215,7 @@ class Photograph(models.Model):
                 self.save(update_fields=["has_errors"])
                 return None
 
-            from photochart.protocols import calculate_checksum
+            from photochart.fs.protocols import calculate_checksum
 
             checksum_value = calculate_checksum(file_path)
             if checksum_value:
@@ -300,14 +300,14 @@ class Photograph(models.Model):
             resolution_tuple = None
             if resolution:
                 if isinstance(resolution, str):
-                    from photochart.resolution import parse_resolution
+                    from photochart.media.resolution import parse_resolution
 
                     resolution_tuple = parse_resolution(resolution)
                 elif isinstance(resolution, tuple) and len(resolution) == 2:
                     resolution_tuple = resolution
 
             # Try to process through backend first (for special formats like NEF)
-            from photochart.backends import process_image_file
+            from photochart.imaging.backends import process_image_file
 
             processed_image = process_image_file(
                 file_path, output_format="JPEG", resolution=resolution_tuple
@@ -659,7 +659,7 @@ class PhotoPath(models.Model):
             and os.path.exists(file_access_path)
         ):
             try:
-                from photochart.protocols import calculate_checksum
+                from photochart.fs.protocols import calculate_checksum
 
                 # Compute checksum from the file
                 checksum_value = calculate_checksum(file_access_path)
@@ -744,7 +744,7 @@ class IngestJob(models.Model):
 
     Mirrors the ``DuplicateScan`` pattern so the same Celery + REST patterns apply.
     Operators create an ``IngestJob`` via ``POST /api/ingest-jobs/``; the Celery
-    worker calls ``photochart.ingest_runner.choose_and_run_ingest`` and updates
+    worker calls ``photochart.ingest.runner.choose_and_run_ingest`` and updates
     status fields as it proceeds.
     """
 

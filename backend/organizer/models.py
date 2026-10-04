@@ -1,6 +1,6 @@
 from django.db import models
 
-from photochart.media_extensions import DEFAULT_ORGANIZER_MEDIA_EXTENSIONS
+from photochart.media.extensions import DEFAULT_ORGANIZER_MEDIA_EXTENSIONS
 
 
 def default_media_extensions():
