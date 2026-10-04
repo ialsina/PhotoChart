@@ -145,6 +145,7 @@ def run_ingest_local(
     store_images: bool = True,
     resolution: Optional[str] = None,
     log_path: Optional[str] = None,
+    retry_thumbnails: bool = False,
 ) -> dict:
     """Call ``ingest_photos`` directly in the current process.
 
@@ -156,6 +157,9 @@ def run_ingest_local(
     """
     from photochart.ingest.photos import ingest_photos
 
+    if retry_thumbnails:
+        store_images = True
+
     return ingest_photos(
         path=path,
         device=device,
@@ -164,6 +168,7 @@ def run_ingest_local(
         store_images=store_images,
         resolution=resolution,
         log_path=log_path,
+        retry_thumbnails=retry_thumbnails,
     )
 
 
@@ -184,6 +189,7 @@ def run_ingest_docker(
     compose_file: Optional[str] = None,
     project_name: Optional[str] = None,
     timeout: int = 3600,
+    retry_thumbnails: bool = False,
 ) -> dict:
     """Spawn a one-shot ``docker compose run`` container that bind-mounts
     *mount_root* read-only, then runs ``pchart ingest`` inside it.
@@ -255,6 +261,8 @@ def run_ingest_docker(
         cmd += ["--no-store-images"]
     if resolution:
         cmd += ["--resolution", resolution]
+    if retry_thumbnails:
+        cmd += ["--retry-thumbnails"]
 
     logger.info(
         "Launching one-shot ingest container: %s",
@@ -266,6 +274,7 @@ def run_ingest_docker(
         "count": 0,
         "checksums_calculated": 0,
         "images_stored": 0,
+        "thumbnails_retried": 0,
         "errors": [],
     }
 
@@ -345,6 +354,7 @@ def choose_and_run_ingest(
     store_images: bool = True,
     resolution: Optional[str] = None,
     log_path: Optional[str] = None,
+    retry_thumbnails: bool = False,
 ) -> dict:
     """Dispatch an ingest request to the local or Docker backend.
 
@@ -371,6 +381,9 @@ def choose_and_run_ingest(
         ``images_stored``, ``errors``.
     """
     from django.conf import settings as django_settings
+
+    if retry_thumbnails:
+        store_images = True
 
     # ----- Validate -------------------------------------------------------
     allowed_prefixes: list[str] = [
@@ -400,6 +413,7 @@ def choose_and_run_ingest(
             "count": 0,
             "checksums_calculated": 0,
             "images_stored": 0,
+            "thumbnails_retried": 0,
             "errors": [str(exc)],
         }
 
@@ -415,6 +429,7 @@ def choose_and_run_ingest(
             store_images=store_images,
             resolution=resolution,
             log_path=log_path,
+            retry_thumbnails=retry_thumbnails,
         )
 
     # ----- Docker path ----------------------------------------------------
@@ -462,4 +477,5 @@ def choose_and_run_ingest(
         calculate_checksum=calculate_checksum,
         store_images=store_images,
         resolution=resolution,
+        retry_thumbnails=retry_thumbnails,
     )

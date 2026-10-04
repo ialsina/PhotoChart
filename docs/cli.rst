@@ -86,8 +86,15 @@ Catalog ingestion
    pchart ingest /data/Photos
 
 Important options include ``--no-checksum``, ``--no-recursive``,
-``--no-store-images``, ``--resolution``, and ``--log``. Ingestion records files
-and thumbnails in Django but does not classify or move the source.
+``--no-store-images``, ``--resolution``, ``--log``, and ``--retry-thumbnails``.
+Ingestion records files and thumbnails in Django but does not classify or move
+the source.
+
+``--retry-thumbnails`` scans the same file tree as a normal ingest but does not
+add new catalog entries. It builds a work list of catalogued files (same stored
+path and device label) whose photograph has no thumbnail; only those files are
+processed and reflected in the progress bar. ``--no-store-images`` is ignored
+in this mode.
 
 Metadata inspection and conversion
 ----------------------------------

@@ -817,6 +817,13 @@ class IngestJob(models.Model):
         blank=True,
         help_text="Optional resolution preset or WxH string for thumbnail storage.",
     )
+    retry_thumbnails = models.BooleanField(
+        default=False,
+        help_text=(
+            "Do not add new catalog entries; retry thumbnail storage for "
+            "existing PhotoPath rows when the photograph has no thumbnail."
+        ),
+    )
 
     # ---- Job tracking ----
     status = models.CharField(

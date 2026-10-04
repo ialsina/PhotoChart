@@ -42,6 +42,10 @@ All notable changes to PhotoChart are documented in this file.
   directory without changing the default bundled-PostgreSQL stack.
 - `scripts/check-host-postgres.sh` to verify PostgreSQL is reachable from both
   the host and a Docker container.
+- ``pchart ingest --retry-thumbnails`` (and ``IngestJob.retry_thumbnails``) to
+  backfill missing thumbnails for already-catalogued files without creating new
+  ``PhotoPath`` rows. The progress bar counts only catalogued files missing
+  thumbnails, not every image under the ingest path.
 
 ### Changed
 

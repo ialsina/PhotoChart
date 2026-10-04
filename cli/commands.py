@@ -70,6 +70,11 @@ def cmd_ingest(args: argparse.Namespace) -> int:
             print(f"Error: {err}", file=sys.stderr)
             return 1
 
+    retry_thumbnails = getattr(args, "retry_thumbnails", False)
+    store_images = getattr(args, "store_images", True)
+    if retry_thumbnails:
+        store_images = True
+
     # Dispatch via choose_and_run_ingest so that both local paths and external
     # device paths (INGEST_DOCKER_ENABLED) are handled uniformly.
     result = choose_and_run_ingest(
@@ -77,9 +82,10 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         device=getattr(args, "device", None),
         recursive=not getattr(args, "no_recursive", False),
         calculate_checksum=getattr(args, "checksum", True),
-        store_images=getattr(args, "store_images", True),
+        store_images=store_images,
         resolution=getattr(args, "resolution", None),
         log_path=log_path,
+        retry_thumbnails=retry_thumbnails,
     )
 
     if not result["success"]:
@@ -89,11 +95,17 @@ def cmd_ingest(args: argparse.Namespace) -> int:
             print(f"Detailed error information logged to: {log_path}", file=sys.stderr)
         return 1
 
-    print(f"Ingested {result['count']} photo(s) from '{args.path}'.")
-    if result.get("checksums_calculated", 0) > 0:
-        print(f"Calculated {result['checksums_calculated']} checksum(s).")
-    if result.get("images_stored", 0) > 0:
-        print(f"Stored {result['images_stored']} image(s) in database.")
+    if retry_thumbnails:
+        retried = result.get("thumbnails_retried", 0)
+        print(f"Retried thumbnails for {retried} photo(s) from '{args.path}'.")
+        if result.get("images_stored", 0) > 0:
+            print(f"Stored {result['images_stored']} image(s) in database.")
+    else:
+        print(f"Ingested {result['count']} photo(s) from '{args.path}'.")
+        if result.get("checksums_calculated", 0) > 0:
+            print(f"Calculated {result['checksums_calculated']} checksum(s).")
+        if result.get("images_stored", 0) > 0:
+            print(f"Stored {result['images_stored']} image(s) in database.")
     if log_path:
         print(f"Log file written to: {log_path}")
 

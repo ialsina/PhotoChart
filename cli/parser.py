@@ -157,6 +157,18 @@ def build_parser() -> argparse.ArgumentParser:
             "Defaults to LOG_DIR from the environment when omitted."
         ),
     )
+    p_ing.add_argument(
+        "--retry-thumbnails",
+        action="store_true",
+        dest="retry_thumbnails",
+        default=False,
+        help=(
+            "Do not add new catalog entries. For image files that are already "
+            "catalogued (same path and device), retry storing a thumbnail when "
+            "the photograph has none. Implies storing thumbnails (--no-store-images "
+            "is ignored)."
+        ),
+    )
     p_ing.set_defaults(func=cmd_ingest)
 
     # convert

@@ -246,6 +246,21 @@ class TestRunIngestDocker:
         cmd = mock_run.call_args[0][0]
         assert "--device" not in cmd
 
+    def test_retry_thumbnails_flag_forwarded(self) -> None:
+        with self._patched_settings():
+            with patch(
+                "photochart.ingest.runner.subprocess.run",
+                return_value=MagicMock(
+                    returncode=0,
+                    stdout="Ingested 0 photo(s) from '/x'.",
+                    stderr="",
+                ),
+            ) as mock_run:
+                run_ingest_docker(path="/x", mount_root="/x", retry_thumbnails=True)
+
+        cmd = mock_run.call_args[0][0]
+        assert "--retry-thumbnails" in cmd
+
     def test_no_recursive_flag_forwarded(self) -> None:
         with self._patched_settings():
             with patch(
@@ -328,6 +343,27 @@ class TestChooseAndRunIngest:
 
         mock_local.assert_called_once()
         assert result["success"] is True
+
+    def test_retry_thumbnails_forwarded_to_local(self, tmp_path: Path) -> None:
+        mock_result = {
+            "success": True,
+            "count": 0,
+            "checksums_calculated": 0,
+            "images_stored": 1,
+            "thumbnails_retried": 1,
+            "errors": [],
+        }
+        with _fake_django_settings():
+            with patch(
+                "photochart.ingest.runner.run_ingest_local", return_value=mock_result
+            ) as mock_local:
+                choose_and_run_ingest(
+                    str(tmp_path), retry_thumbnails=True, store_images=False
+                )
+
+        call_kwargs = mock_local.call_args.kwargs
+        assert call_kwargs["retry_thumbnails"] is True
+        assert call_kwargs["store_images"] is True
 
     def test_missing_path_without_docker_returns_error(self) -> None:
         with _fake_django_settings(INGEST_DOCKER_ENABLED=False):

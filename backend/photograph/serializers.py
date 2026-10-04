@@ -184,6 +184,7 @@ class IngestJobSerializer(serializers.ModelSerializer):
             "calculate_checksum",
             "store_images",
             "resolution",
+            "retry_thumbnails",
             "status",
             "task_id",
             "error",

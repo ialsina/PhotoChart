@@ -173,6 +173,41 @@ def get_image_files(path: str, recursive: bool = True) -> List[Path]:
     return image_files
 
 
+def stored_path_for_file(file_path: Path) -> str:
+    """Return the path string stored on ``PhotoPath`` for a file on disk."""
+    file_path_str = str(file_path.resolve())
+    mount_point = get_mount_point(file_path_str)
+    if mount_point:
+        mount_path = Path(mount_point)
+        file_path_obj = Path(file_path_str)
+        try:
+            return str(file_path_obj.relative_to(mount_path))
+        except ValueError:
+            return file_path_str
+    return file_path_str
+
+
+def collect_thumbnail_retry_candidates(
+    image_files: List[Path],
+    device: str,
+) -> List[Tuple[Path, Any]]:
+    """Return on-disk files that are catalogued on *device* but lack a thumbnail."""
+    candidates: List[Tuple[Path, Any]] = []
+    for file_path in image_files:
+        if is_path_in_media_root(file_path):
+            continue
+        path_to_store = stored_path_for_file(file_path)
+        existing_path = (
+            PhotoPath.objects.filter(path=path_to_store, device=device)
+            .select_related("photograph")
+            .first()
+        )
+        photograph = existing_path.photograph if existing_path else None
+        if photograph and not photograph.thumbnail:
+            candidates.append((file_path, existing_path))
+    return candidates
+
+
 def ingest_photos(
     path: str,
     resolution: Optional[str] = None,
@@ -181,6 +216,7 @@ def ingest_photos(
     device: Optional[str] = None,
     store_images: bool = False,
     log_path: Optional[str] = None,
+    retry_thumbnails: bool = False,
 ) -> Dict[str, Any]:
     """Ingest photos from a directory and store them in the database.
 
@@ -208,6 +244,9 @@ def ingest_photos(
             specified, images will be resized accordingly.
         log_path: Optional path to log file where detailed error information will be written.
             If provided, all errors will be logged with full traceback information.
+        retry_thumbnails: If True, do not create new catalog rows; for files that
+            already exist as PhotoPath (same path and device), attempt thumbnail
+            storage when the linked Photograph has no thumbnail.
 
     Returns:
         Dictionary with:
@@ -215,13 +254,18 @@ def ingest_photos(
             - count: number of photos ingested
             - checksums_calculated: number of checksums calculated
             - images_stored: number of images stored (if store_images=True)
+            - thumbnails_retried: number of existing catalog entries thumbnail-retry was attempted on
             - errors: list of error messages
     """
+    if retry_thumbnails:
+        store_images = True
+
     result = {
         "success": True,
         "count": 0,
         "checksums_calculated": 0,
         "images_stored": 0,
+        "thumbnails_retried": 0,
         "errors": [],
     }
 
@@ -238,7 +282,8 @@ def ingest_photos(
         logger.info(f"Starting photo ingestion from: {path}")
         logger.info(
             f"Parameters: resolution={resolution}, calculate_checksum={calculate_checksum}, "
-            f"recursive={recursive}, store_images={store_images}"
+            f"recursive={recursive}, store_images={store_images}, "
+            f"retry_thumbnails={retry_thumbnails}"
         )
 
     try:
@@ -264,6 +309,91 @@ def ingest_photos(
         if not image_files:
             result["errors"].append(f"No image files found in: {path}")
             result["success"] = False
+            return result
+
+        if retry_thumbnails:
+            retry_candidates = collect_thumbnail_retry_candidates(image_files, device)
+            if logger:
+                logger.info(
+                    "Thumbnail retry: %s catalogued file(s) missing thumbnails "
+                    "(of %s image file(s) scanned)",
+                    len(retry_candidates),
+                    len(image_files),
+                )
+            resolution_arg = (
+                resolution_tuple if resolution_tuple is not None else resolution
+            )
+            with tqdm(
+                total=len(retry_candidates),
+                desc="Retrying thumbnails",
+                unit="file",
+                unit_scale=False,
+                dynamic_ncols=True,
+            ) as pbar:
+                for file_path, existing_path in retry_candidates:
+                    file_path_str = str(file_path.resolve())
+                    photograph = existing_path.photograph
+                    try:
+                        with transaction.atomic():
+                            pbar.set_postfix_str(
+                                os.path.basename(file_path_str)[:50], refresh=False
+                            )
+                            result["thumbnails_retried"] += 1
+                            try:
+                                success = photograph.get_image_from_file(
+                                    file_path_str,
+                                    resolution=resolution_arg,
+                                )
+                                if success:
+                                    result["images_stored"] += 1
+                                else:
+                                    error_msg = (
+                                        f"Failed to store thumbnail for {file_path_str}: "
+                                        "get_image_from_file() returned False or no "
+                                        "thumbnail was created."
+                                    )
+                                    result["errors"].append(error_msg)
+                                    if logger:
+                                        logger.warning(
+                                            "Thumbnail retry failed for file: "
+                                            f"{file_path_str}",
+                                            extra={
+                                                "file_path": file_path_str,
+                                                "photograph_id": photograph.id,
+                                            },
+                                        )
+                            except Exception as thumb_exc:
+                                error_msg = (
+                                    f"Error retrying thumbnail for {file_path_str}: "
+                                    f"{thumb_exc}"
+                                )
+                                result["errors"].append(error_msg)
+                                if logger:
+                                    logger.error(
+                                        f"Thumbnail retry error for file: {file_path_str}",
+                                        exc_info=True,
+                                        extra={"file_path": file_path_str},
+                                    )
+                    except Exception as e:
+                        error_msg = f"Error processing {file_path}: {str(e)}"
+                        result["errors"].append(error_msg)
+                        if logger:
+                            logger.error(
+                                f"Error processing file: {file_path}",
+                                exc_info=True,
+                                extra={"file_path": str(file_path)},
+                            )
+                    pbar.update(1)
+
+            if result["errors"]:
+                if result["images_stored"] == 0:
+                    result["success"] = False
+
+            if logger:
+                logger.info(
+                    f"Ingestion completed. Success: {result['success']}, "
+                    f"Count: {result['count']}, Errors: {len(result['errors'])}"
+                )
             return result
 
         # Process each image file with progress bar
@@ -294,23 +424,8 @@ def ingest_photos(
                             os.path.basename(file_path_str)[:50], refresh=False
                         )
 
-                        # For files on mounted devices, store path relative to mount point
-                        # For files on root filesystem, store absolute path
+                        path_to_store = stored_path_for_file(file_path)
                         mount_point = get_mount_point(file_path_str)
-                        if mount_point:
-                            # Calculate relative path from mount point
-                            mount_path = Path(mount_point)
-                            file_path_obj = Path(file_path_str)
-                            try:
-                                path_to_store = str(
-                                    file_path_obj.relative_to(mount_path)
-                                )
-                            except ValueError:
-                                # If relative_to fails, fall back to absolute path
-                                path_to_store = file_path_str
-                        else:
-                            # On root filesystem, store absolute path
-                            path_to_store = file_path_str
 
                         # Check if PhotoPath already exists for this path and device
                         existing_path = PhotoPath.objects.filter(
@@ -318,7 +433,6 @@ def ingest_photos(
                         ).first()
 
                         if existing_path:
-                            # Skip if already exists
                             pbar.update(1)
                             continue
 

@@ -89,8 +89,14 @@ Request body (all fields except ``path`` are optional):
      "recursive":          true,
      "calculate_checksum": true,
      "store_images":       true,
-     "resolution":         ""
+     "resolution":         "",
+     "retry_thumbnails":   false
    }
+
+When ``retry_thumbnails`` is true, no new ``PhotoPath`` rows are created; the
+job only attempts thumbnail storage for files already catalogued at the same
+path and device when the photograph has no thumbnail. Thumbnail storage is
+implied (``store_images`` is treated as true).
 
 Response (202 Accepted):
 

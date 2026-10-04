@@ -39,6 +39,7 @@ def run_ingest_job(self, job_id: int) -> str:
             calculate_checksum=job.calculate_checksum,
             store_images=job.store_images,
             resolution=job.resolution or None,
+            retry_thumbnails=job.retry_thumbnails,
         )
 
         job.count = result.get("count", 0)

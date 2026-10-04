@@ -59,6 +59,7 @@ Options forwarded to pchart ingest:
   --no-store-images   Do not copy thumbnails into the media volume
   --resolution <R>    Resize thumbnails (e.g. 1920x1080, high, medium)
   --log <PATH>        Log file or directory for detailed error output
+  --retry-thumbnails  Retry thumbnails for already-catalogued files only
 
 EOF
   exit 0
