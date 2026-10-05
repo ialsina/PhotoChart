@@ -91,7 +91,7 @@ def convert_image(
             # Write the processed image to destination
             with open(dst, "wb") as f:
                 f.write(processed_image.read())
-            logger.info("Successfully converted %s to %s", src, dst)
+            logger.debug("Successfully converted %s to %s", src, dst)
             return True
 
         # Fallback to PIL for standard formats
@@ -142,7 +142,7 @@ def convert_image(
 
         # Save the image
         image.save(dst, format=output_format, quality=95)
-        logger.info("Successfully converted %s to %s", src, dst)
+        logger.debug("Successfully converted %s to %s", src, dst)
         return True
 
     except Exception as exc:

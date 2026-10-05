@@ -129,9 +129,9 @@ def cp(
                 f_dst.write(chunk)
         # Preserve file metadata (permissions, timestamps, etc.)
         shutil.copystat(src, dst)
-        logger.info("Successfully moved large file %s to %s", src, dst)
+        logger.debug("Successfully copied large file %s to %s", src, dst)
     except Exception as exc:
-        logger.error("Error during chunked move from %s to %s: %s", src, dst, exc)
+        logger.error("Error during chunked copy from %s to %s: %s", src, dst, exc)
         raise exc
 
 
@@ -177,12 +177,12 @@ def mv(src: str, dst: str, logger: Logger = LOGGER) -> None:
         dst_checksum = calculate_checksum(temp_dst)
 
         if src_checksum and dst_checksum and src_checksum == dst_checksum:
-            logger.info("Integrity check passed for file %s", src)
+            logger.debug("Integrity check passed for file %s", src)
             # Atomic rename to final destination
             os.rename(temp_dst, dst)
             # Remove source file only after successful move
             os.remove(src)
-            logger.info("File successfully moved from %s to %s", src, dst)
+            logger.debug("File successfully moved from %s to %s", src, dst)
         else:
             logger.error("Integrity check failed for file %s", src)
             # Clean up temporary file if integrity check fails
@@ -206,6 +206,6 @@ def rm(path: str, logger: Logger = LOGGER) -> None:
     """
     if os.path.exists(path):
         os.remove(path)
-        logger.info("File successfully removed: %s", path)
+        logger.debug("File successfully removed: %s", path)
     else:
         logger.error("File not found: %s", path)

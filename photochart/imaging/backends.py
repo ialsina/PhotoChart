@@ -205,7 +205,7 @@ class RawPyBackend:
                     image.save(output_buffer, format=output_format)
 
                 output_buffer.seek(0)
-                self.logger.info("Successfully processed RAW file: %s", file_path)
+                self.logger.debug("Successfully processed RAW file: %s", file_path)
                 return output_buffer
 
         except Exception as exc:
