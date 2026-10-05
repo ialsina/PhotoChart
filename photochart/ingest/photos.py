@@ -15,7 +15,12 @@ from django.conf import settings
 from django.db import transaction
 from tqdm import tqdm
 
-from photochart.fs.device import get_device_name, get_mount_point
+from photochart.fs.device import (
+    get_device_name,
+    get_mount_point,
+    load_mount_table,
+    mount_point_for_path,
+)
 from photochart.fs.protocols import calculate_checksum as calculate_file_checksum
 from photochart.media.extensions import IMAGE_EXTENSIONS
 from photochart.media.resolution import parse_resolution
@@ -75,7 +80,15 @@ def _setup_logger(log_path: Optional[str] = None) -> Optional[logging.Logger]:
         return None
 
 
-def is_path_in_media_root(file_path: Path) -> bool:
+def _resolved_media_root() -> Optional[Path]:
+    """Return resolved MEDIA_ROOT, or None if unavailable."""
+    try:
+        return Path(settings.MEDIA_ROOT).resolve()
+    except Exception:
+        return None
+
+
+def is_path_in_media_root(file_path: Path, media_root: Optional[Path] = None) -> bool:
     """Check if a file path is within the Django MEDIA_ROOT directory.
 
     This prevents ingesting files that are stored in the media directory,
@@ -91,7 +104,10 @@ def is_path_in_media_root(file_path: Path) -> bool:
         True if the path is within MEDIA_ROOT, False otherwise
     """
     try:
-        media_root = Path(settings.MEDIA_ROOT).resolve()
+        if media_root is None:
+            media_root = _resolved_media_root()
+        if media_root is None:
+            return True
         file_path_resolved = file_path.resolve()
         # Check if the file path is within MEDIA_ROOT
         # Use is_relative_to for Python 3.9+, fallback for older versions
@@ -120,7 +136,11 @@ def is_image_file(file_path: Path) -> bool:
     return file_path.suffix.lower() in IMAGE_EXTENSIONS
 
 
-def get_image_files(path: str, recursive: bool = True) -> List[Path]:
+def get_image_files(
+    path: str,
+    recursive: bool = True,
+    media_root: Optional[Path] = None,
+) -> List[Path]:
     """Get all image files from a directory.
 
     Excludes files that are within the Django MEDIA_ROOT directory to prevent
@@ -133,12 +153,18 @@ def get_image_files(path: str, recursive: bool = True) -> List[Path]:
     Returns:
         List of Path objects for image files (excluding those in MEDIA_ROOT)
     """
+    if media_root is None:
+        media_root = _resolved_media_root()
+
     path_obj = Path(path)
     image_files = []
 
+    def _in_media_root(file_path: Path) -> bool:
+        return is_path_in_media_root(file_path, media_root=media_root)
+
     if path_obj.is_file():
         # Single file
-        if is_image_file(path_obj) and not is_path_in_media_root(path_obj):
+        if is_image_file(path_obj) and not _in_media_root(path_obj):
             image_files.append(path_obj)
     elif path_obj.is_dir():
         # Directory
@@ -147,25 +173,19 @@ def get_image_files(path: str, recursive: bool = True) -> List[Path]:
             for root, dirs, files in os.walk(path):
                 # Skip directories that are within MEDIA_ROOT
                 root_path = Path(root)
-                if is_path_in_media_root(root_path):
+                if _in_media_root(root_path):
                     # Skip this directory and all subdirectories
                     dirs[:] = []
                     continue
 
                 for file in files:
                     file_path = Path(root) / file
-                    if is_image_file(file_path) and not is_path_in_media_root(
-                        file_path
-                    ):
+                    if is_image_file(file_path) and not _in_media_root(file_path):
                         image_files.append(file_path)
         else:
             # Non-recursive search
             for file in path_obj.iterdir():
-                if (
-                    file.is_file()
-                    and is_image_file(file)
-                    and not is_path_in_media_root(file)
-                ):
+                if file.is_file() and is_image_file(file) and not _in_media_root(file):
                     image_files.append(file)
     else:
         raise ValueError(f"Path does not exist or is not a file/directory: {path}")
@@ -173,12 +193,21 @@ def get_image_files(path: str, recursive: bool = True) -> List[Path]:
     return image_files
 
 
-def stored_path_for_file(file_path: Path) -> str:
+def stored_path_for_file(
+    file_path: Path,
+    *,
+    mount_point: Optional[str] = None,
+    mount_table: Optional[List[str]] = None,
+) -> str:
     """Return the path string stored on ``PhotoPath`` for a file on disk."""
     file_path_str = str(file_path.resolve())
-    mount_point = get_mount_point(file_path_str)
-    if mount_point:
-        mount_path = Path(mount_point)
+    effective_mount = mount_point
+    if effective_mount is None and mount_table is not None:
+        effective_mount = mount_point_for_path(file_path_str, mount_table)
+    elif effective_mount is None:
+        effective_mount = get_mount_point(file_path_str)
+    if effective_mount:
+        mount_path = Path(effective_mount)
         file_path_obj = Path(file_path_str)
         try:
             return str(file_path_obj.relative_to(mount_path))
@@ -187,65 +216,177 @@ def stored_path_for_file(file_path: Path) -> str:
     return file_path_str
 
 
-def collect_thumbnail_retry_candidates(
-    image_files: List[Path],
-    device: str,
-) -> List[Tuple[Path, Any]]:
-    """Return on-disk files that are catalogued on *device* but lack a thumbnail."""
-    candidates: List[Tuple[Path, Any]] = []
-    for file_path in image_files:
-        if is_path_in_media_root(file_path):
-            continue
-        path_to_store = stored_path_for_file(file_path)
-        existing_path = (
-            PhotoPath.objects.filter(path=path_to_store, device=device)
-            .select_related("photograph")
-            .first()
-        )
-        photograph = existing_path.photograph if existing_path else None
-        if photograph and not photograph.thumbnail:
-            candidates.append((file_path, existing_path))
-    return candidates
+def _resolve_mount_for_file(
+    file_path_str: str,
+    mount_table: List[str],
+    ingest_mount: Optional[str],
+) -> Optional[str]:
+    if ingest_mount and (
+        file_path_str == ingest_mount or file_path_str.startswith(ingest_mount + os.sep)
+    ):
+        return ingest_mount
+    return mount_point_for_path(file_path_str, mount_table)
 
 
 _PATH_LOOKUP_CHUNK = 5000
 
 
-def filter_uningested_image_files(
-    image_files: List[Path],
+def _stored_path_prefix_for_ingest(
+    ingest_path: str,
+    mount_table: List[str],
+    ingest_mount: Optional[str],
+) -> Optional[str]:
+    ingest_resolved = Path(ingest_path).resolve()
+    stored = stored_path_for_file(
+        ingest_resolved,
+        mount_point=ingest_mount,
+        mount_table=mount_table,
+    )
+    if len(stored) < 2:
+        return None
+    if ingest_resolved.is_dir():
+        return stored.rstrip("/") + "/"
+    return stored
+
+
+def _fetch_existing_catalog_paths(
     device: str,
-) -> Tuple[List[Path], int]:
-    """Return on-disk image files not yet catalogued on *device*.
-
-    Returns:
-        Tuple of (pending files to ingest, count skipped as already catalogued).
-    """
-    eligible: List[Tuple[Path, str]] = []
-    for file_path in image_files:
-        if is_path_in_media_root(file_path):
-            continue
-        eligible.append((file_path, stored_path_for_file(file_path)))
-
-    if not eligible:
-        return [], 0
-
-    stored_paths = [path_to_store for _, path_to_store in eligible]
+    stored_paths: List[str],
+    path_prefix: Optional[str],
+) -> set[str]:
+    n = len(stored_paths)
+    if path_prefix and len(path_prefix) >= 2:
+        prefix_count = PhotoPath.objects.filter(
+            device=device, path__startswith=path_prefix
+        ).count()
+        if prefix_count <= n:
+            return set(
+                PhotoPath.objects.filter(
+                    device=device, path__startswith=path_prefix
+                ).values_list("path", flat=True)
+            )
     existing: set[str] = set()
-    for i in range(0, len(stored_paths), _PATH_LOOKUP_CHUNK):
+    for i in range(0, n, _PATH_LOOKUP_CHUNK):
         chunk = stored_paths[i : i + _PATH_LOOKUP_CHUNK]
         existing.update(
             PhotoPath.objects.filter(device=device, path__in=chunk).values_list(
                 "path", flat=True
             )
         )
+    return existing
 
-    pending: List[Path] = []
+
+def _fetch_photo_paths_by_stored_paths(
+    device: str,
+    stored_paths: List[str],
+    path_prefix: Optional[str],
+) -> Dict[str, Any]:
+    """Map stored path strings to ``PhotoPath`` rows (with photograph prefetched)."""
+    n = len(stored_paths)
+    stored_set = set(stored_paths)
+    by_path: Dict[str, Any] = {}
+
+    if path_prefix and len(path_prefix) >= 2:
+        prefix_count = PhotoPath.objects.filter(
+            device=device, path__startswith=path_prefix
+        ).count()
+        if prefix_count <= n:
+            for photo_path in PhotoPath.objects.filter(
+                device=device, path__startswith=path_prefix
+            ).select_related("photograph"):
+                if photo_path.path in stored_set:
+                    by_path[photo_path.path] = photo_path
+            return by_path
+
+    for i in range(0, n, _PATH_LOOKUP_CHUNK):
+        chunk = stored_paths[i : i + _PATH_LOOKUP_CHUNK]
+        for photo_path in PhotoPath.objects.filter(
+            device=device, path__in=chunk
+        ).select_related("photograph"):
+            by_path[photo_path.path] = photo_path
+    return by_path
+
+
+def collect_thumbnail_retry_candidates(
+    image_files: List[Path],
+    device: str,
+    *,
+    ingest_path: str,
+    mount_table: Optional[List[str]] = None,
+    ingest_mount: Optional[str] = None,
+    media_root: Optional[Path] = None,
+) -> List[Tuple[Path, Any]]:
+    """Return on-disk files that are catalogued on *device* but lack a thumbnail."""
+    if mount_table is None:
+        mount_table = load_mount_table()
+    eligible: List[Tuple[Path, str]] = []
+    for file_path in image_files:
+        if is_path_in_media_root(file_path, media_root=media_root):
+            continue
+        eligible.append(
+            (
+                file_path,
+                stored_path_for_file(file_path, mount_table=mount_table),
+            )
+        )
+
+    if not eligible:
+        return []
+
+    stored_paths = [path_to_store for _, path_to_store in eligible]
+    path_prefix = _stored_path_prefix_for_ingest(ingest_path, mount_table, ingest_mount)
+    by_path = _fetch_photo_paths_by_stored_paths(device, stored_paths, path_prefix)
+
+    candidates: List[Tuple[Path, Any]] = []
+    for file_path, path_to_store in eligible:
+        existing_path = by_path.get(path_to_store)
+        if not existing_path:
+            continue
+        photograph = existing_path.photograph
+        if photograph and not photograph.thumbnail:
+            candidates.append((file_path, existing_path))
+    return candidates
+
+
+def filter_uningested_image_files(
+    image_files: List[Path],
+    device: str,
+    *,
+    ingest_path: str,
+    mount_table: List[str],
+    ingest_mount: Optional[str] = None,
+    media_root: Optional[Path] = None,
+) -> Tuple[List[Tuple[Path, str]], int]:
+    """Return on-disk image files not yet catalogued on *device*.
+
+    Returns:
+        Tuple of (pending (path, stored_path) pairs, count skipped as already catalogued).
+    """
+    eligible: List[Tuple[Path, str]] = []
+    for file_path in image_files:
+        if is_path_in_media_root(file_path, media_root=media_root):
+            continue
+        eligible.append(
+            (
+                file_path,
+                stored_path_for_file(file_path, mount_table=mount_table),
+            )
+        )
+
+    if not eligible:
+        return [], 0
+
+    stored_paths = [path_to_store for _, path_to_store in eligible]
+    path_prefix = _stored_path_prefix_for_ingest(ingest_path, mount_table, ingest_mount)
+    existing = _fetch_existing_catalog_paths(device, stored_paths, path_prefix)
+
+    pending: List[Tuple[Path, str]] = []
     skipped = 0
     for file_path, path_to_store in eligible:
         if path_to_store in existing:
             skipped += 1
         else:
-            pending.append(file_path)
+            pending.append((file_path, path_to_store))
     return pending, skipped
 
 
@@ -346,8 +487,12 @@ def ingest_photos(
                 )
                 # Continue anyway, just without resolution processing
 
+        mount_table = load_mount_table()
+        ingest_mount = mount_point_for_path(str(Path(path).resolve()), mount_table)
+        media_root = _resolved_media_root()
+
         # Get all image files
-        image_files = get_image_files(path, recursive=recursive)
+        image_files = get_image_files(path, recursive=recursive, media_root=media_root)
 
         if not image_files:
             result["errors"].append(f"No image files found in: {path}")
@@ -355,7 +500,14 @@ def ingest_photos(
             return result
 
         if retry_thumbnails:
-            retry_candidates = collect_thumbnail_retry_candidates(image_files, device)
+            retry_candidates = collect_thumbnail_retry_candidates(
+                image_files,
+                device,
+                ingest_path=path,
+                mount_table=mount_table,
+                ingest_mount=ingest_mount,
+                media_root=media_root,
+            )
             if logger:
                 logger.info(
                     "Thumbnail retry: %s catalogued file(s) missing thumbnails "
@@ -439,7 +591,14 @@ def ingest_photos(
                 )
             return result
 
-        pending_files, skipped = filter_uningested_image_files(image_files, device)
+        pending_files, skipped = filter_uningested_image_files(
+            image_files,
+            device,
+            ingest_path=path,
+            mount_table=mount_table,
+            ingest_mount=ingest_mount,
+            media_root=media_root,
+        )
         result["skipped_already_ingested"] = skipped
         if logger:
             logger.info(
@@ -457,7 +616,7 @@ def ingest_photos(
             unit_scale=False,
             dynamic_ncols=True,
         ) as pbar:
-            for file_path in pending_files:
+            for file_path, path_to_store in pending_files:
                 # Use a transaction per file to ensure each file is persisted immediately
                 # This prevents orphaned files in the media directory if the process is aborted
                 try:
@@ -466,7 +625,7 @@ def ingest_photos(
 
                         # Safety check: Never ingest files from MEDIA_ROOT
                         # This prevents loops where thumbnails stored in MEDIA_ROOT would be re-ingested
-                        if is_path_in_media_root(file_path):
+                        if is_path_in_media_root(file_path, media_root=media_root):
                             # Skip this file silently - it's in the media directory
                             pbar.update(1)
                             continue
@@ -476,8 +635,9 @@ def ingest_photos(
                             os.path.basename(file_path_str)[:50], refresh=False
                         )
 
-                        path_to_store = stored_path_for_file(file_path)
-                        mount_point = get_mount_point(file_path_str)
+                        mount_point = _resolve_mount_for_file(
+                            file_path_str, mount_table, ingest_mount
+                        )
 
                         # If checksum calculation is requested, do it before creating PhotoPath
                         # This way the Photograph will be created with the checksum

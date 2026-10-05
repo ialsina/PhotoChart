@@ -397,6 +397,37 @@ class IngestRetryThumbnailsTest(TestCase):
 
     @patch("photochart.ingest.photos.get_mount_point", return_value=None)
     @patch("photochart.ingest.photos.get_device_name", return_value=DEVICE)
+    def test_retry_candidate_collection_uses_batched_db_lookup(self, *_mocks) -> None:
+        from photochart.ingest.photos import collect_thumbnail_retry_candidates
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with tempfile.TemporaryDirectory() as tmp:
+                with self.settings(MEDIA_ROOT=media_root):
+                    tmp_path = Path(tmp)
+                    paths_on_disk = []
+                    for i in range(5):
+                        img = self._write_minimal_jpeg(tmp_path, f"p{i}.jpg")
+                        paths_on_disk.append(img)
+                    photograph = Photograph.objects.create()
+                    PhotoPath.objects.create(
+                        path=str(paths_on_disk[0].resolve()),
+                        device=self.DEVICE,
+                        photograph=photograph,
+                    )
+
+                    with self.assertNumQueries(2):
+                        candidates = collect_thumbnail_retry_candidates(
+                            paths_on_disk,
+                            self.DEVICE,
+                            ingest_path=tmp,
+                            mount_table=[],
+                        )
+
+                    assert len(candidates) == 1
+                    assert candidates[0][0] == paths_on_disk[0]
+
+    @patch("photochart.ingest.photos.get_mount_point", return_value=None)
+    @patch("photochart.ingest.photos.get_device_name", return_value=DEVICE)
     def test_retry_does_not_create_new_paths(self, *_mocks) -> None:
         from photochart.ingest.photos import ingest_photos
 
@@ -535,6 +566,48 @@ class IngestPrefilterCataloguedTest(TestCase):
                     assert not any(
                         "No image files found" in e for e in result["errors"]
                     )
+
+    @patch("photochart.ingest.photos.get_mount_point", return_value=None)
+    @patch("photochart.ingest.photos.get_device_name", return_value=DEVICE)
+    def test_ingest_loads_mount_table_once(self, *_mocks) -> None:
+        from photochart.fs.device import load_mount_table as real_load_mount_table
+        from photochart.ingest.photos import ingest_photos
+
+        load_calls = 0
+
+        def counting_load(*args, **kwargs):
+            nonlocal load_calls
+            load_calls += 1
+            return real_load_mount_table(*args, **kwargs)
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with tempfile.TemporaryDirectory() as tmp:
+                with self.settings(MEDIA_ROOT=media_root):
+                    tmp_path = Path(tmp)
+                    for i in range(3):
+                        self._write_minimal_jpeg(tmp_path, f"photo{i}.jpg")
+                    catalogued = tmp_path / "photo0.jpg"
+                    PhotoPath.objects.create(
+                        path=str(catalogued.resolve()),
+                        device=self.DEVICE,
+                        photograph=None,
+                    )
+
+                    with patch(
+                        "photochart.ingest.photos.load_mount_table",
+                        side_effect=counting_load,
+                    ):
+                        result = ingest_photos(
+                            tmp,
+                            device=self.DEVICE,
+                            recursive=False,
+                            calculate_checksum=False,
+                            store_images=False,
+                        )
+
+                    assert load_calls == 1
+                    assert result["skipped_already_ingested"] == 1
+                    assert result["count"] == 2
 
 
 # ---------------------------------------------------------------------------

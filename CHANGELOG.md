@@ -94,6 +94,23 @@ All notable changes to PhotoChart are documented in this file.
 - ``pchart ingest`` progress counts only files not yet catalogued on the ingest
   device; the CLI and ingest log report how many were skipped as already
   catalogued.
+- ``pchart ingest`` (normal mode) pre-filters already-catalogued files before
+  the progress loop: only pending files are counted and processed. The CLI
+  prints ``Skipped N already catalogued photo(s).`` when applicable; the ingest
+  log records skip and pending counts. Ingest results include
+  ``skipped_already_ingested``.
+- Ingest scan and pre-filter performance: ``/proc/mounts`` is read once per run
+  via ``load_mount_table`` / ``mount_point_for_path``; stored paths are derived
+  from a cached mount table instead of per-file mount lookups; ``MEDIA_ROOT`` is
+  resolved once during filesystem walks. Catalog membership checks use batched
+  ``PhotoPath`` queries (chunked ``path__in``, or ``path__startswith`` when
+  the ingest tree maps to a safe prefix and that is cheaper than scanning the
+  full on-disk file list).
+- ``pchart ingest --retry-thumbnails`` uses the same batched ``PhotoPath``
+  lookup strategy when matching on-disk files to catalog rows (with
+  ``select_related`` for thumbnails), instead of one database query per scanned
+  file. Thumbnail retry still shares the single mount-table load and cached
+  ``MEDIA_ROOT`` handling with normal ingest.
 
 ### Fixed
 

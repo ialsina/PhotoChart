@@ -53,6 +53,32 @@ def sanitize_label(label: str) -> str:
     return label
 
 
+def load_mount_table(proc_mounts_path: str = "/proc/mounts") -> list[str]:
+    """Read mount points from *proc_mounts_path*, longest prefixes first."""
+    mount_points: list[str] = []
+    try:
+        with open(proc_mounts_path, encoding="utf-8") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 2:
+                    mount = unescape_mounts_path(parts[1])
+                    if mount not in ("/", ""):
+                        mount_points.append(mount)
+        mount_points.sort(key=len, reverse=True)
+    except (OSError, IOError):
+        pass
+    return mount_points
+
+
+def mount_point_for_path(path: str, mount_table: list[str]) -> Optional[str]:
+    """Return the longest mount prefix for *path* using a pre-loaded *mount_table*."""
+    path_norm = os.path.normpath(path)
+    for mount in mount_table:
+        if path_norm == mount or path_norm.startswith(mount + "/"):
+            return mount
+    return None
+
+
 def get_mount_point_from_file(
     path: str, proc_mounts_path: str = "/proc/mounts"
 ) -> Optional[str]:
@@ -77,20 +103,7 @@ def get_mount_point_from_file(
         or the path maps to the root filesystem.
     """
     try:
-        path_norm = os.path.normpath(path)
-        mount_points: list[str] = []
-        with open(proc_mounts_path) as f:
-            for line in f:
-                parts = line.split()
-                if len(parts) >= 2:
-                    mount = unescape_mounts_path(parts[1])
-                    if mount not in ("/", ""):
-                        mount_points.append(mount)
-        # Longest (most-specific) mount point first
-        mount_points.sort(key=len, reverse=True)
-        for mount in mount_points:
-            if path_norm == mount or path_norm.startswith(mount + "/"):
-                return mount
+        return mount_point_for_path(path, load_mount_table(proc_mounts_path))
     except (OSError, IOError):
         pass
     return None
@@ -169,35 +182,14 @@ def get_mount_point(file_path: str) -> Optional[str]:
         # Resolve to absolute path
         abs_path = path_obj.resolve()
 
-        # Read /proc/mounts to find mount points (Linux)
         try:
-            with open("/proc/mounts", "r") as f:
-                mounts = []
-                for line in f:
-                    parts = line.split()
-                    if len(parts) >= 2:
-                        device = unescape_mounts_path(parts[0])
-                        mount = unescape_mounts_path(parts[1])
-                        fstype = parts[2] if len(parts) > 2 else ""
-                        mounts.append((device, mount, fstype))
-
-                # Sort by mount path length (longest first) to match most specific mount
-                mounts.sort(key=lambda x: len(x[1]), reverse=True)
-
-                # Find the mount point that contains our path
-                for device, mount, fstype in mounts:
-                    try:
-                        mount_path = Path(mount)
-                        if mount_path.exists() and abs_path.is_relative_to(mount_path):
-                            # return mount point if it's not the root filesystem
-                            if mount != "/":
-                                return mount
-                            return None
-                    except (ValueError, OSError):
-                        # Path comparison failed, skip
-                        continue
-        except (OSError, IOError):
-            # /proc/mounts not available (not Linux or permission issue)
+            mount = mount_point_for_path(str(abs_path), load_mount_table())
+            if mount is None:
+                return None
+            mount_path = Path(mount)
+            if mount_path.exists() and abs_path.is_relative_to(mount_path):
+                return mount
+        except (OSError, IOError, ValueError):
             pass
 
         return None
