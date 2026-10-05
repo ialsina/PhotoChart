@@ -275,6 +275,7 @@ def run_ingest_docker(
         "checksums_calculated": 0,
         "images_stored": 0,
         "thumbnails_retried": 0,
+        "skipped_already_ingested": 0,
         "errors": [],
     }
 
@@ -414,6 +415,7 @@ def choose_and_run_ingest(
             "checksums_calculated": 0,
             "images_stored": 0,
             "thumbnails_retried": 0,
+            "skipped_already_ingested": 0,
             "errors": [str(exc)],
         }
 
@@ -440,6 +442,8 @@ def choose_and_run_ingest(
             "count": 0,
             "checksums_calculated": 0,
             "images_stored": 0,
+            "thumbnails_retried": 0,
+            "skipped_already_ingested": 0,
             "errors": [
                 f"Path {path!r} does not exist in the current container namespace "
                 "and INGEST_DOCKER_ENABLED is False. "
@@ -455,6 +459,8 @@ def choose_and_run_ingest(
             "count": 0,
             "checksums_calculated": 0,
             "images_stored": 0,
+            "thumbnails_retried": 0,
+            "skipped_already_ingested": 0,
             "errors": [
                 f"Path {path!r} does not exist locally and "
                 "INGEST_ALLOWED_PATH_PREFIXES is not configured. "

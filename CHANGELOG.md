@@ -46,10 +46,6 @@ All notable changes to PhotoChart are documented in this file.
   backfill missing thumbnails for already-catalogued files without creating new
   ``PhotoPath`` rows. The progress bar counts only catalogued files missing
   thumbnails, not every image under the ingest path.
-- ``pchart ingest --retry-thumbnails`` (and ``IngestJob.retry_thumbnails``) to
-  backfill missing thumbnails for already-catalogued files without creating new
-  ``PhotoPath`` rows. The progress bar counts only catalogued files missing
-  thumbnails, not every image under the ingest path.
 - ``pchart resize-thumbnails --resolution`` to bulk-resize stored catalog
   thumbnails in the media volume, with optional ``--max-size`` to skip smaller
   files (e.g. ``800K``, ``10M``, ``1G``).
@@ -95,6 +91,9 @@ All notable changes to PhotoChart are documented in this file.
   (`photographs/ab/cd/...`) instead of three (`photographs/ab/cd/ef/...`) via
   `photograph_upload_path` in `backend/photograph/models.py`; existing stored
   paths are unchanged until thumbnails are written again.
+- ``pchart ingest`` progress counts only files not yet catalogued on the ingest
+  device; the CLI and ingest log report how many were skipped as already
+  catalogued.
 
 ### Fixed
 

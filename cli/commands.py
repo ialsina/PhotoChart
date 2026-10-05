@@ -101,6 +101,9 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         if result.get("images_stored", 0) > 0:
             print(f"Stored {result['images_stored']} image(s) in database.")
     else:
+        skipped = result.get("skipped_already_ingested", 0)
+        if skipped > 0:
+            print(f"Skipped {skipped} already catalogued photo(s).")
         print(f"Ingested {result['count']} photo(s) from '{args.path}'.")
         if result.get("checksums_calculated", 0) > 0:
             print(f"Calculated {result['checksums_calculated']} checksum(s).")

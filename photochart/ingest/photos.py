@@ -208,6 +208,47 @@ def collect_thumbnail_retry_candidates(
     return candidates
 
 
+_PATH_LOOKUP_CHUNK = 5000
+
+
+def filter_uningested_image_files(
+    image_files: List[Path],
+    device: str,
+) -> Tuple[List[Path], int]:
+    """Return on-disk image files not yet catalogued on *device*.
+
+    Returns:
+        Tuple of (pending files to ingest, count skipped as already catalogued).
+    """
+    eligible: List[Tuple[Path, str]] = []
+    for file_path in image_files:
+        if is_path_in_media_root(file_path):
+            continue
+        eligible.append((file_path, stored_path_for_file(file_path)))
+
+    if not eligible:
+        return [], 0
+
+    stored_paths = [path_to_store for _, path_to_store in eligible]
+    existing: set[str] = set()
+    for i in range(0, len(stored_paths), _PATH_LOOKUP_CHUNK):
+        chunk = stored_paths[i : i + _PATH_LOOKUP_CHUNK]
+        existing.update(
+            PhotoPath.objects.filter(device=device, path__in=chunk).values_list(
+                "path", flat=True
+            )
+        )
+
+    pending: List[Path] = []
+    skipped = 0
+    for file_path, path_to_store in eligible:
+        if path_to_store in existing:
+            skipped += 1
+        else:
+            pending.append(file_path)
+    return pending, skipped
+
+
 def ingest_photos(
     path: str,
     resolution: Optional[str] = None,
@@ -255,6 +296,7 @@ def ingest_photos(
             - checksums_calculated: number of checksums calculated
             - images_stored: number of images stored (if store_images=True)
             - thumbnails_retried: number of existing catalog entries thumbnail-retry was attempted on
+            - skipped_already_ingested: files already in the catalog for this device (not processed)
             - errors: list of error messages
     """
     if retry_thumbnails:
@@ -266,6 +308,7 @@ def ingest_photos(
         "checksums_calculated": 0,
         "images_stored": 0,
         "thumbnails_retried": 0,
+        "skipped_already_ingested": 0,
         "errors": [],
     }
 
@@ -396,16 +439,25 @@ def ingest_photos(
                 )
             return result
 
+        pending_files, skipped = filter_uningested_image_files(image_files, device)
+        result["skipped_already_ingested"] = skipped
+        if logger:
+            logger.info(
+                "Skipping %s already catalogued file(s) (%s pending)",
+                skipped,
+                len(pending_files),
+            )
+
         # Process each image file with progress bar
-        # Use tqdm to show progress across all files (including nested ones) in a single bar
+        # Use tqdm to show progress across pending files only
         with tqdm(
-            total=len(image_files),
+            total=len(pending_files),
             desc="Ingesting photos",
             unit="file",
             unit_scale=False,
             dynamic_ncols=True,
         ) as pbar:
-            for file_path in image_files:
+            for file_path in pending_files:
                 # Use a transaction per file to ensure each file is persisted immediately
                 # This prevents orphaned files in the media directory if the process is aborted
                 try:
@@ -426,15 +478,6 @@ def ingest_photos(
 
                         path_to_store = stored_path_for_file(file_path)
                         mount_point = get_mount_point(file_path_str)
-
-                        # Check if PhotoPath already exists for this path and device
-                        existing_path = PhotoPath.objects.filter(
-                            path=path_to_store, device=device
-                        ).first()
-
-                        if existing_path:
-                            pbar.update(1)
-                            continue
 
                         # If checksum calculation is requested, do it before creating PhotoPath
                         # This way the Photograph will be created with the checksum
