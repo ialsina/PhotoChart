@@ -2,11 +2,13 @@
 
 This module provides functions to extract specific EXIF tags from image files,
 optimized to read the image file only once when extracting multiple tags.
+Use ``full=True`` for comprehensive multi-IFD extraction (e.g. CLI ``pchart info -a``).
 """
 
 from datetime import datetime
 from enum import Enum, IntEnum
-from typing import Dict, Any, Optional, List
+from fractions import Fraction
+from typing import Dict, Any, Optional, List, Mapping
 from pathlib import Path
 
 
@@ -26,56 +28,60 @@ class ExifTagName(str, Enum):
     MODEL = "model"
 
 
-def extract_exif(
-    file_path: str, tags: Optional[List[ExifTagName]] = None
-) -> Dict[str, Any]:
-    """Extract specified EXIF tags from an image file.
+# Sub-IFD pointer tag IDs (IFD0) — values are expanded via get_ifd(), not serialized.
+_SUB_IFD_POINTER_IDS = frozenset({0x8769, 0x8825, 0xA005, 0x010000})
 
-    Reads the image file only once and extracts all requested tags.
-    Supported tags:
-    - ExifTagName.DATETIME: Extracts photograph datetime (returns datetime object)
-    - ExifTagName.MODEL: Extracts camera model (returns string)
+
+def extract_exif(
+    file_path: str,
+    tags: Optional[List[ExifTagName]] = None,
+    full: bool = False,
+) -> Dict[str, Any]:
+    """Extract EXIF metadata from an image file.
+
+    Reads the image file only once.
+
+    Limited mode (``full=False``, default): returns only requested logical tags:
+    - ExifTagName.DATETIME: photograph datetime (``datetime`` object)
+    - ExifTagName.MODEL: camera model (``str``)
+
+    Full mode (``full=True``): returns human-readable EXIF tag names with
+    JSON-friendly values from IFD0, the Exif sub-IFD, GPS, and ``img.info``.
+    The ``tags`` argument is ignored when ``full=True``.
 
     Args:
         file_path: Path to the image file
         tags: List of ExifTagName enum values to extract. If None or empty,
-            extracts all supported tags.
+            extracts all supported tags. Ignored when ``full=True``.
+        full: When True, extract all available EXIF fields.
 
     Returns:
-        Dictionary with extracted tag values. Keys are the string values of the
-        requested tag names. Values are None if the tag was not found or extraction failed.
-
-    Examples:
-        >>> # Extract both datetime and model
-        >>> result = extract_exif("photo.jpg", [ExifTagName.DATETIME, ExifTagName.MODEL])
-        >>> print(result["datetime"])  # datetime object or None
-        >>> print(result["model"])     # string or None
-
-        >>> # Extract only datetime
-        >>> result = extract_exif("photo.jpg", [ExifTagName.DATETIME])
-        >>> print(result["datetime"])
-
-        >>> # Extract all supported tags
-        >>> result = extract_exif("photo.jpg")
+        Dictionary of extracted values. Keys depend on mode; missing tags are None
+        in limited mode.
     """
+    if full:
+        try:
+            from PIL import Image
+
+            with Image.open(file_path) as img:
+                return _extract_full_exif_from_image(img)
+        except Exception:
+            return {}
+
     if tags is None:
         tags = [ExifTagName.DATETIME, ExifTagName.MODEL]
     else:
-        # Validate and normalize tag names
         valid_tags = []
         for tag in tags:
             if isinstance(tag, ExifTagName):
                 valid_tags.append(tag)
             elif isinstance(tag, str):
-                # Allow string values for backward compatibility
                 try:
                     valid_tags.append(ExifTagName(tag.lower()))
                 except ValueError:
-                    # Skip invalid tag names
                     continue
         tags = valid_tags
 
-    # Convert enum values to strings for dictionary keys
     tag_strings = [tag.value for tag in tags]
     result: Dict[str, Any] = {tag: None for tag in tag_strings}
 
@@ -84,25 +90,127 @@ def extract_exif(
         from PIL.ExifTags import TAGS
 
         with Image.open(file_path) as img:
-            # Get EXIF data
             exif_data = img.getexif()
             if not exif_data:
                 return result
 
-            # Extract datetime if requested
             if ExifTagName.DATETIME in tags:
-                datetime_value = _extract_datetime_from_exif(exif_data)
-                result[ExifTagName.DATETIME.value] = datetime_value
+                result[ExifTagName.DATETIME.value] = _extract_datetime_from_exif(
+                    exif_data
+                )
 
-            # Extract model if requested
             if ExifTagName.MODEL in tags:
-                model_value = _extract_model_from_exif(exif_data, TAGS)
-                result[ExifTagName.MODEL.value] = model_value
+                result[ExifTagName.MODEL.value] = _extract_model_from_exif(
+                    exif_data, TAGS
+                )
 
     except Exception:
-        # If extraction fails, return None for all requested tags
-        # Don't raise exception - let caller handle missing data
         pass
+
+    return result
+
+
+def _get_exif_tag(exif_data: Any, tag_id: int) -> Any:
+    """Return a tag value from IFD0 or the Exif sub-IFD."""
+    value = exif_data.get(tag_id)
+    if value is not None:
+        return value
+    try:
+        from PIL.ExifTags import IFD
+
+        exif_ifd = exif_data.get_ifd(IFD.Exif)
+        return exif_ifd.get(tag_id)
+    except Exception:
+        return None
+
+
+def _serialize_exif_value(value: Any) -> Any:
+    """Convert EXIF values to JSON-friendly Python types."""
+    if value is None:
+        return None
+    if isinstance(value, bytes):
+        try:
+            decoded = value.decode("utf-8", errors="ignore").strip("\x00").strip()
+            if decoded:
+                return decoded
+        except Exception:
+            pass
+        return f"<binary data: {len(value)} bytes>"
+    if isinstance(value, (Fraction,)):
+        return float(value)
+    if hasattr(value, "numerator") and hasattr(value, "denominator"):
+        try:
+            return float(value)
+        except (TypeError, ValueError, ZeroDivisionError):
+            return str(value)
+    if isinstance(value, tuple):
+        return [_serialize_exif_value(item) for item in value]
+    if isinstance(value, list):
+        return [_serialize_exif_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(k): _serialize_exif_value(v) for k, v in value.items()}
+    if isinstance(value, (int, float, str, bool)):
+        return value
+    return str(value)
+
+
+def _merge_ifd_tags(
+    target: Dict[str, Any],
+    ifd_data: Mapping[int, Any],
+    tags_dict: Dict[int, str],
+    skip_tag_ids: frozenset[int] = frozenset(),
+) -> None:
+    for tag_id, value in ifd_data.items():
+        if tag_id in skip_tag_ids:
+            continue
+        tag_name = tags_dict.get(tag_id, tag_id)
+        if isinstance(tag_name, int):
+            tag_name = str(tag_name)
+        target[tag_name] = _serialize_exif_value(value)
+
+
+def _extract_full_exif_from_image(img: Any) -> Dict[str, Any]:
+    from PIL.ExifTags import TAGS, GPSTAGS, IFD
+
+    result: Dict[str, Any] = {}
+    exif_data = img.getexif()
+    if exif_data:
+        _merge_ifd_tags(
+            result,
+            exif_data,
+            TAGS,
+            skip_tag_ids=_SUB_IFD_POINTER_IDS,
+        )
+        try:
+            exif_ifd = exif_data.get_ifd(IFD.Exif)
+            _merge_ifd_tags(result, exif_ifd, TAGS)
+        except Exception:
+            pass
+        try:
+            gps_ifd = exif_data.get_ifd(IFD.GPSInfo)
+            if gps_ifd:
+                gps_data: Dict[str, Any] = {}
+                _merge_ifd_tags(gps_data, gps_ifd, GPSTAGS)
+                if gps_data:
+                    result["GPSInfo"] = gps_data
+        except Exception:
+            pass
+        try:
+            interop_ifd = exif_data.get_ifd(IFD.Interop)
+            if interop_ifd:
+                interop_data: Dict[str, Any] = {}
+                _merge_ifd_tags(interop_data, interop_ifd, TAGS)
+                for key, value in interop_data.items():
+                    prefixed = f"Interop:{key}"
+                    if prefixed not in result:
+                        result[prefixed] = value
+        except Exception:
+            pass
+
+    if hasattr(img, "info"):
+        for key, value in img.info.items():
+            if key not in result:
+                result[key] = _serialize_exif_value(value)
 
     return result
 
@@ -115,47 +223,32 @@ def _extract_datetime_from_exif(exif_data: Any) -> Optional[datetime]:
     2. DateTimeDigitized (tag 36868) - when the photo was digitized
     3. DateTime (tag 306) - general datetime
 
-    Args:
-        exif_data: EXIF data dictionary from PIL
-
-    Returns:
-        datetime object if found, None otherwise
+    Checks IFD0 and the Exif sub-IFD.
     """
-    datetime_str = None
-
-    # Priority 1: DateTimeOriginal
-    # Use .get() method for safer access, as 'in' operator might not work with all PIL versions
-    datetime_str = exif_data.get(ExifTag.DATETIME_ORIGINAL)
-    # Priority 2: DateTimeDigitized
+    datetime_str = _get_exif_tag(exif_data, ExifTag.DATETIME_ORIGINAL)
     if not datetime_str:
-        datetime_str = exif_data.get(ExifTag.DATETIME_DIGITIZED)
-    # Priority 3: DateTime
+        datetime_str = _get_exif_tag(exif_data, ExifTag.DATETIME_DIGITIZED)
     if not datetime_str:
-        datetime_str = exif_data.get(ExifTag.DATETIME)
+        datetime_str = _get_exif_tag(exif_data, ExifTag.DATETIME)
 
     if datetime_str:
-        # Convert bytes to string if necessary
         if isinstance(datetime_str, bytes):
             try:
                 datetime_str = datetime_str.decode("utf-8", errors="ignore")
             except Exception:
                 return None
 
-        # Ensure it's a string
         if not isinstance(datetime_str, str):
             datetime_str = str(datetime_str)
 
-        # Strip whitespace
         datetime_str = datetime_str.strip()
 
         if not datetime_str:
             return None
 
-        # Parse EXIF datetime format: "YYYY:MM:DD HH:MM:SS"
         try:
             return datetime.strptime(datetime_str, "%Y:%m:%d %H:%M:%S")
         except (ValueError, TypeError):
-            # Try alternative formats if standard format fails
             try:
                 return datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%S")
             except (ValueError, TypeError):
@@ -164,39 +257,35 @@ def _extract_datetime_from_exif(exif_data: Any) -> Optional[datetime]:
     return None
 
 
+def _iter_exif_tag_items(exif_data: Any, tags_dict: Dict) -> List[tuple]:
+    """Yield (tag_id, value) from IFD0 and the Exif sub-IFD."""
+    items: List[tuple] = list(exif_data.items())
+    try:
+        from PIL.ExifTags import IFD
+
+        exif_ifd = exif_data.get_ifd(IFD.Exif)
+        items.extend(exif_ifd.items())
+    except Exception:
+        pass
+    return items
+
+
 def _extract_model_from_exif(exif_data: Any, tags_dict: Dict) -> Optional[str]:
-    """Extract camera model from EXIF data.
+    """Extract camera model from EXIF data (IFD0 and Exif sub-IFD)."""
+    model_value = _get_exif_tag(exif_data, ExifTag.MODEL)
+    if model_value:
+        model_str = str(model_value).strip().replace("\x00", "")
+        if model_str:
+            return model_str
 
-    Tries to extract the camera model from EXIF tags:
-    1. Model (tag 272) - camera model name
-    2. CameraModelName - alternative tag name (some cameras use this)
-
-    Args:
-        exif_data: EXIF data dictionary from PIL
-        tags_dict: PIL.ExifTags.TAGS dictionary for tag name lookup
-
-    Returns:
-        Camera model string if found, None otherwise
-    """
-    # Try to get Model tag directly
-    if ExifTag.MODEL in exif_data:
-        model_value = exif_data[ExifTag.MODEL]
-        if model_value:
-            # Clean up the model string (remove null bytes, strip whitespace)
-            model_str = str(model_value).strip().replace("\x00", "")
-            if model_str:
-                return model_str
-
-    # Try to find by tag name (for compatibility with different EXIF implementations)
-    for tag_id, value in exif_data.items():
+    for tag_id, value in _iter_exif_tag_items(exif_data, tags_dict):
         tag_name = tags_dict.get(tag_id, tag_id)
         if tag_name == "Model" and value:
             model_str = str(value).strip().replace("\x00", "")
             if model_str:
                 return model_str
 
-    # Try alternative tag names
-    for tag_id, value in exif_data.items():
+    for tag_id, value in _iter_exif_tag_items(exif_data, tags_dict):
         tag_name = tags_dict.get(tag_id, tag_id)
         if tag_name in ("CameraModelName", "Camera Model") and value:
             model_str = str(value).strip().replace("\x00", "")
@@ -210,12 +299,6 @@ def extract_exif_datetime(file_path: str) -> Optional[datetime]:
     """Extract datetime from EXIF metadata of an image file.
 
     Convenience function that extracts only the datetime tag.
-
-    Args:
-        file_path: Path to the image file
-
-    Returns:
-        datetime object if found, None otherwise
     """
     result = extract_exif(file_path, [ExifTagName.DATETIME])
     return result.get(ExifTagName.DATETIME.value)
@@ -225,12 +308,6 @@ def extract_exif_model(file_path: str) -> Optional[str]:
     """Extract camera model from EXIF metadata of an image file.
 
     Convenience function that extracts only the model tag.
-
-    Args:
-        file_path: Path to the image file
-
-    Returns:
-        Camera model string if found, None otherwise
     """
     result = extract_exif(file_path, [ExifTagName.MODEL])
     return result.get(ExifTagName.MODEL.value)

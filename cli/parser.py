@@ -249,6 +249,19 @@ def build_parser() -> argparse.ArgumentParser:
         "file",
         help="Path to the image file to inspect",
     )
+    p_info.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        dest="all_exif",
+        help="Include full EXIF metadata (all IFDs and image info fields)",
+    )
+    p_info.add_argument(
+        "-j",
+        "--json",
+        action="store_true",
+        help="Output full metadata as JSON (machine-readable)",
+    )
     p_info.set_defaults(func=cmd_info)
 
     # organize

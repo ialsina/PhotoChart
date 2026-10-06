@@ -78,6 +78,68 @@ def extract_metadata(file_path: str, logger: Logger = LOGGER) -> Dict[str, Any]:
     return metadata
 
 
+def _raw_metadata_from_rawpy_object(raw: Any) -> Dict[str, Any]:
+    """Build a metadata dict from an opened ``rawpy.RawPy`` instance.
+
+    Only uses attributes documented in the rawpy API; skips missing fields so
+    newer/older rawpy builds do not break extraction.
+    """
+    raw_metadata: Dict[str, Any] = {}
+
+    if hasattr(raw, "raw_type"):
+        raw_metadata["raw_type"] = str(raw.raw_type)
+    if hasattr(raw, "num_colors"):
+        raw_metadata["num_colors"] = raw.num_colors
+
+    if hasattr(raw, "sizes"):
+        sizes = raw.sizes
+        raw_metadata["sizes"] = {
+            "raw_size": {
+                "width": sizes.raw_width,
+                "height": sizes.raw_height,
+            },
+            "top_margin": sizes.top_margin,
+            "left_margin": sizes.left_margin,
+            "iwidth": sizes.iwidth,
+            "iheight": sizes.iheight,
+            "pixel_aspect": sizes.pixel_aspect,
+        }
+
+    if hasattr(raw, "color_desc") and raw.color_desc:
+        color_desc = raw.color_desc
+        if isinstance(color_desc, bytes):
+            raw_metadata["color_desc"] = color_desc.decode("utf-8", errors="ignore")
+        else:
+            raw_metadata["color_desc"] = str(color_desc)
+
+    if hasattr(raw, "camera_whitebalance"):
+        raw_metadata["camera_whitebalance"] = list(raw.camera_whitebalance)
+
+    if hasattr(raw, "color_matrix"):
+        matrix = raw.color_matrix
+        if hasattr(matrix, "tolist"):
+            raw_metadata["color_matrix"] = matrix.tolist()
+        else:
+            raw_metadata["color_matrix"] = matrix
+
+    if hasattr(raw, "white_level"):
+        raw_metadata["white_level"] = raw.white_level
+
+    if hasattr(raw, "extract_thumb"):
+        try:
+            thumb = raw.extract_thumb()
+            raw_metadata["thumbnail"] = {
+                "format": str(thumb.format),
+                "width": thumb.width,
+                "height": thumb.height,
+                "size": len(thumb.data) if thumb.data else 0,
+            }
+        except Exception:
+            pass
+
+    return raw_metadata
+
+
 def _extract_raw_metadata(file_path: str, logger: Logger = LOGGER) -> Dict[str, Any]:
     """Extract metadata from RAW image files using rawpy.
 
@@ -88,64 +150,18 @@ def _extract_raw_metadata(file_path: str, logger: Logger = LOGGER) -> Dict[str, 
     Returns:
         Dictionary containing RAW-specific metadata, or empty dict if extraction fails
     """
-    raw_metadata: Dict[str, Any] = {}
-
     try:
         import rawpy
 
         with rawpy.imread(file_path) as raw:
-            # Extract RAW metadata
-            raw_metadata["color_space"] = str(raw.color_space)
-            raw_metadata["num_colors"] = raw.num_colors
-            raw_metadata["sizes"] = {
-                "raw_size": {
-                    "width": raw.sizes.raw_width,
-                    "height": raw.sizes.raw_height,
-                },
-                "top_margin": raw.sizes.top_margin,
-                "left_margin": raw.sizes.left_margin,
-                "iwidth": raw.sizes.iwidth,
-                "iheight": raw.sizes.iheight,
-                "pixel_aspect": raw.sizes.pixel_aspect,
-            }
-
-            # Extract color description
-            if hasattr(raw, "color_desc"):
-                raw_metadata["color_desc"] = raw.color_desc.decode(
-                    "utf-8", errors="ignore"
-                )
-
-            # Extract camera white balance
-            if hasattr(raw, "camera_whitebalance"):
-                raw_metadata["camera_whitebalance"] = list(raw.camera_whitebalance)
-
-            # Extract camera color matrix
-            if hasattr(raw, "camera_color_matrix"):
-                raw_metadata["camera_color_matrix"] = raw.camera_color_matrix.tolist()
-
-            # Extract EXIF data from RAW file
-            if hasattr(raw, "extract_thumb"):
-                try:
-                    thumb = raw.extract_thumb()
-                    raw_metadata["thumbnail"] = {
-                        "format": str(thumb.format),
-                        "width": thumb.width,
-                        "height": thumb.height,
-                        "size": len(thumb.data) if thumb.data else 0,
-                    }
-                except Exception:
-                    pass
-
-            # Try to get additional metadata from rawpy
-            if hasattr(raw, "metadata"):
-                raw_metadata["has_metadata"] = True
+            return _raw_metadata_from_rawpy_object(raw)
 
     except ImportError:
         logger.debug("rawpy not available for RAW metadata extraction")
     except Exception as exc:
         logger.warning("Failed to extract RAW metadata from %s: %s", file_path, exc)
 
-    return raw_metadata
+    return {}
 
 
 def _extract_pil_metadata(file_path: str, logger: Logger = LOGGER) -> Dict[str, Any]:

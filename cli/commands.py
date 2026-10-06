@@ -28,6 +28,7 @@ except Exception:  # pragma: no cover
     HAS_RICH = False
     _console = None
 
+from photochart.imaging.exif import extract_exif
 from photochart.imaging.extract import extract_metadata
 from photochart.media.resolution import get_resolution_presets
 
@@ -353,6 +354,12 @@ def cmd_list_resolutions(args: argparse.Namespace) -> int:
     return 0
 
 
+def _metadata_json_default(obj: object) -> str:
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    return str(obj)
+
+
 def cmd_info(args: argparse.Namespace) -> int:
     """Display metadata for an image file."""
     file_path = args.file
@@ -362,8 +369,15 @@ def cmd_info(args: argparse.Namespace) -> int:
         print(f"Error: File does not exist: {file_path}", file=sys.stderr)
         return 1
 
-    # Extract metadata
     metadata = extract_metadata(file_path)
+    if getattr(args, "all_exif", False):
+        metadata["exif"] = extract_exif(file_path, full=True)
+    else:
+        metadata["exif"] = extract_exif(file_path)
+
+    if getattr(args, "json", False):
+        print(json.dumps(metadata, default=_metadata_json_default, sort_keys=True))
+        return 0
 
     if not HAS_RICH:
         # Plain text output

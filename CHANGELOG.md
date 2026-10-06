@@ -2,6 +2,13 @@
 
 All notable changes to PhotoChart are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- ``extract_exif(..., full=True)`` for multi-IFD EXIF extraction; ``pchart info
+  --all`` / ``-a`` and machine-readable ``pchart info --json`` / ``-j``.
+
 ## [v0.4.0] - 2026-10-05
 
 ### Added
