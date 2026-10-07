@@ -243,6 +243,67 @@ class Photograph(models.Model):
     def compute_hash_from_file(self, file_path):
         return self.compute_checksum_from_file(file_path)
 
+    def repair_from_file(
+        self, file_path, resolution=None, store_thumbnail=True
+    ) -> bool:
+        """Re-attempt checksum, thumbnail, and metadata from a source file on disk.
+
+        Clears ``has_errors`` at the start so a prior flag does not block retry.
+        On success (no ``has_errors`` after repair steps), the flag stays false.
+
+        Args:
+            file_path: Absolute or resolvable path to the original image file.
+            resolution: Optional thumbnail resolution (preset name or WxH).
+            store_thumbnail: When True and no thumbnail exists, call
+                :meth:`get_image_from_file`.
+
+        Returns:
+            True if ``has_errors`` is false after repair, False otherwise.
+        """
+        if not file_path or not os.path.exists(file_path):
+            self.has_errors = True
+            self.save(update_fields=["has_errors"])
+            return False
+
+        self.has_errors = False
+        self.save(update_fields=["has_errors"])
+
+        if not self.checksum:
+            self.compute_checksum_from_file(file_path)
+
+        if store_thumbnail and not self.thumbnail:
+            self.get_image_from_file(file_path, resolution=resolution)
+
+        if not self.time or not self.model:
+            try:
+                from photochart.imaging.exif import ExifTagName, extract_exif
+
+                exif_data = extract_exif(
+                    file_path, [ExifTagName.DATETIME, ExifTagName.MODEL]
+                )
+                if exif_data:
+                    update_fields = []
+                    if not self.time and exif_data.get("datetime"):
+                        exif_time = exif_data["datetime"]
+                        self.time = (
+                            timezone.make_aware(exif_time)
+                            if timezone.is_naive(exif_time)
+                            else exif_time
+                        )
+                        update_fields.append("time")
+                    if not self.model and exif_data.get("model"):
+                        self.model = exif_data["model"]
+                        update_fields.append("model")
+                    if update_fields:
+                        self.save(update_fields=update_fields)
+                elif not self.time or not self.model:
+                    self._extract_exif_data(file_path)
+            except Exception:
+                self._extract_exif_data(file_path)
+
+        self.refresh_from_db()
+        return not self.has_errors
+
     def _generate_timestamp_filename(self, original_file_path, extension=None):
         """Generate a timestamp-based filename to avoid clashes.
 
@@ -885,6 +946,14 @@ class IngestJob(models.Model):
         help_text=(
             "Do not add new catalog entries; retry thumbnail storage for "
             "existing PhotoPath rows when the photograph has no thumbnail."
+        ),
+    )
+    fix_errors = models.BooleanField(
+        default=False,
+        help_text=(
+            "Do not add new catalog entries; re-attempt checksum, thumbnail, "
+            "and metadata repair for catalogued files whose photograph has "
+            "has_errors."
         ),
     )
     raw_only = models.BooleanField(

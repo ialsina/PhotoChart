@@ -146,6 +146,7 @@ def run_ingest_local(
     resolution: Optional[str] = None,
     log_path: Optional[str] = None,
     retry_thumbnails: bool = False,
+    fix_errors: bool = False,
     raw_only: bool = False,
 ) -> dict:
     """Call ``ingest_photos`` directly in the current process.
@@ -170,6 +171,7 @@ def run_ingest_local(
         resolution=resolution,
         log_path=log_path,
         retry_thumbnails=retry_thumbnails,
+        fix_errors=fix_errors,
         raw_only=raw_only,
     )
 
@@ -192,6 +194,7 @@ def run_ingest_docker(
     project_name: Optional[str] = None,
     timeout: int = 3600,
     retry_thumbnails: bool = False,
+    fix_errors: bool = False,
     raw_only: bool = False,
 ) -> dict:
     """Spawn a one-shot ``docker compose run`` container that bind-mounts
@@ -266,6 +269,8 @@ def run_ingest_docker(
         cmd += ["--resolution", resolution]
     if retry_thumbnails:
         cmd += ["--retry-thumbnails"]
+    if fix_errors:
+        cmd += ["--fix-errors"]
     if raw_only:
         cmd += ["--raw"]
 
@@ -280,6 +285,8 @@ def run_ingest_docker(
         "checksums_calculated": 0,
         "images_stored": 0,
         "thumbnails_retried": 0,
+        "errors_repair_attempted": 0,
+        "errors_cleared": 0,
         "skipped_already_ingested": 0,
         "errors": [],
     }
@@ -361,6 +368,7 @@ def choose_and_run_ingest(
     resolution: Optional[str] = None,
     log_path: Optional[str] = None,
     retry_thumbnails: bool = False,
+    fix_errors: bool = False,
     raw_only: bool = False,
 ) -> dict:
     """Dispatch an ingest request to the local or Docker backend.
@@ -421,6 +429,8 @@ def choose_and_run_ingest(
             "checksums_calculated": 0,
             "images_stored": 0,
             "thumbnails_retried": 0,
+            "errors_repair_attempted": 0,
+            "errors_cleared": 0,
             "skipped_already_ingested": 0,
             "errors": [str(exc)],
         }
@@ -438,6 +448,7 @@ def choose_and_run_ingest(
             resolution=resolution,
             log_path=log_path,
             retry_thumbnails=retry_thumbnails,
+            fix_errors=fix_errors,
             raw_only=raw_only,
         )
 
@@ -450,6 +461,8 @@ def choose_and_run_ingest(
             "checksums_calculated": 0,
             "images_stored": 0,
             "thumbnails_retried": 0,
+            "errors_repair_attempted": 0,
+            "errors_cleared": 0,
             "skipped_already_ingested": 0,
             "errors": [
                 f"Path {path!r} does not exist in the current container namespace "
@@ -467,6 +480,8 @@ def choose_and_run_ingest(
             "checksums_calculated": 0,
             "images_stored": 0,
             "thumbnails_retried": 0,
+            "errors_repair_attempted": 0,
+            "errors_cleared": 0,
             "skipped_already_ingested": 0,
             "errors": [
                 f"Path {path!r} does not exist locally and "
@@ -491,5 +506,6 @@ def choose_and_run_ingest(
         store_images=store_images,
         resolution=resolution,
         retry_thumbnails=retry_thumbnails,
+        fix_errors=fix_errors,
         raw_only=raw_only,
     )

@@ -39,6 +39,7 @@ class IngestJobModelTest(TestCase):
         assert job.calculate_checksum is True
         assert job.store_images is True
         assert job.retry_thumbnails is False
+        assert job.fix_errors is False
         assert job.count == 0
         assert job.error == ""
 
@@ -236,6 +237,7 @@ class IngestJobTaskTest(TestCase):
         assert call_kwargs["calculate_checksum"] is False
         assert call_kwargs["store_images"] is False
         assert call_kwargs["retry_thumbnails"] is False
+        assert call_kwargs["fix_errors"] is False
         assert call_kwargs["raw_only"] is False
 
     def test_task_passes_raw_only_to_runner(self) -> None:
@@ -279,6 +281,29 @@ class IngestJobTaskTest(TestCase):
 
         call_kwargs = mock_runner.call_args.kwargs
         assert call_kwargs["retry_thumbnails"] is True
+
+    def test_task_passes_fix_errors_to_runner(self) -> None:
+        job = IngestJob.objects.create(
+            path="/photos/Photos",
+            fix_errors=True,
+        )
+        with patch(
+            "photochart.ingest.runner.choose_and_run_ingest",
+            return_value={
+                "success": True,
+                "count": 0,
+                "checksums_calculated": 0,
+                "images_stored": 0,
+                "errors_repair_attempted": 1,
+                "errors_cleared": 1,
+                "errors": [],
+            },
+        ) as mock_runner:
+            from .tasks import run_ingest_job
+
+            run_ingest_job(job.pk)
+
+        assert mock_runner.call_args.kwargs["fix_errors"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -465,6 +490,205 @@ class IngestRetryThumbnailsTest(TestCase):
                     assert PhotoPath.objects.count() == 0
                     assert result["count"] == 0
                     assert result["success"] is True
+
+
+# ---------------------------------------------------------------------------
+# Ingest fix errors
+# ---------------------------------------------------------------------------
+
+
+class IngestFixErrorsTest(TestCase):
+    DEVICE = "test-device"
+
+    def _write_minimal_jpeg(self, directory: Path, name: str = "photo.jpg") -> Path:
+        jpeg = (
+            b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+            b"\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c"
+            b"\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c"
+            b"\x1c $.\x27 ,#\x1c\x1c(7),01444\x1f\x27=9=82<.342\xff\xc0\x00\x0b\x08"
+            b"\x00\x01\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01"
+            b"\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06"
+            b"\x07\x08\t\n\x0b\xff\xc4\x00\xb5\x10\x00\x02\x01\x03\x03\x02\x04\x03\x05"
+            b"\x05\x04\x04\x00\x00\x01}\x01\x02\x03\x00\x04\x11\x05\x12!1A\x06\x13Qa"
+            b'\x07"q\x142\x81\x91\xa1\x08#B\xb1\xc1\x15R\xd1\xf0$3br\x82\t\n\x16\x17'
+            b"\x18\x19\x1a%&'()*456789:CDEFGHIJSTUVWXYZcdefghijstuvwxyz\x83\x84\x85"
+            b"\x86\x87\x88\x89\x8a\x92\x93\x94\x95\x96\x97\x98\x99\x9a\xa2\xa3\xa4\xa5"
+            b"\xa6\xa7\xa8\xa9\xaa\xb2\xb3\xb4\xb5\xb6\xb7\xb8\xb9\xba\xc2\xc3\xc4\xc5"
+            b"\xc6\xc7\xc8\xc9\xca\xd2\xd3\xd4\xd5\xd6\xd7\xd8\xd9\xda\xe1\xe2\xe3\xe4"
+            b"\xe5\xe6\xe7\xe8\xe9\xea\xf1\xf2\xf3\xf4\xf5\xf6\xf7\xf8\xf9\xfa\xff\xda"
+            b"\x00\x08\x01\x01\x00\x00?\x00\xfb\xd5\x7f\xff\xd9"
+        )
+        path = directory / name
+        path.write_bytes(jpeg)
+        return path
+
+    @patch("photochart.ingest.photos.get_mount_point", return_value=None)
+    @patch("photochart.ingest.photos.get_device_name", return_value=DEVICE)
+    def test_fix_errors_invokes_repair_and_clears_flag(self, *_mocks) -> None:
+        from photochart.ingest.photos import ingest_photos
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with tempfile.TemporaryDirectory() as tmp:
+                with self.settings(MEDIA_ROOT=media_root):
+                    img = self._write_minimal_jpeg(Path(tmp))
+                    path_str = str(img.resolve())
+                    photograph = Photograph.objects.create(has_errors=True)
+                    PhotoPath.objects.create(
+                        path=path_str, device=self.DEVICE, photograph=photograph
+                    )
+
+                    with patch(
+                        "photograph.models.Photograph.repair_from_file",
+                        return_value=True,
+                    ) as mock_repair:
+                        result = ingest_photos(
+                            tmp,
+                            device=self.DEVICE,
+                            recursive=False,
+                            calculate_checksum=False,
+                            store_images=True,
+                            fix_errors=True,
+                        )
+
+                    mock_repair.assert_called_once()
+                    assert result["errors_repair_attempted"] == 1
+                    assert result["errors_cleared"] == 1
+                    assert PhotoPath.objects.count() == 1
+
+    @patch("photochart.ingest.photos.get_mount_point", return_value=None)
+    @patch("photochart.ingest.photos.get_device_name", return_value=DEVICE)
+    def test_fix_errors_skips_when_thumbnail_present(self, *_mocks) -> None:
+        from photochart.ingest.photos import ingest_photos
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with tempfile.TemporaryDirectory() as tmp:
+                with self.settings(MEDIA_ROOT=media_root):
+                    img = self._write_minimal_jpeg(Path(tmp))
+                    path_str = str(img.resolve())
+                    photograph = Photograph.objects.create(has_errors=True)
+                    photograph.thumbnail.save(
+                        "existing.jpg",
+                        SimpleUploadedFile("existing.jpg", b"thumb"),
+                        save=True,
+                    )
+                    PhotoPath.objects.create(
+                        path=path_str, device=self.DEVICE, photograph=photograph
+                    )
+
+                    with patch(
+                        "photograph.models.Photograph.repair_from_file",
+                        return_value=True,
+                    ) as mock_repair:
+                        result = ingest_photos(
+                            tmp,
+                            device=self.DEVICE,
+                            recursive=False,
+                            calculate_checksum=False,
+                            fix_errors=True,
+                            store_images=True,
+                        )
+
+                    mock_repair.assert_called_once()
+                    call_kwargs = mock_repair.call_args.kwargs
+                    assert call_kwargs["store_thumbnail"] is True
+                    assert result["errors_repair_attempted"] == 1
+
+    @patch("photochart.ingest.photos.get_mount_point", return_value=None)
+    @patch("photochart.ingest.photos.get_device_name", return_value=DEVICE)
+    def test_fix_errors_skips_not_in_catalog(self, *_mocks) -> None:
+        from photochart.ingest.photos import ingest_photos
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with tempfile.TemporaryDirectory() as tmp:
+                with self.settings(MEDIA_ROOT=media_root):
+                    self._write_minimal_jpeg(Path(tmp))
+                    result = ingest_photos(
+                        tmp,
+                        device=self.DEVICE,
+                        recursive=False,
+                        calculate_checksum=False,
+                        fix_errors=True,
+                    )
+
+                    assert result["errors_repair_attempted"] == 0
+
+    @patch("photochart.ingest.photos.get_mount_point", return_value=None)
+    @patch("photochart.ingest.photos.get_device_name", return_value=DEVICE)
+    def test_fix_errors_candidate_collection_uses_batched_db_lookup(
+        self, *_mocks
+    ) -> None:
+        from photochart.ingest.photos import collect_error_repair_candidates
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with tempfile.TemporaryDirectory() as tmp:
+                with self.settings(MEDIA_ROOT=media_root):
+                    tmp_path = Path(tmp)
+                    paths_on_disk = []
+                    for i in range(5):
+                        img = self._write_minimal_jpeg(tmp_path, f"p{i}.jpg")
+                        paths_on_disk.append(img)
+                    photograph = Photograph.objects.create(has_errors=True)
+                    PhotoPath.objects.create(
+                        path=str(paths_on_disk[0].resolve()),
+                        device=self.DEVICE,
+                        photograph=photograph,
+                    )
+
+                    with self.assertNumQueries(2):
+                        candidates = collect_error_repair_candidates(
+                            paths_on_disk,
+                            self.DEVICE,
+                            ingest_path=tmp,
+                        )
+
+                    assert len(candidates) == 1
+
+
+class PhotographRepairFromFileTest(TestCase):
+    def _write_minimal_jpeg(self, directory: Path) -> Path:
+        jpeg = (
+            b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+            b"\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c"
+            b"\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c"
+            b"\x1c $.\x27 ,#\x1c\x1c(7),01444\x1f\x27=9=82<.342\xff\xc0\x00\x0b\x08"
+            b"\x00\x01\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01"
+            b"\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06"
+            b"\x07\x08\t\n\x0b\xff\xc4\x00\xb5\x10\x00\x02\x01\x03\x03\x02\x04\x03\x05"
+            b"\x05\x04\x04\x00\x00\x01}\x01\x02\x03\x00\x04\x11\x05\x12!1A\x06\x13Qa"
+            b'\x07"q\x142\x81\x91\xa1\x08#B\xb1\xc1\x15R\xd1\xf0$3br\x82\t\n\x16\x17'
+            b"\x18\x19\x1a%&'()*456789:CDEFGHIJSTUVWXYZcdefghijstuvwxyz\x83\x84\x85"
+            b"\x86\x87\x88\x89\x8a\x92\x93\x94\x95\x96\x97\x98\x99\x9a\xa2\xa3\xa4\xa5"
+            b"\xa6\xa7\xa8\xa9\xaa\xb2\xb3\xb4\xb5\xb6\xb7\xb8\xb9\xba\xc2\xc3\xc4\xc5"
+            b"\xc6\xc7\xc8\xc9\xca\xd2\xd3\xd4\xd5\xd6\xd7\xd8\xd9\xda\xe1\xe2\xe3\xe4"
+            b"\xe5\xe6\xe7\xe8\xe9\xea\xf1\xf2\xf3\xf4\xf5\xf6\xf7\xf8\xf9\xfa\xff\xda"
+            b"\x00\x08\x01\x01\x00\x00?\x00\xfb\xd5\x7f\xff\xd9"
+        )
+        path = directory / "photo.jpg"
+        path.write_bytes(jpeg)
+        return path
+
+    @patch("photograph.models.Photograph.get_image_from_file", return_value=True)
+    @patch("photograph.models.Photograph.compute_checksum_from_file")
+    def test_repair_clears_has_errors_when_steps_succeed(
+        self, mock_checksum, mock_thumb
+    ) -> None:
+        mock_checksum.return_value = "a" * 32
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with tempfile.TemporaryDirectory() as tmp:
+                with self.settings(MEDIA_ROOT=media_root):
+                    img = self._write_minimal_jpeg(Path(tmp))
+                    photograph = Photograph.objects.create(has_errors=True)
+
+                    ok = photograph.repair_from_file(
+                        str(img.resolve()), store_thumbnail=True
+                    )
+
+                    assert ok is True
+                    photograph.refresh_from_db()
+                    assert photograph.has_errors is False
+                    mock_checksum.assert_called_once()
+                    mock_thumb.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

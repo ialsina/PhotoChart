@@ -20,6 +20,9 @@ All notable changes to PhotoChart are documented in this file.
 - Shared ``LazyThumbnail`` component for Photographs and Photo Paths: loads
   thumbnails when cards are near the viewport, caps concurrent ``/media/``
   fetches, and retries once on transient failures.
+- ``pchart ingest --fix-errors`` (and ``IngestJob.fix_errors``) to re-attempt
+  checksum, thumbnail, and metadata repair for catalogued files whose
+  photograph is flagged ``has_errors``, without adding new catalog rows.
 
 ### Changed
 

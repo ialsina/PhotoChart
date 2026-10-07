@@ -185,6 +185,7 @@ class IngestJobSerializer(serializers.ModelSerializer):
             "store_images",
             "resolution",
             "retry_thumbnails",
+            "fix_errors",
             "raw_only",
             "status",
             "task_id",
@@ -217,6 +218,13 @@ class IngestJobSerializer(serializers.ModelSerializer):
         if obj.requested_by:
             return obj.requested_by.username
         return None
+
+    def validate(self, attrs):
+        if attrs.get("retry_thumbnails") and attrs.get("fix_errors"):
+            raise serializers.ValidationError(
+                "retry_thumbnails and fix_errors cannot both be true."
+            )
+        return attrs
 
     def validate_path(self, value: str) -> str:
         """Reject obviously dangerous or empty paths early (full validation is

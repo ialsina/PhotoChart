@@ -86,8 +86,8 @@ Catalog ingestion
    pchart ingest /data/Photos
 
 Important options include ``--no-checksum``, ``--no-recursive``,
-``--no-store-images``, ``--resolution``, ``--log``, ``--retry-thumbnails``, and
-``--raw`` (``-r``).
+``--no-store-images``, ``--resolution``, ``--log``, ``--retry-thumbnails``,
+``--fix-errors``, and ``--raw`` (``-r``).
 Ingestion records files and thumbnails in Django but does not classify or move
 the source.
 
@@ -101,7 +101,13 @@ card holds paired RAW+JPEG folders and you only want RAW in the catalog.
 add new catalog entries. It builds a work list of catalogued files (same stored
 path and device label) whose photograph has no thumbnail; only those files are
 processed and reflected in the progress bar. ``--no-store-images`` is ignored
-in this mode.
+in this mode. ``--retry-thumbnails`` and ``--fix-errors`` cannot be used together.
+
+``--fix-errors`` uses the same scan-and-match rules but selects catalogued files
+whose photograph is flagged ``has_errors``. For each candidate it re-reads the
+file on disk to fill a missing checksum or thumbnail (thumbnail retry only when
+thumbnails are stored) and refresh EXIF metadata, clearing ``has_errors`` when
+repair succeeds. Files that are not yet in the catalog are skipped.
 
 Resize stored thumbnails
 ------------------------

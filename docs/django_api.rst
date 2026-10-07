@@ -91,6 +91,7 @@ Request body (all fields except ``path`` are optional):
      "store_images":       true,
      "resolution":         "",
      "retry_thumbnails":   false,
+     "fix_errors":         false,
      "raw_only":           false
    }
 
@@ -102,6 +103,11 @@ When ``retry_thumbnails`` is true, no new ``PhotoPath`` rows are created; the
 job only attempts thumbnail storage for files already catalogued at the same
 path and device when the photograph has no thumbnail. Thumbnail storage is
 implied (``store_images`` is treated as true).
+
+When ``fix_errors`` is true, no new ``PhotoPath`` rows are created; the job
+re-attempts checksum, thumbnail (when ``store_images`` is true), and metadata
+repair from disk for catalogued files whose photograph has ``has_errors``.
+``retry_thumbnails`` and ``fix_errors`` must not both be true on the same job.
 
 Response (202 Accepted):
 

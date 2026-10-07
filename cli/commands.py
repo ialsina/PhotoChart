@@ -72,6 +72,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
             return 1
 
     retry_thumbnails = getattr(args, "retry_thumbnails", False)
+    fix_errors = getattr(args, "fix_errors", False)
     store_images = getattr(args, "store_images", True)
     if retry_thumbnails:
         store_images = True
@@ -87,6 +88,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         resolution=getattr(args, "resolution", None),
         log_path=log_path,
         retry_thumbnails=retry_thumbnails,
+        fix_errors=fix_errors,
         raw_only=getattr(args, "raw_only", False),
     )
 
@@ -97,7 +99,16 @@ def cmd_ingest(args: argparse.Namespace) -> int:
             print(f"Detailed error information logged to: {log_path}", file=sys.stderr)
         return 1
 
-    if retry_thumbnails:
+    if fix_errors:
+        attempted = result.get("errors_repair_attempted", 0)
+        cleared = result.get("errors_cleared", 0)
+        print(f"Attempted error repair for {attempted} photo(s) from '{args.path}'.")
+        print(f"Cleared errors for {cleared} photograph(s).")
+        if result.get("checksums_calculated", 0) > 0:
+            print(f"Calculated {result['checksums_calculated']} checksum(s).")
+        if result.get("images_stored", 0) > 0:
+            print(f"Stored {result['images_stored']} image(s) in database.")
+    elif retry_thumbnails:
         retried = result.get("thumbnails_retried", 0)
         print(f"Retried thumbnails for {retried} photo(s) from '{args.path}'.")
         if result.get("images_stored", 0) > 0:

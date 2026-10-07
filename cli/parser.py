@@ -158,7 +158,8 @@ def build_parser() -> argparse.ArgumentParser:
             "Defaults to LOG_DIR from the environment when omitted."
         ),
     )
-    p_ing.add_argument(
+    ingest_mode = p_ing.add_mutually_exclusive_group()
+    ingest_mode.add_argument(
         "--retry-thumbnails",
         action="store_true",
         dest="retry_thumbnails",
@@ -168,6 +169,17 @@ def build_parser() -> argparse.ArgumentParser:
             "catalogued (same path and device), retry storing a thumbnail when "
             "the photograph has none. Implies storing thumbnails (--no-store-images "
             "is ignored)."
+        ),
+    )
+    ingest_mode.add_argument(
+        "--fix-errors",
+        action="store_true",
+        dest="fix_errors",
+        default=False,
+        help=(
+            "Do not add new catalog entries. For catalogued files whose "
+            "photograph is flagged has_errors, re-attempt checksum, thumbnail "
+            "(unless --no-store-images), and metadata repair from disk."
         ),
     )
     p_ing.add_argument(

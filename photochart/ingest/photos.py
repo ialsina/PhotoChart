@@ -358,6 +358,47 @@ def collect_thumbnail_retry_candidates(
     return candidates
 
 
+def collect_error_repair_candidates(
+    image_files: List[Path],
+    device: str,
+    *,
+    ingest_path: str,
+    mount_table: Optional[List[str]] = None,
+    ingest_mount: Optional[str] = None,
+    media_root: Optional[Path] = None,
+) -> List[Tuple[Path, Any]]:
+    """Return catalogued on-disk files whose linked photograph has ``has_errors``."""
+    if mount_table is None:
+        mount_table = load_mount_table()
+    eligible: List[Tuple[Path, str]] = []
+    for file_path in image_files:
+        if is_path_in_media_root(file_path, media_root=media_root):
+            continue
+        eligible.append(
+            (
+                file_path,
+                stored_path_for_file(file_path, mount_table=mount_table),
+            )
+        )
+
+    if not eligible:
+        return []
+
+    stored_paths = [path_to_store for _, path_to_store in eligible]
+    path_prefix = _stored_path_prefix_for_ingest(ingest_path, mount_table, ingest_mount)
+    by_path = _fetch_photo_paths_by_stored_paths(device, stored_paths, path_prefix)
+
+    candidates: List[Tuple[Path, Any]] = []
+    for file_path, path_to_store in eligible:
+        existing_path = by_path.get(path_to_store)
+        if not existing_path:
+            continue
+        photograph = existing_path.photograph
+        if photograph and photograph.has_errors:
+            candidates.append((file_path, existing_path))
+    return candidates
+
+
 def filter_uningested_image_files(
     image_files: List[Path],
     device: str,
@@ -409,6 +450,7 @@ def ingest_photos(
     store_images: bool = False,
     log_path: Optional[str] = None,
     retry_thumbnails: bool = False,
+    fix_errors: bool = False,
     raw_only: bool = False,
 ) -> Dict[str, Any]:
     """Ingest photos from a directory and store them in the database.
@@ -440,6 +482,9 @@ def ingest_photos(
         retry_thumbnails: If True, do not create new catalog rows; for files that
             already exist as PhotoPath (same path and device), attempt thumbnail
             storage when the linked Photograph has no thumbnail.
+        fix_errors: If True, do not create new catalog rows; for catalogued files
+            whose photograph has ``has_errors``, re-attempt checksum, thumbnail,
+            and metadata repair from disk.
         raw_only: When True, ingest only camera RAW file extensions.
 
     Returns:
@@ -449,6 +494,8 @@ def ingest_photos(
             - checksums_calculated: number of checksums calculated
             - images_stored: number of images stored (if store_images=True)
             - thumbnails_retried: number of existing catalog entries thumbnail-retry was attempted on
+            - errors_repair_attempted: fix_errors mode repair attempts
+            - errors_cleared: fix_errors mode photographs cleared of has_errors
             - skipped_already_ingested: files already in the catalog for this device (not processed)
             - errors: list of error messages
     """
@@ -461,6 +508,8 @@ def ingest_photos(
         "checksums_calculated": 0,
         "images_stored": 0,
         "thumbnails_retried": 0,
+        "errors_repair_attempted": 0,
+        "errors_cleared": 0,
         "skipped_already_ingested": 0,
         "errors": [],
     }
@@ -479,7 +528,8 @@ def ingest_photos(
         logger.info(
             f"Parameters: resolution={resolution}, calculate_checksum={calculate_checksum}, "
             f"recursive={recursive}, store_images={store_images}, "
-            f"retry_thumbnails={retry_thumbnails}, raw_only={raw_only}"
+            f"retry_thumbnails={retry_thumbnails}, fix_errors={fix_errors}, "
+            f"raw_only={raw_only}"
         )
 
     try:
@@ -517,6 +567,108 @@ def ingest_photos(
             else:
                 result["errors"].append(f"No image files found in: {path}")
             result["success"] = False
+            return result
+
+        if fix_errors:
+            repair_candidates = collect_error_repair_candidates(
+                image_files,
+                device,
+                ingest_path=path,
+                mount_table=mount_table,
+                ingest_mount=ingest_mount,
+                media_root=media_root,
+            )
+            if logger:
+                logger.info(
+                    "Error repair: %s catalogued file(s) with has_errors "
+                    "(of %s image file(s) scanned)",
+                    len(repair_candidates),
+                    len(image_files),
+                )
+            resolution_arg = (
+                resolution_tuple if resolution_tuple is not None else resolution
+            )
+            with tqdm(
+                total=len(repair_candidates),
+                desc="Fixing errors",
+                unit="file",
+                unit_scale=False,
+                dynamic_ncols=True,
+            ) as pbar:
+                for file_path, existing_path in repair_candidates:
+                    file_path_str = str(file_path.resolve())
+                    photograph = existing_path.photograph
+                    if not photograph:
+                        pbar.update(1)
+                        continue
+                    try:
+                        with transaction.atomic():
+                            pbar.set_postfix_str(
+                                os.path.basename(file_path_str)[:50], refresh=False
+                            )
+                            result["errors_repair_attempted"] += 1
+                            had_checksum = bool(photograph.checksum)
+                            had_thumbnail = bool(photograph.thumbnail)
+                            try:
+                                cleared = photograph.repair_from_file(
+                                    file_path_str,
+                                    resolution=resolution_arg,
+                                    store_thumbnail=store_images,
+                                )
+                                photograph.refresh_from_db()
+                                if not had_checksum and photograph.checksum:
+                                    result["checksums_calculated"] += 1
+                                if not had_thumbnail and photograph.thumbnail:
+                                    result["images_stored"] += 1
+                                if cleared:
+                                    result["errors_cleared"] += 1
+                                else:
+                                    error_msg = (
+                                        f"Error repair failed for {file_path_str}: "
+                                        f"Photograph id={photograph.id} still has_errors."
+                                    )
+                                    result["errors"].append(error_msg)
+                                    if logger:
+                                        logger.warning(
+                                            "Error repair failed for file: "
+                                            f"{file_path_str}",
+                                            extra={
+                                                "file_path": file_path_str,
+                                                "photograph_id": photograph.id,
+                                            },
+                                        )
+                            except Exception as repair_exc:
+                                error_msg = (
+                                    f"Error repairing {file_path_str}: {repair_exc}"
+                                )
+                                result["errors"].append(error_msg)
+                                if logger:
+                                    logger.error(
+                                        f"Error repair exception for file: {file_path_str}",
+                                        exc_info=True,
+                                        extra={"file_path": file_path_str},
+                                    )
+                    except Exception as e:
+                        error_msg = f"Error processing {file_path}: {str(e)}"
+                        result["errors"].append(error_msg)
+                        if logger:
+                            logger.error(
+                                f"Error processing file: {file_path}",
+                                exc_info=True,
+                                extra={"file_path": str(file_path)},
+                            )
+                    pbar.update(1)
+
+            if result["errors"]:
+                if result["errors_cleared"] == 0:
+                    result["success"] = False
+
+            if logger:
+                logger.info(
+                    f"Ingestion completed. Success: {result['success']}, "
+                    f"Errors cleared: {result['errors_cleared']}, "
+                    f"Errors: {len(result['errors'])}"
+                )
             return result
 
         if retry_thumbnails:

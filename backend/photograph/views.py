@@ -488,7 +488,8 @@ class IngestJobViewSet(viewsets.ReadOnlyModelViewSet):
           "calculate_checksum": true,
           "store_images":       true,
           "resolution":         "",
-          "retry_thumbnails":   false
+          "retry_thumbnails":   false,
+          "fix_errors":         false
         }
 
     The job is queued asynchronously via Celery.  Poll the returned ``id``
