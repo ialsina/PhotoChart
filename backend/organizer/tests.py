@@ -55,6 +55,21 @@ class OrganizerModelTests(TestCase):
         assert response.status_code == 200
         assert b"photochart_organizer_jobs" in response.content
 
+    @override_settings(DEBUG=True)
+    def test_protected_media_serves_file_when_debug(self):
+        user = User.objects.create_user(username="mediauser", password="pass")
+        with TemporaryDirectory() as tmp:
+            media_root = Path(tmp)
+            relative = Path("thumbnails") / "sample.jpg"
+            file_path = media_root / relative
+            file_path.parent.mkdir(parents=True)
+            file_path.write_bytes(b"thumbnail-bytes")
+            with override_settings(MEDIA_ROOT=media_root):
+                self.client.force_login(user)
+                response = self.client.get(f"/media/{relative.as_posix()}")
+                assert response.status_code == 200
+                assert response.content == b"thumbnail-bytes"
+
     def test_job_keeps_operation_audit(self):
         configuration = OrganizerConfiguration.objects.create(
             name="local",

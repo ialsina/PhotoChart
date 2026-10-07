@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { api } from "../api";
 import type { Photograph, Album } from "../types";
 import { PhotographPathsDropdown } from "./PhotographPathsDropdown";
+import { LazyThumbnail } from "./LazyThumbnail";
 import { photographErrorTooltip } from "../utils/photographErrors";
 
 type SortMode = "id" | "date";
@@ -639,7 +640,7 @@ export function Photographs() {
                   onClick={() => togglePhotoSelection(photo.id)}
                 >
                 {photo.image_url ? (
-                  <img
+                  <LazyThumbnail
                     src={photo.image_url}
                     alt={photo.checksum || `Photo ${photo.id}`}
                     className="photograph-image"

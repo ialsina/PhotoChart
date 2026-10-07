@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { api } from "../api";
 import type { PhotoPath } from "../types";
+import { LazyThumbnail } from "./LazyThumbnail";
 
 type NavigationPath = {
   type: "device" | "segment";
@@ -546,7 +547,7 @@ export function PhotoPaths() {
                   <div key={path.id} className="path-card">
                     {path.photograph_image_url && (
                       <div className="path-image-container">
-                        <img
+                        <LazyThumbnail
                           src={path.photograph_image_url}
                           alt={`Photo for path ${path.id}`}
                           className="path-image"
@@ -695,7 +696,7 @@ export function PhotoPaths() {
                   <div key={path.id} className="path-card">
                     {path.photograph_image_url && (
                       <div className="path-image-container">
-                        <img
+                        <LazyThumbnail
                           src={path.photograph_image_url}
                           alt={`Photo for path ${path.id}`}
                           className="path-image"

@@ -17,6 +17,25 @@ All notable changes to PhotoChart are documented in this file.
 - Photographs view: cards flagged with ``has_errors`` show the ID and checksum
   in red; hovering either field shows a tooltip explaining the flag and likely
   causes inferred from missing thumbnail or checksum.
+- Shared ``LazyThumbnail`` component for Photographs and Photo Paths: loads
+  thumbnails when cards are near the viewport, caps concurrent ``/media/``
+  fetches, and retries once on transient failures.
+
+### Changed
+
+- Gateway ``deploy/nginx.conf``: ``limit_req`` applies to API, admin, health,
+  metrics, and static paths only; ``/media/`` is proxied to Django without the
+  API rate limit so large day views do not hit nginx **503** responses after the
+  first burst of thumbnails.
+- ``protected_media`` in ``DEBUG`` serves authenticated thumbnail bytes via
+  ``FileResponse`` instead of an nginx-only ``X-Accel-Redirect``, so local Vite
+  dev can display catalog images reliably.
+
+### Fixed
+
+- Browsing a day with many photographs no longer opens an unbounded parallel
+  storm of ``/media/`` requests that could overwhelm ``runserver`` or the Vite
+  proxy and surface as failed thumbnail loads.
 
 ## [v0.4.0] - 2026-10-05
 

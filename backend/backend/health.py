@@ -1,6 +1,7 @@
 """Liveness, readiness, metrics, and protected media endpoints."""
 
 import hmac
+import mimetypes
 import time
 from pathlib import PurePosixPath
 from urllib.parse import quote
@@ -8,9 +9,10 @@ from urllib.parse import quote
 import redis
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.core.files.storage import default_storage
 from django.db import connection
 from django.db.models import Count
-from django.http import Http404, HttpResponse, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.views.decorators.http import require_GET
 from prometheus_client import CollectorRegistry, Gauge, generate_latest
 
@@ -85,8 +87,15 @@ def protected_media(request, path):
     candidate = PurePosixPath(path)
     if candidate.is_absolute() or ".." in candidate.parts:
         raise Http404
+    storage_path = candidate.as_posix()
+    if settings.DEBUG:
+        if not default_storage.exists(storage_path):
+            raise Http404
+        content_type, _ = mimetypes.guess_type(storage_path)
+        return FileResponse(
+            default_storage.open(storage_path, "rb"),
+            content_type=content_type or "application/octet-stream",
+        )
     response = HttpResponse()
-    response["X-Accel-Redirect"] = "/_protected_media/" + quote(
-        candidate.as_posix(), safe="/"
-    )
+    response["X-Accel-Redirect"] = "/_protected_media/" + quote(storage_path, safe="/")
     return response
