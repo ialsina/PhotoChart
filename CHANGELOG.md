@@ -14,6 +14,9 @@ All notable changes to PhotoChart are documented in this file.
 - Photographs view: each card's Paths count opens a dropdown of linked file
   paths (middle-truncated for display); clicking a path copies it to the
   clipboard and shows a short confirmation message.
+- Photographs view: cards flagged with ``has_errors`` show the ID and checksum
+  in red; hovering either field shows a tooltip explaining the flag and likely
+  causes inferred from missing thumbnail or checksum.
 
 ## [v0.4.0] - 2026-10-05
 

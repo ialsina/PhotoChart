@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { api } from "../api";
 import type { Photograph, Album } from "../types";
 import { PhotographPathsDropdown } from "./PhotographPathsDropdown";
+import { photographErrorTooltip } from "../utils/photographErrors";
 
 type SortMode = "id" | "date";
 type NavigationPath = {
@@ -629,7 +630,9 @@ export function Photographs() {
             <p className="empty-state">No photographs found.</p>
           ) : (
             <div className="photographs-grid">
-              {sortedPhotographs.map((photo) => (
+              {sortedPhotographs.map((photo) => {
+                const errorTooltip = photographErrorTooltip(photo);
+                return (
                 <div
                   key={photo.id}
                   className={`photograph-card ${selectedPhotos.has(photo.id) ? "selected" : ""}`}
@@ -647,7 +650,10 @@ export function Photographs() {
                   </div>
                 )}
                 <div className="photograph-info">
-                  <div className={`photograph-id ${photo.has_errors ? 'has-errors' : ''}`}>
+                  <div
+                    className={`photograph-id ${photo.has_errors ? "has-errors" : ""}`}
+                    title={errorTooltip || undefined}
+                  >
                     ID: {photo.id}
                   </div>
                   {(() => {
@@ -679,7 +685,10 @@ export function Photographs() {
                     {photo.checksum ? (
                       <div>
                         <span className="field-label">Checksum:</span>{" "}
-                        <code className={photo.has_errors ? 'has-errors' : ''}>
+                        <code
+                          className={photo.has_errors ? "has-errors" : ""}
+                          title={errorTooltip || undefined}
+                        >
                           {photo.checksum.substring(0, 16)}...
                         </code>
                       </div>
@@ -718,7 +727,8 @@ export function Photographs() {
                   </div>
                 </div>
               </div>
-              ))}
+              );
+              })}
             </div>
           )}
         </>

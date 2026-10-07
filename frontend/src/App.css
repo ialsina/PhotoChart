@@ -451,6 +451,7 @@
 
 .photograph-id.has-errors {
   color: #ff4444;
+  cursor: help;
 }
 
 .photograph-checksum {
@@ -471,6 +472,7 @@
 
 .photograph-checksum code.has-errors {
   color: #ff4444;
+  cursor: help;
 }
 
 .photograph-checksum .no-checksum {
