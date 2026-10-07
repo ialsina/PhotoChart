@@ -28,7 +28,7 @@ except Exception:  # pragma: no cover
     HAS_RICH = False
     _console = None
 
-from photochart.imaging.exif import extract_exif
+from photochart.imaging.exif import extract_exif_for_info
 from photochart.imaging.extract import extract_metadata
 from photochart.media.resolution import get_resolution_presets
 
@@ -87,6 +87,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         resolution=getattr(args, "resolution", None),
         log_path=log_path,
         retry_thumbnails=retry_thumbnails,
+        raw_only=getattr(args, "raw_only", False),
     )
 
     if not result["success"]:
@@ -370,10 +371,9 @@ def cmd_info(args: argparse.Namespace) -> int:
         return 1
 
     metadata = extract_metadata(file_path)
-    if getattr(args, "all_exif", False):
-        metadata["exif"] = extract_exif(file_path, full=True)
-    else:
-        metadata["exif"] = extract_exif(file_path)
+    metadata["exif"] = extract_exif_for_info(
+        file_path, all_exif=getattr(args, "all_exif", False)
+    )
 
     if getattr(args, "json", False):
         print(json.dumps(metadata, default=_metadata_json_default, sort_keys=True))

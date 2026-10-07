@@ -22,7 +22,7 @@ from photochart.fs.device import (
     mount_point_for_path,
 )
 from photochart.fs.protocols import calculate_checksum as calculate_file_checksum
-from photochart.media.extensions import IMAGE_EXTENSIONS
+from photochart.media.extensions import IMAGE_EXTENSIONS, RAW_IMAGE_EXTENSIONS
 from photochart.media.resolution import parse_resolution
 
 try:
@@ -124,22 +124,25 @@ def is_path_in_media_root(file_path: Path, media_root: Optional[Path] = None) ->
         return True
 
 
-def is_image_file(file_path: Path) -> bool:
+def is_image_file(file_path: Path, *, raw_only: bool = False) -> bool:
     """Check if a file is an image based on its extension.
 
     Args:
         file_path: Path to the file to check
+        raw_only: When True, only camera RAW extensions are accepted.
 
     Returns:
         True if the file has an image extension, False otherwise
     """
-    return file_path.suffix.lower() in IMAGE_EXTENSIONS
+    extensions = RAW_IMAGE_EXTENSIONS if raw_only else IMAGE_EXTENSIONS
+    return file_path.suffix.lower() in extensions
 
 
 def get_image_files(
     path: str,
     recursive: bool = True,
     media_root: Optional[Path] = None,
+    raw_only: bool = False,
 ) -> List[Path]:
     """Get all image files from a directory.
 
@@ -149,6 +152,7 @@ def get_image_files(
     Args:
         path: Path to directory or file
         recursive: Whether to search recursively
+        raw_only: When True, include only camera RAW extensions.
 
     Returns:
         List of Path objects for image files (excluding those in MEDIA_ROOT)
@@ -164,7 +168,7 @@ def get_image_files(
 
     if path_obj.is_file():
         # Single file
-        if is_image_file(path_obj) and not _in_media_root(path_obj):
+        if is_image_file(path_obj, raw_only=raw_only) and not _in_media_root(path_obj):
             image_files.append(path_obj)
     elif path_obj.is_dir():
         # Directory
@@ -180,12 +184,18 @@ def get_image_files(
 
                 for file in files:
                     file_path = Path(root) / file
-                    if is_image_file(file_path) and not _in_media_root(file_path):
+                    if is_image_file(
+                        file_path, raw_only=raw_only
+                    ) and not _in_media_root(file_path):
                         image_files.append(file_path)
         else:
             # Non-recursive search
             for file in path_obj.iterdir():
-                if file.is_file() and is_image_file(file) and not _in_media_root(file):
+                if (
+                    file.is_file()
+                    and is_image_file(file, raw_only=raw_only)
+                    and not _in_media_root(file)
+                ):
                     image_files.append(file)
     else:
         raise ValueError(f"Path does not exist or is not a file/directory: {path}")
@@ -399,6 +409,7 @@ def ingest_photos(
     store_images: bool = False,
     log_path: Optional[str] = None,
     retry_thumbnails: bool = False,
+    raw_only: bool = False,
 ) -> Dict[str, Any]:
     """Ingest photos from a directory and store them in the database.
 
@@ -429,6 +440,7 @@ def ingest_photos(
         retry_thumbnails: If True, do not create new catalog rows; for files that
             already exist as PhotoPath (same path and device), attempt thumbnail
             storage when the linked Photograph has no thumbnail.
+        raw_only: When True, ingest only camera RAW file extensions.
 
     Returns:
         Dictionary with:
@@ -467,7 +479,7 @@ def ingest_photos(
         logger.info(
             f"Parameters: resolution={resolution}, calculate_checksum={calculate_checksum}, "
             f"recursive={recursive}, store_images={store_images}, "
-            f"retry_thumbnails={retry_thumbnails}"
+            f"retry_thumbnails={retry_thumbnails}, raw_only={raw_only}"
         )
 
     try:
@@ -492,10 +504,18 @@ def ingest_photos(
         media_root = _resolved_media_root()
 
         # Get all image files
-        image_files = get_image_files(path, recursive=recursive, media_root=media_root)
+        image_files = get_image_files(
+            path,
+            recursive=recursive,
+            media_root=media_root,
+            raw_only=raw_only,
+        )
 
         if not image_files:
-            result["errors"].append(f"No image files found in: {path}")
+            if raw_only:
+                result["errors"].append(f"No raw image files found in: {path}")
+            else:
+                result["errors"].append(f"No image files found in: {path}")
             result["success"] = False
             return result
 

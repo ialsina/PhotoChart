@@ -170,6 +170,14 @@ def build_parser() -> argparse.ArgumentParser:
             "is ignored)."
         ),
     )
+    p_ing.add_argument(
+        "-r",
+        "--raw",
+        action="store_true",
+        dest="raw_only",
+        default=False,
+        help="Ingest only camera RAW files (extensions in RAW_IMAGE_EXTENSIONS)",
+    )
     p_ing.set_defaults(func=cmd_ingest)
 
     p_resize = sub.add_parser(
@@ -254,7 +262,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--all",
         action="store_true",
         dest="all_exif",
-        help="Include full EXIF metadata (all IFDs and image info fields)",
+        help=(
+            "Include complete EXIF (default shows common shooting tags: exposure, "
+            "aperture, ISO, lens, etc.)"
+        ),
     )
     p_info.add_argument(
         "-j",

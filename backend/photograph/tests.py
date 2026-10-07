@@ -236,6 +236,25 @@ class IngestJobTaskTest(TestCase):
         assert call_kwargs["calculate_checksum"] is False
         assert call_kwargs["store_images"] is False
         assert call_kwargs["retry_thumbnails"] is False
+        assert call_kwargs["raw_only"] is False
+
+    def test_task_passes_raw_only_to_runner(self) -> None:
+        job = IngestJob.objects.create(path="/photos/Photos", raw_only=True)
+        with patch(
+            "photochart.ingest.runner.choose_and_run_ingest",
+            return_value={
+                "success": True,
+                "count": 0,
+                "checksums_calculated": 0,
+                "images_stored": 0,
+                "errors": [],
+            },
+        ) as mock_runner:
+            from .tasks import run_ingest_job
+
+            run_ingest_job(job.pk)
+
+        assert mock_runner.call_args.kwargs["raw_only"] is True
 
     def test_task_passes_retry_thumbnails_to_runner(self) -> None:
         job = IngestJob.objects.create(

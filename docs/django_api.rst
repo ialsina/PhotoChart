@@ -90,8 +90,13 @@ Request body (all fields except ``path`` are optional):
      "calculate_checksum": true,
      "store_images":       true,
      "resolution":         "",
-     "retry_thumbnails":   false
+     "retry_thumbnails":   false,
+     "raw_only":           false
    }
+
+When ``raw_only`` is true, only files whose extension is in
+``RAW_IMAGE_EXTENSIONS`` (see :mod:`photochart.media.extensions`) are discovered
+and ingested; the same filter applies before catalog skip logic runs.
 
 When ``retry_thumbnails`` is true, no new ``PhotoPath`` rows are created; the
 job only attempts thumbnail storage for files already catalogued at the same

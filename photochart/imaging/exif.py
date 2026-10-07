@@ -5,11 +5,15 @@ optimized to read the image file only once when extracting multiple tags.
 Use ``full=True`` for comprehensive multi-IFD extraction (e.g. CLI ``pchart info -a``).
 """
 
+import io
+from contextlib import contextmanager
 from datetime import datetime
 from enum import Enum, IntEnum
 from fractions import Fraction
-from typing import Dict, Any, Optional, List, Mapping
 from pathlib import Path
+from typing import Any, Dict, Iterator, List, Mapping, Optional
+
+from photochart.media.extensions import RAW_IMAGE_EXTENSIONS
 
 
 class ExifTag(IntEnum):
@@ -30,6 +34,29 @@ class ExifTagName(str, Enum):
 
 # Sub-IFD pointer tag IDs (IFD0) — values are expanded via get_ifd(), not serialized.
 _SUB_IFD_POINTER_IDS = frozenset({0x8769, 0x8825, 0xA005, 0x010000})
+
+# Typical shooting EXIF keys shown by ``pchart info`` without ``--all``.
+_INFO_SUMMARY_EXIF_KEYS = frozenset(
+    {
+        "Make",
+        "Model",
+        "ExposureTime",
+        "FNumber",
+        "PhotographicSensitivity",
+        "ISOSpeedRatings",
+        "FocalLength",
+        "FocalLengthIn35mmFilm",
+        "LensModel",
+        "LensMake",
+        "LensSpecification",
+        "ExposureProgram",
+        "MeteringMode",
+        "Flash",
+        "WhiteBalance",
+        "ShutterSpeedValue",
+        "ApertureValue",
+    }
+)
 
 
 def extract_exif(
@@ -61,9 +88,9 @@ def extract_exif(
     """
     if full:
         try:
-            from PIL import Image
-
-            with Image.open(file_path) as img:
+            with _exif_image(file_path) as img:
+                if img is None:
+                    return {}
                 return _extract_full_exif_from_image(img)
         except Exception:
             return {}
@@ -86,10 +113,11 @@ def extract_exif(
     result: Dict[str, Any] = {tag: None for tag in tag_strings}
 
     try:
-        from PIL import Image
         from PIL.ExifTags import TAGS
 
-        with Image.open(file_path) as img:
+        with _exif_image(file_path) as img:
+            if img is None:
+                return result
             exif_data = img.getexif()
             if not exif_data:
                 return result
@@ -108,6 +136,103 @@ def extract_exif(
         pass
 
     return result
+
+
+def extract_exif_for_info(file_path: str, all_exif: bool = False) -> Dict[str, Any]:
+    """EXIF payload for ``pchart info``.
+
+    Without ``all_exif``, returns parsed ``datetime`` / ``model`` plus a curated
+    set of common shooting tags (exposure, aperture, ISO, lens, etc.). With
+    ``all_exif``, returns the complete EXIF dump (same as ``extract_exif(...,
+    full=True)``).
+    """
+    if all_exif:
+        return extract_exif(file_path, full=True)
+
+    limited_defaults = {
+        ExifTagName.DATETIME.value: None,
+        ExifTagName.MODEL.value: None,
+    }
+    try:
+        from PIL.ExifTags import TAGS
+
+        with _exif_image(file_path) as img:
+            if img is None:
+                return limited_defaults
+            exif_data = img.getexif()
+            limited = {
+                ExifTagName.DATETIME.value: (
+                    _extract_datetime_from_exif(exif_data) if exif_data else None
+                ),
+                ExifTagName.MODEL.value: (
+                    _extract_model_from_exif(exif_data, TAGS) if exif_data else None
+                ),
+            }
+            full_tags = _extract_full_exif_from_image(img)
+            summary = {
+                key: value
+                for key, value in full_tags.items()
+                if key in _INFO_SUMMARY_EXIF_KEYS
+            }
+            return {**summary, **limited}
+    except Exception:
+        return limited_defaults
+
+
+@contextmanager
+def _exif_image(file_path: str) -> Iterator[Any]:
+    """Open an image suitable for EXIF reads (file or RAW embedded JPEG)."""
+    from PIL import Image
+
+    img: Any = None
+    embedded: Any = None
+    try:
+        try:
+            img = Image.open(file_path)
+            img.load()
+            if img.getexif():
+                yield img
+                return
+            img.close()
+            img = None
+        except Exception:
+            if img is not None:
+                try:
+                    img.close()
+                except Exception:
+                    pass
+            img = None
+
+        embedded = _open_raw_embedded_jpeg_image(file_path)
+        yield embedded
+    finally:
+        if img is not None:
+            try:
+                img.close()
+            except Exception:
+                pass
+        if embedded is not None:
+            try:
+                embedded.close()
+            except Exception:
+                pass
+
+
+def _open_raw_embedded_jpeg_image(file_path: str) -> Any:
+    """Return a PIL image from a RAW file's embedded JPEG preview, if any."""
+    if Path(file_path).suffix.lower() not in RAW_IMAGE_EXTENSIONS:
+        return None
+    try:
+        import rawpy
+        from PIL import Image
+
+        with rawpy.imread(file_path) as raw:
+            thumb = raw.extract_thumb()
+        if thumb.format != rawpy.ThumbFormat.JPEG or not thumb.data:
+            return None
+        return Image.open(io.BytesIO(thumb.data))
+    except Exception:
+        return None
 
 
 def _get_exif_tag(exif_data: Any, tag_id: int) -> Any:

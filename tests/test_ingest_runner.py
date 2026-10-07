@@ -261,6 +261,21 @@ class TestRunIngestDocker:
         cmd = mock_run.call_args[0][0]
         assert "--retry-thumbnails" in cmd
 
+    def test_raw_flag_forwarded(self) -> None:
+        with self._patched_settings():
+            with patch(
+                "photochart.ingest.runner.subprocess.run",
+                return_value=MagicMock(
+                    returncode=0,
+                    stdout="Ingested 0 photo(s) from '/x'.",
+                    stderr="",
+                ),
+            ) as mock_run:
+                run_ingest_docker(path="/x", mount_root="/x", raw_only=True)
+
+        cmd = mock_run.call_args[0][0]
+        assert "--raw" in cmd
+
     def test_no_recursive_flag_forwarded(self) -> None:
         with self._patched_settings():
             with patch(

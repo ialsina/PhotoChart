@@ -8,6 +8,9 @@ All notable changes to PhotoChart are documented in this file.
 
 - ``extract_exif(..., full=True)`` for multi-IFD EXIF extraction; ``pchart info
   --all`` / ``-a`` and machine-readable ``pchart info --json`` / ``-j``.
+- ``pchart ingest --raw`` / ``-r`` (and ``IngestJob.raw_only``) to ingest only
+  camera RAW extensions from ``RAW_IMAGE_EXTENSIONS``, including catalog
+  pre-selection of not-yet-catalogued files.
 
 ## [v0.4.0] - 2026-10-05
 

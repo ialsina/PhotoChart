@@ -213,6 +213,7 @@ where you want to ingest a path that is not permanently mounted:
 
    ./scripts/compose-ingest.sh /mnt/camera/DCIM
    ./scripts/compose-ingest.sh /run/media/$USER/SD_CARD --no-store-images
+   ./scripts/compose-ingest.sh /mnt/camera/DCIM --raw
 
 **Generic runner for other commands**
 
@@ -312,6 +313,11 @@ Operators can POST to ``/api/ingest-jobs/`` to queue a job:
      -d '{"path": "/mnt/camera/DCIM",
           "mount_root": "/mnt/camera",
           "device": "EOS_DIGITAL (/mnt/camera)"}'
+
+   # RAW files only (skip in-camera JPEGs in the same tree):
+   curl -X POST /api/ingest-jobs/ \
+     -H "Content-Type: application/json" \
+     -d '{"path": "/mnt/camera/DCIM", "raw_only": true}'
 
 When ``INGEST_DOCKER_ENABLED=true``, the Celery worker spawns the same one-shot
 container pattern used by ``scripts/compose-ingest.sh``.  This requires:

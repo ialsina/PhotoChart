@@ -86,9 +86,16 @@ Catalog ingestion
    pchart ingest /data/Photos
 
 Important options include ``--no-checksum``, ``--no-recursive``,
-``--no-store-images``, ``--resolution``, ``--log``, and ``--retry-thumbnails``.
+``--no-store-images``, ``--resolution``, ``--log``, ``--retry-thumbnails``, and
+``--raw`` (``-r``).
 Ingestion records files and thumbnails in Django but does not classify or move
 the source.
+
+``--raw`` limits discovery to camera RAW suffixes defined in
+:mod:`photochart.media.extensions` (``RAW_IMAGE_EXTENSIONS``), including the
+catalog pre-filter that skips paths already stored for the ingest device. JPEG,
+HEIC, and other non-RAW images under the same tree are ignored. Useful when a
+card holds paired RAW+JPEG folders and you only want RAW in the catalog.
 
 ``--retry-thumbnails`` scans the same file tree as a normal ingest but does not
 add new catalog entries. It builds a work list of catalogued files (same stored

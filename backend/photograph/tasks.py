@@ -40,6 +40,7 @@ def run_ingest_job(self, job_id: int) -> str:
             store_images=job.store_images,
             resolution=job.resolution or None,
             retry_thumbnails=job.retry_thumbnails,
+            raw_only=job.raw_only,
         )
 
         job.count = result.get("count", 0)

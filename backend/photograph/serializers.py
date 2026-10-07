@@ -185,6 +185,7 @@ class IngestJobSerializer(serializers.ModelSerializer):
             "store_images",
             "resolution",
             "retry_thumbnails",
+            "raw_only",
             "status",
             "task_id",
             "error",

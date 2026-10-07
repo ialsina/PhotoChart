@@ -146,6 +146,7 @@ def run_ingest_local(
     resolution: Optional[str] = None,
     log_path: Optional[str] = None,
     retry_thumbnails: bool = False,
+    raw_only: bool = False,
 ) -> dict:
     """Call ``ingest_photos`` directly in the current process.
 
@@ -169,6 +170,7 @@ def run_ingest_local(
         resolution=resolution,
         log_path=log_path,
         retry_thumbnails=retry_thumbnails,
+        raw_only=raw_only,
     )
 
 
@@ -190,6 +192,7 @@ def run_ingest_docker(
     project_name: Optional[str] = None,
     timeout: int = 3600,
     retry_thumbnails: bool = False,
+    raw_only: bool = False,
 ) -> dict:
     """Spawn a one-shot ``docker compose run`` container that bind-mounts
     *mount_root* read-only, then runs ``pchart ingest`` inside it.
@@ -263,6 +266,8 @@ def run_ingest_docker(
         cmd += ["--resolution", resolution]
     if retry_thumbnails:
         cmd += ["--retry-thumbnails"]
+    if raw_only:
+        cmd += ["--raw"]
 
     logger.info(
         "Launching one-shot ingest container: %s",
@@ -356,6 +361,7 @@ def choose_and_run_ingest(
     resolution: Optional[str] = None,
     log_path: Optional[str] = None,
     retry_thumbnails: bool = False,
+    raw_only: bool = False,
 ) -> dict:
     """Dispatch an ingest request to the local or Docker backend.
 
@@ -432,6 +438,7 @@ def choose_and_run_ingest(
             resolution=resolution,
             log_path=log_path,
             retry_thumbnails=retry_thumbnails,
+            raw_only=raw_only,
         )
 
     # ----- Docker path ----------------------------------------------------
@@ -484,4 +491,5 @@ def choose_and_run_ingest(
         store_images=store_images,
         resolution=resolution,
         retry_thumbnails=retry_thumbnails,
+        raw_only=raw_only,
     )

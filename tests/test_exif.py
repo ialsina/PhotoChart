@@ -11,6 +11,7 @@ from photochart.imaging.exif import (
     ExifTagName,
     _serialize_exif_value,
     extract_exif,
+    extract_exif_for_info,
 )
 
 
@@ -29,6 +30,8 @@ def _write_jpeg_with_exif(path: Path) -> None:
     exif[ExifTag.DATETIME] = "2024:01:15 10:20:30"
     exif_ifd = exif.get_ifd(0x8769)
     exif_ifd[ExifTag.DATETIME_ORIGINAL] = "2024:01:15 10:20:31"
+    exif_ifd[0x829A] = (1, 125)  # ExposureTime 1/125s
+    exif_ifd[0xA434] = "Test Lens 24mm"
     exif[0x8769] = exif_ifd
     img.save(path, exif=exif)
 
@@ -41,6 +44,16 @@ def test_extract_exif_limited_datetime_from_exif_sub_ifd(tmp_path: Path) -> None
     assert set(result.keys()) == {"datetime", "model"}
     assert result["model"] == "TestCam"
     assert result["datetime"] == datetime(2024, 1, 15, 10, 20, 31)
+
+
+def test_extract_exif_for_info_includes_summary_tags(tmp_path: Path) -> None:
+    jpeg = tmp_path / "shot.jpg"
+    _write_jpeg_with_exif(jpeg)
+
+    info_exif = extract_exif_for_info(str(jpeg), all_exif=False)
+    assert info_exif["model"] == "TestCam"
+    assert "ExposureTime" in info_exif
+    assert info_exif["LensModel"] == "Test Lens 24mm"
 
 
 def test_extract_exif_full_ignores_tags_and_includes_extra_fields(
@@ -87,10 +100,11 @@ def test_cmd_info_json_and_all_exif(tmp_path: Path) -> None:
     finally:
         sys.stdout = old_stdout
 
-    for key in ("file", "image", "exif", "raw"):
-        assert key in payload_limited
-    assert set(payload_limited["exif"].keys()) <= {"datetime", "model"}
-    assert len(payload_full["exif"]) > len(payload_limited["exif"])
+        for key in ("file", "image", "exif", "raw"):
+            assert key in payload_limited
+        assert "datetime" in payload_limited["exif"]
+        assert "ExposureTime" in payload_limited["exif"]
+        assert len(payload_full["exif"]) > len(payload_limited["exif"])
 
 
 def test_cli_info_json_does_not_initialize_django(

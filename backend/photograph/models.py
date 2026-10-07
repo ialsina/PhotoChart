@@ -887,6 +887,10 @@ class IngestJob(models.Model):
             "existing PhotoPath rows when the photograph has no thumbnail."
         ),
     )
+    raw_only = models.BooleanField(
+        default=False,
+        help_text="Ingest only RAW image extensions.",
+    )
 
     # ---- Job tracking ----
     status = models.CharField(
