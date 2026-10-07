@@ -11,6 +11,9 @@ All notable changes to PhotoChart are documented in this file.
 - ``pchart ingest --raw`` / ``-r`` (and ``IngestJob.raw_only``) to ingest only
   camera RAW extensions from ``RAW_IMAGE_EXTENSIONS``, including catalog
   pre-selection of not-yet-catalogued files.
+- Photographs view: each card's Paths count opens a dropdown of linked file
+  paths (middle-truncated for display); clicking a path copies it to the
+  clipboard and shows a short confirmation message.
 
 ## [v0.4.0] - 2026-10-05
 

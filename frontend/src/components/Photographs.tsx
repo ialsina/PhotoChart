@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { api } from "../api";
 import type { Photograph, Album } from "../types";
+import { PhotographPathsDropdown } from "./PhotographPathsDropdown";
 
 type SortMode = "id" | "date";
 type NavigationPath = {
@@ -690,14 +691,8 @@ export function Photographs() {
                     )}
                   </div>
                   <div className="photograph-paths">
-                    <span className="field-label">Paths:</span>{" "}
-                    {photo.paths.length > 0 ? (
-                      <span className="paths-count">
-                        {photo.paths.length} path{photo.paths.length !== 1 ? "s" : ""}
-                      </span>
-                    ) : (
-                      <span className="no-paths">No paths</span>
-                    )}
+                    <span className="field-label">Paths:</span>
+                    <PhotographPathsDropdown paths={photo.paths} />
                   </div>
                   {photo.albums && photo.albums.length > 0 && (
                     <div className="photograph-albums">
