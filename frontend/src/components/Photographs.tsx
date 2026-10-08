@@ -24,6 +24,12 @@ export function Photographs() {
   const [showAddToAlbumDropdown, setShowAddToAlbumDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  const [nextPageUrl, setNextPageUrl] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
+  const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -53,69 +59,116 @@ export function Photographs() {
     loadAlbums();
   }, []);
 
-  const loadPhotographs = useCallback(async () => {
-    try {
-      setLoading(true);
-
-      // Only fetch photos when at leaf level (day or Unknown)
-      // This prevents pagination through thousands of photos when just navigating
-      const shouldFetch =
-        navigationPath.length === 3 || // At day level
-        (navigationPath.length === 1 && navigationPath[0].value === "Unknown"); // At Unknown level
-
-      if (!shouldFetch) {
-        setPhotographs([]);
-        setLoading(false);
-        return;
-      }
-
-      // Build filter parameters based on navigation path
-      const params: { year?: string; month?: string; day?: string } = {};
-
-      if (navigationPath.length > 0) {
-        params.year = navigationPath[0].value;
-      }
-      if (navigationPath.length > 1) {
-        params.month = navigationPath[1].value;
-      }
-      if (navigationPath.length > 2) {
-        params.day = navigationPath[2].value;
-      }
-
-      // Ensure we have at least one filter parameter
-      if (Object.keys(params).length === 0) {
-        console.warn("loadPhotographs called without filters, skipping");
-        setPhotographs([]);
-        setLoading(false);
-        return;
-      }
-
-      const allPhotographs = await api.getAllPhotographs(params);
-      setPhotographs(allPhotographs);
-
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load photographs");
-    } finally {
-      setLoading(false);
+  const buildNavFilterParams = useCallback((): {
+    year?: string;
+    month?: string;
+    day?: string;
+  } => {
+    const params: { year?: string; month?: string; day?: string } = {};
+    if (navigationPath.length > 0) {
+      params.year = navigationPath[0].value;
     }
+    if (navigationPath.length > 1) {
+      params.month = navigationPath[1].value;
+    }
+    if (navigationPath.length > 2) {
+      params.day = navigationPath[2].value;
+    }
+    return params;
   }, [navigationPath]);
 
-  // Only fetch photographs when at leaf level (day or Unknown)
-  // For hierarchy navigation (year/month), use summary endpoints instead
-  useEffect(() => {
-    const shouldFetchPhotos =
-      navigationPath.length === 3 || // At day level
-      (navigationPath.length === 1 && navigationPath[0].value === "Unknown"); // At Unknown level
-
-    if (shouldFetchPhotos) {
-      loadPhotographs();
-    } else {
-      // Clear photos when not at leaf level to save memory
-      setPhotographs([]);
-      setSelectedPhotos(new Set()); // Clear selection when navigating away
+  const getOrderingParam = useCallback((): string => {
+    if (sortMode === "id") {
+      return ascending ? "id" : "-id";
     }
-  }, [navigationPath, loadPhotographs]);
+    return ascending ? "date" : "-date";
+  }, [sortMode, ascending]);
+
+  const isLeafPhotoView =
+    navigationPath.length === 3 ||
+    (navigationPath.length === 1 && navigationPath[0].value === "Unknown");
+
+  const loadPhotographs = useCallback(
+    async (reset: boolean) => {
+      if (!isLeafPhotoView) {
+        return;
+      }
+
+      const navParams = buildNavFilterParams();
+      if (Object.keys(navParams).length === 0) {
+        console.warn("loadPhotographs called without filters, skipping");
+        return;
+      }
+
+      try {
+        if (reset) {
+          setLoading(true);
+          setPhotographs([]);
+          setNextPageUrl(null);
+          setHasMore(false);
+        } else {
+          setLoadingMore(true);
+        }
+
+        const ordering = getOrderingParam();
+        const pageUrl = reset ? undefined : nextPageUrl || undefined;
+
+        if (reset) {
+          const countResponse = await api.getPhotographCount(navParams);
+          setTotalCount(countResponse.count);
+        }
+
+        const response = await api.getPhotographsPage(
+          { ...navParams, ordering },
+          pageUrl
+        );
+
+        if (reset) {
+          setPhotographs(response.results);
+        } else {
+          setPhotographs((prev) => [...prev, ...response.results]);
+        }
+
+        setNextPageUrl(response.next);
+        setHasMore(response.next !== null);
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load photographs");
+      } finally {
+        if (reset) {
+          setLoading(false);
+        } else {
+          setLoadingMore(false);
+        }
+      }
+    },
+    [
+      isLeafPhotoView,
+      buildNavFilterParams,
+      getOrderingParam,
+      nextPageUrl,
+    ]
+  );
+
+  const loadMorePhotographs = useCallback(() => {
+    if (!loadingMore && hasMore && nextPageUrl) {
+      loadPhotographs(false);
+    }
+  }, [loadPhotographs, loadingMore, hasMore, nextPageUrl]);
+
+  useEffect(() => {
+    if (isLeafPhotoView) {
+      loadPhotographs(true);
+    } else {
+      setPhotographs([]);
+      setTotalCount(null);
+      setNextPageUrl(null);
+      setHasMore(false);
+      setSelectedPhotos(new Set());
+    }
+    // Intentionally omit loadPhotographs: it changes when nextPageUrl updates after each page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigationPath, sortMode, ascending, isLeafPhotoView]);
 
   const toggleSort = () => {
     setSortMode((prev) => (prev === "id" ? "date" : "id"));
@@ -140,7 +193,7 @@ export function Photographs() {
 
   const selectAll = () => {
     if (currentView.type === "photographs") {
-      const allIds = new Set(sortedPhotographs.map((p) => p.id));
+      const allIds = new Set(photographs.map((p) => p.id));
       setSelectedPhotos(allIds);
     }
   };
@@ -151,7 +204,7 @@ export function Photographs() {
 
   const isAllSelected = () => {
     if (currentView.type !== "photographs") return false;
-    return sortedPhotographs.length > 0 && selectedPhotos.size === sortedPhotographs.length;
+    return photographs.length > 0 && selectedPhotos.size === photographs.length;
   };
 
   // Action handlers
@@ -184,7 +237,7 @@ export function Photographs() {
       setShowAddToAlbumDropdown(false);
       setSelectedPhotos(new Set());
       // Reload photos to get updated album information
-      await loadPhotographs();
+      await loadPhotographs(true);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add photos to album");
@@ -199,7 +252,7 @@ export function Photographs() {
       await api.removePhotosFromAlbum(albumId, photoIds);
       setSelectedPhotos(new Set());
       // Reload photos to get updated album information
-      await loadPhotographs();
+      await loadPhotographs(true);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove photos from album");
@@ -322,7 +375,7 @@ export function Photographs() {
       if (year === "Unknown") {
         return {
           type: "photographs" as const,
-          items: hierarchy["Unknown"]?.[""]?.[""] || [],
+          items: photographs,
         };
       }
       const months = hierarchyData.months || [];
@@ -351,16 +404,39 @@ export function Photographs() {
         counts: Object.fromEntries(days.map(d => [d.day, d.count])),
       };
     } else {
-      // Show photographs for selected year/month/day
-      const year = navigationPath[0].value;
-      const month = navigationPath[1].value;
-      const day = navigationPath[2].value;
       return {
         type: "photographs" as const,
-        items: hierarchy[year]?.[month]?.[day] || [],
+        items: photographs,
       };
     }
-  }, [navigationPath, hierarchy, hierarchyData]);
+  }, [navigationPath, hierarchy, hierarchyData, photographs]);
+
+  useEffect(() => {
+    if (!hasMore || loadingMore || !loadMoreTriggerRef.current) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry.isIntersecting) {
+          loadMorePhotographs();
+        }
+      },
+      {
+        root: null,
+        rootMargin: "100px",
+        threshold: 0.1,
+      }
+    );
+
+    const triggerElement = loadMoreTriggerRef.current;
+    observer.observe(triggerElement);
+
+    return () => {
+      observer.unobserve(triggerElement);
+    };
+  }, [hasMore, loadingMore, loadMorePhotographs]);
 
   const navigateTo = (type: "year" | "month" | "day", value: string, label: string) => {
     if (type === "year") {
@@ -395,22 +471,8 @@ export function Photographs() {
     return monthNames[parseInt(month) - 1];
   };
 
-  const sortedPhotographs = useMemo(() => {
-    if (currentView.type !== "photographs") return [];
-
-    const photos = [...currentView.items];
-    return photos.sort((a, b) => {
-      let comparison = 0;
-      if (sortMode === "id") {
-        comparison = a.id - b.id;
-      } else {
-        const dateA = a.time ? new Date(a.time).getTime() : new Date(a.created_at).getTime();
-        const dateB = b.time ? new Date(b.time).getTime() : new Date(b.created_at).getTime();
-        comparison = dateA - dateB;
-      }
-      return ascending ? comparison : -comparison;
-    });
-  }, [currentView, sortMode, ascending]);
+  const displayPhotographs =
+    currentView.type === "photographs" ? currentView.items : [];
 
   const formatTime = (timeValue: string | null | undefined): string | null => {
     if (timeValue === null || timeValue === undefined || timeValue === "") {
@@ -460,7 +522,17 @@ export function Photographs() {
   return (
     <div className="photographs">
       <div className="photographs-header">
-        <h2>Photographs ({photographs.length})</h2>
+        <h2>
+          Photographs ({totalCount ?? photographs.length})
+          {isLeafPhotoView &&
+            totalCount !== null &&
+            photographs.length < totalCount && (
+              <span className="loaded-count-hint">
+                {" "}
+                — showing {photographs.length} loaded
+              </span>
+            )}
+        </h2>
         {currentView.type === "photographs" && (
           <div className="sort-controls">
             <button className="sort-toggle" onClick={toggleSort}>
@@ -566,7 +638,7 @@ export function Photographs() {
       {!isActuallyLoading && currentView.type === "photographs" && (
         <>
           {/* Action Bar */}
-          {sortedPhotographs.length > 0 && (
+          {displayPhotographs.length > 0 && (
             <div className="action-bar">
               <div className="action-bar-left">
                 <button
@@ -575,6 +647,9 @@ export function Photographs() {
                 >
                   {isAllSelected() ? "Unselect All" : "Select All"}
                 </button>
+                {totalCount !== null && photographs.length < totalCount && (
+                  <span className="selection-hint">Select all applies to loaded photos</span>
+                )}
                 {selectedPhotos.size > 0 && (
                   <span className="selection-count">
                     {selectedPhotos.size} selected
@@ -627,11 +702,11 @@ export function Photographs() {
               )}
             </div>
           )}
-          {sortedPhotographs.length === 0 ? (
+          {displayPhotographs.length === 0 ? (
             <p className="empty-state">No photographs found.</p>
           ) : (
             <div className="photographs-grid">
-              {sortedPhotographs.map((photo) => {
+              {displayPhotographs.map((photo) => {
                 const errorTooltip = photographErrorTooltip(photo);
                 return (
                 <div
@@ -730,6 +805,18 @@ export function Photographs() {
               </div>
               );
               })}
+              {hasMore && (
+                <div
+                  ref={loadMoreTriggerRef}
+                  className="load-more-trigger"
+                  style={{ height: "1px", gridColumn: "1 / -1" }}
+                />
+              )}
+              {loadingMore && (
+                <div className="loading-more" style={{ gridColumn: "1 / -1" }}>
+                  Loading more…
+                </div>
+              )}
             </div>
           )}
         </>

@@ -9,7 +9,14 @@ from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
 from rest_framework.response import Response
 from django.db import transaction
 from django.db.models import Q
+from django.db.models.functions import Coalesce
+from .filters import (
+    filter_photographs_by_navigation_params,
+    photograph_list_needs_display_time_annotation,
+    photograph_list_ordering_tuple,
+)
 from .models import Photograph, PhotoPath, IngestJob
+from .pagination import PhotographCursorPagination
 from .serializers import PhotographSerializer, PhotoPathSerializer, IngestJobSerializer
 from backend.permissions import IsPhotoChartOperator
 
@@ -19,57 +26,39 @@ class PhotographViewSet(viewsets.ModelViewSet):
 
     queryset = Photograph.objects.all().prefetch_related("paths", "albums")
     serializer_class = PhotographSerializer
+    pagination_class = PhotographCursorPagination
 
     def get_queryset(self):
         """Filter queryset based on query parameters."""
         queryset = super().get_queryset()
+        return filter_photographs_by_navigation_params(
+            queryset, self.request.query_params
+        )
 
-        # Filter by year
-        year = self.request.query_params.get("year", None)
-        if year and year != "Unknown":
-            try:
-                year_int = int(year)
-                start_date = timezone.make_aware(datetime(year_int, 1, 1))
-                end_date = timezone.make_aware(datetime(year_int + 1, 1, 1))
-                queryset = queryset.filter(time__gte=start_date, time__lt=end_date)
-            except (ValueError, TypeError):
-                pass
+    def get_photograph_list_ordering_tuple(self) -> tuple[str, ...]:
+        ordering_param = self.request.query_params.get("ordering", "id")
+        return photograph_list_ordering_tuple(ordering_param)
 
-        # Filter by year and month
-        month = self.request.query_params.get("month", None)
-        if month and year and year != "Unknown":
-            try:
-                year_int = int(year)
-                month_int = int(month)
-                start_date = timezone.make_aware(datetime(year_int, month_int, 1))
-                if month_int == 12:
-                    end_date = timezone.make_aware(datetime(year_int + 1, 1, 1))
-                else:
-                    end_date = timezone.make_aware(datetime(year_int, month_int + 1, 1))
-                queryset = queryset.filter(time__gte=start_date, time__lt=end_date)
-            except (ValueError, TypeError):
-                pass
-
-        # Filter by year, month, and day
-        day = self.request.query_params.get("day", None)
-        if day and month and year and year != "Unknown":
-            try:
-                year_int = int(year)
-                month_int = int(month)
-                day_int = int(day)
-                start_date = timezone.make_aware(datetime(year_int, month_int, day_int))
-                end_date = timezone.make_aware(
-                    datetime(year_int, month_int, day_int, 23, 59, 59)
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        if self.action == "list":
+            ordering_param = self.request.query_params.get("ordering", "id")
+            if photograph_list_needs_display_time_annotation(ordering_param):
+                queryset = queryset.annotate(
+                    display_time=Coalesce("time", "created_at")
                 )
-                queryset = queryset.filter(time__gte=start_date, time__lte=end_date)
-            except (ValueError, TypeError):
-                pass
-
-        # Filter for "Unknown" (photos without time)
-        if year == "Unknown":
-            queryset = queryset.filter(time__isnull=True)
-
+            queryset = queryset.order_by(
+                *photograph_list_ordering_tuple(ordering_param)
+            )
         return queryset
+
+    @action(detail=False, methods=["get"])
+    def count(self, request):
+        """Get total count of photographs for navigation filters."""
+        queryset = filter_photographs_by_navigation_params(
+            Photograph.objects.all(), request.query_params
+        )
+        return Response({"count": queryset.count()})
 
     def get_serializer_context(self):
         """Add request to serializer context for image URLs."""

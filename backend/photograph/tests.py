@@ -929,3 +929,49 @@ class ResizeStoredThumbnailTest(TestCase):
                 assert result["skipped_too_small"] == 1
                 assert result["resized"] == 1
                 assert mock_resize.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# Photograph list API – cursor pagination and count
+# ---------------------------------------------------------------------------
+
+
+class PhotographListApiTest(TestCase):
+    def setUp(self) -> None:
+        _make_reader("listuser")
+        self.client.login(username="listuser", password="secret")
+
+    def test_unknown_filter_returns_next_when_more_than_page_size(self) -> None:
+        for _ in range(55):
+            Photograph.objects.create(time=None)
+
+        response = self.client.get("/api/photographs/?year=Unknown&ordering=id")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["results"]) == 50
+        assert data["next"] is not None
+
+    def test_count_matches_unknown_filter(self) -> None:
+        for _ in range(7):
+            Photograph.objects.create(time=None)
+        Photograph.objects.create()
+
+        count_response = self.client.get("/api/photographs/count/?year=Unknown")
+        assert count_response.status_code == 200
+        assert count_response.json()["count"] == 7
+
+    def test_ordering_id_asc_vs_desc(self) -> None:
+        a = Photograph.objects.create(time=None)
+        b = Photograph.objects.create(time=None)
+        c = Photograph.objects.create(time=None)
+
+        asc = self.client.get("/api/photographs/?year=Unknown&ordering=id")
+        assert asc.status_code == 200
+        asc_ids = [item["id"] for item in asc.json()["results"]]
+
+        desc = self.client.get("/api/photographs/?year=Unknown&ordering=-id")
+        assert desc.status_code == 200
+        desc_ids = [item["id"] for item in desc.json()["results"]]
+
+        assert asc_ids == sorted([a.id, b.id, c.id])
+        assert desc_ids == sorted([a.id, b.id, c.id], reverse=True)

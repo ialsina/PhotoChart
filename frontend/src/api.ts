@@ -155,6 +155,56 @@ export const api = {
     return fetchAllPages<Photograph>("/photographs/", Object.keys(queryParams).length > 0 ? queryParams : undefined);
   },
 
+  getPhotographsPage: (
+    params?: {
+      year?: string;
+      month?: string;
+      day?: string;
+      ordering?: string;
+    },
+    pageUrl?: string
+  ): Promise<PaginatedResponse<Photograph>> => {
+    if (pageUrl) {
+      try {
+        const url = new URL(pageUrl);
+        const path = url.pathname + url.search;
+        return fetchAPI<PaginatedResponse<Photograph>>(path);
+      } catch {
+        return fetchAPI<PaginatedResponse<Photograph>>(
+          pageUrl.startsWith("/") ? pageUrl : `/${pageUrl}`
+        );
+      }
+    }
+
+    const queryParams: Record<string, string> = {};
+    if (params?.year) queryParams.year = params.year;
+    if (params?.month) queryParams.month = params.month;
+    if (params?.day) queryParams.day = params.day;
+    if (params?.ordering) queryParams.ordering = params.ordering;
+
+    const queryString =
+      Object.keys(queryParams).length > 0
+        ? `?${new URLSearchParams(queryParams).toString()}`
+        : "";
+    return fetchAPI<PaginatedResponse<Photograph>>(`/photographs/${queryString}`);
+  },
+
+  getPhotographCount: (params?: {
+    year?: string;
+    month?: string;
+    day?: string;
+  }): Promise<{ count: number }> => {
+    const queryParams: Record<string, string> = {};
+    if (params?.year) queryParams.year = params.year;
+    if (params?.month) queryParams.month = params.month;
+    if (params?.day) queryParams.day = params.day;
+    const queryString =
+      Object.keys(queryParams).length > 0
+        ? `?${new URLSearchParams(queryParams).toString()}`
+        : "";
+    return fetchAPI<{ count: number }>(`/photographs/count/${queryString}`);
+  },
+
   getPhotographYears: (): Promise<Array<{ year: string; count: number }>> =>
     fetchAPI("/photographs/years/"),
 

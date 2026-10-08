@@ -33,6 +33,9 @@ All notable changes to PhotoChart are documented in this file.
 - ``protected_media`` in ``DEBUG`` serves authenticated thumbnail bytes via
   ``FileResponse`` instead of an nginx-only ``X-Accel-Redirect``, so local Vite
   dev can display catalog images reliably.
+- Photographs leaf views (Unknown date and a specific day): load photos with
+  cursor-based API pagination and infinite scroll instead of fetching every page
+  up front; sort order is applied on the server.
 
 ### Fixed
 
