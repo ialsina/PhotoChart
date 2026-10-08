@@ -63,6 +63,30 @@ async function fetchAPI<T>(endpoint: string): Promise<T> {
   }
 }
 
+/** Follow DRF ``next`` / ``previous`` links without doubling ``API_BASE_URL``. */
+async function fetchPaginatedNext<T>(pageUrl: string): Promise<T> {
+  let url: string;
+  try {
+    url = new URL(pageUrl, window.location.origin).href;
+  } catch {
+    url = `${API_BASE_URL}${pageUrl.startsWith("/") ? pageUrl : `/${pageUrl}`}`;
+  }
+  try {
+    const response = await fetch(url, { credentials: "same-origin" });
+    if (!response.ok) {
+      throw new Error(await apiErrorMessage(response));
+    }
+    return response.json();
+  } catch (err) {
+    if (err instanceof TypeError && err.message.includes("fetch")) {
+      throw new Error(
+        `Network error: Unable to connect to backend at ${API_BASE_URL}. Is the server running?`
+      );
+    }
+    throw err;
+  }
+}
+
 async function fetchAPIMethod<T>(
   endpoint: string,
   method: string,
@@ -165,15 +189,7 @@ export const api = {
     pageUrl?: string
   ): Promise<PaginatedResponse<Photograph>> => {
     if (pageUrl) {
-      try {
-        const url = new URL(pageUrl);
-        const path = url.pathname + url.search;
-        return fetchAPI<PaginatedResponse<Photograph>>(path);
-      } catch {
-        return fetchAPI<PaginatedResponse<Photograph>>(
-          pageUrl.startsWith("/") ? pageUrl : `/${pageUrl}`
-        );
-      }
+      return fetchPaginatedNext<PaginatedResponse<Photograph>>(pageUrl);
     }
 
     const queryParams: Record<string, string> = {};
@@ -237,16 +253,7 @@ export const api = {
 
   getPhotoPathsPage: (pathPrefix?: string, onlyDirect?: boolean, device?: string, pageUrl?: string): Promise<PaginatedResponse<PhotoPath>> => {
     if (pageUrl) {
-      // If pageUrl is provided, use it directly (it's already a full URL from the API)
-      // Extract the path from the full URL
-      try {
-        const url = new URL(pageUrl);
-        const path = url.pathname + url.search;
-        return fetchAPI<PaginatedResponse<PhotoPath>>(path);
-      } catch {
-        // If URL parsing fails, try using it as-is (might be relative)
-        return fetchAPI<PaginatedResponse<PhotoPath>>(pageUrl.startsWith('/') ? pageUrl : `/${pageUrl}`);
-      }
+      return fetchPaginatedNext<PaginatedResponse<PhotoPath>>(pageUrl);
     }
 
     // Build initial request URL
