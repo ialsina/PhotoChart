@@ -106,6 +106,20 @@ Prerequisites
 
       mkdir -p ./backend/media
 
+   Host ``pchart ingest`` runs as your login user; Compose ``web`` / ``worker``
+   write thumbnails as container uid **10001** (``photochart``).  The host-postgres
+   overlay does **not** run ``chown -R 10001:10001`` on that bind mount (unlike
+   the default named ``media`` volume).  Ensure both sides can create files under
+   ``MEDIA_ROOT``, for example:
+
+   - Create the directory as your user and use group-writable layout
+     (``chmod 2775`` on ``MEDIA_ROOT`` and a shared group), or
+   - Use default ACLs so uid 10001 can write new files and directories.
+
+   If thumbnails were previously owned by uid 10001 from an older stack,
+   reclaim ownership for host ingest with ``chown -R "$(id -un)":"$(id -gn)"
+   MEDIA_ROOT`` (adjust paths as needed).
+
 Environment
 -----------
 
@@ -287,6 +301,13 @@ Troubleshooting
    If the source path ends with ``//deleted``, recreate ``web``, ``gateway``, and
    any other service that bind-mounts media so Docker attaches the current host
    directory.
+
+``Permission denied`` during host ``pchart ingest`` (thumbnails / ``MEDIA_ROOT``)
+   The UI or worker may have created directories as uid **10001** while your host
+   CLI runs as a different uid.  Check ownership with ``ls -lan MEDIA_ROOT``.
+   Reclaim the tree for your user (see prerequisites above) and set permissions
+   or ACLs so both your uid and container uid 10001 can write.  Recreating the
+   stack no longer bulk-chowns ``MEDIA_ROOT`` in this topology.
 
 ``migrate`` / ``photochart-migrate-1`` did not complete successfully
    After ``scripts/check-host-postgres.sh`` passes, recreate the one-shot migrate

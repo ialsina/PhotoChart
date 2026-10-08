@@ -29,8 +29,14 @@ services:
   db:
     profiles: ["container-postgres"]
 
+  # Host MEDIA_ROOT is bind-mounted; do not chown to uid 10001 (default
+  # init-volumes) or host pchart ingest loses write access. Named-volume stacks
+  # still use chown in docker/compose.yaml.
   init-volumes:
     <<: *host-postgres-app
+    user: root
+    command: >
+      sh -c "mkdir -p /app/backend/media && exit 0"
 
   ingest:
     <<: *host-postgres-app

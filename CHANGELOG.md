@@ -39,6 +39,10 @@ All notable changes to PhotoChart are documented in this file.
 - Browsing a day with many photographs no longer opens an unbounded parallel
   storm of ``/media/`` requests that could overwhelm ``runserver`` or the Vite
   proxy and surface as failed thumbnail loads.
+- Host-postgres Compose overlay: ``init-volumes`` only ensures ``MEDIA_ROOT``
+  exists on the bind mount; it no longer ``chown``s the host media tree to uid
+  10001 (default ``docker/compose.yaml`` still chowns the named ``media``
+  volume).
 
 ## [v0.4.0] - 2026-10-05
 
