@@ -46,6 +46,9 @@ All notable changes to PhotoChart are documented in this file.
   exists on the bind mount; it no longer ``chown``s the host media tree to uid
   10001 (default ``docker/compose.yaml`` still chowns the named ``media``
   volume).
+- Photo Paths directory listing aggregates over the full catalog for the device
+  and prefix instead of sampling the first 1,000 distinct paths, so large
+  libraries (e.g. pCloud Drive) show every top-level folder with correct counts.
 
 ## [v0.4.0] - 2026-10-05
 

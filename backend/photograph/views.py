@@ -1,6 +1,8 @@
 """API views for the photograph app."""
 
 import re
+from collections import Counter
+from collections.abc import Iterable
 from datetime import datetime
 from django.utils import timezone
 from rest_framework import status, viewsets
@@ -254,19 +256,20 @@ class PhotoPathViewSet(viewsets.ModelViewSet):
 
         return queryset
 
-    def _extract_segments_from_paths(self, paths, path_prefix=""):
-        """Extract directory/file segments from a list of paths.
+    def _extract_segments_from_paths(
+        self, paths: Iterable[str], path_prefix: str = ""
+    ) -> Counter:
+        """Count directory/file segments at the next level below *path_prefix*.
 
         Args:
-            paths: List of path strings
+            paths: Iterable of stored path strings
             path_prefix: Optional prefix to filter and remove from paths
 
         Returns:
-            Dictionary mapping (segment_name, is_directory) to set of paths
+            Counter mapping (segment_name, is_directory) to occurrence count
         """
-        segments = {}  # key: (segment_name, is_directory), value: set of paths
+        segments: Counter = Counter()
 
-        # Normalize prefix
         normalized_prefix = (
             path_prefix.replace("\\", "/").strip("/") if path_prefix else ""
         )
@@ -275,16 +278,14 @@ class PhotoPathViewSet(viewsets.ModelViewSet):
             if not path_obj:
                 continue
 
-            # Normalize path separators
             normalized_path = path_obj.replace("\\", "/")
             normalized_path_clean = normalized_path.strip("/")
 
-            # Remove prefix and get remaining path
             if normalized_prefix:
                 if normalized_path_clean.startswith(normalized_prefix + "/"):
                     remaining = normalized_path_clean[len(normalized_prefix) + 1 :]
                 elif normalized_path_clean == normalized_prefix:
-                    continue  # This is the prefix itself, skip
+                    continue
                 else:
                     continue
             else:
@@ -293,18 +294,13 @@ class PhotoPathViewSet(viewsets.ModelViewSet):
             if not remaining:
                 continue
 
-            # Get first segment (directory or file)
-            # Split on "/" and get the first non-empty part
-            parts = [p for p in remaining.split("/") if p]  # Filter out empty parts
-            if len(parts) > 0:
-                first_segment = parts[0]
-                is_directory = len(parts) > 1  # Has more parts after the first
+            parts = [p for p in remaining.split("/") if p]
+            if not parts:
+                continue
 
-                # Track this segment
-                segment_key = (first_segment, is_directory)
-                if segment_key not in segments:
-                    segments[segment_key] = set()
-                segments[segment_key].add(normalized_path)  # Store path for counting
+            first_segment = parts[0]
+            is_directory = len(parts) > 1
+            segments[(first_segment, is_directory)] += 1
 
         return segments
 
@@ -373,8 +369,7 @@ class PhotoPathViewSet(viewsets.ModelViewSet):
     def directories(self, request):
         """Get directory structure for a given path prefix."""
         import logging
-        from django.db.models import Q, Count
-        from django.db import connection
+        from django.db.models import Q
 
         logger = logging.getLogger(__name__)
 
@@ -409,25 +404,21 @@ class PhotoPathViewSet(viewsets.ModelViewSet):
                     | Q(path=pattern3)
                 )
 
-            # For root level, use a much smaller sample to avoid timeout
-            # For subdirectories, we can process more since the dataset is smaller
-            max_paths = 1000 if not normalized_prefix else 5000
+            paths_iter = queryset.values_list("path", flat=True).iterator(
+                chunk_size=2000
+            )
+            segments = self._extract_segments_from_paths(paths_iter, normalized_prefix)
 
-            # Get distinct paths efficiently using iterator to avoid loading all into memory
-            paths_iter = queryset.values_list("path", flat=True).distinct()[:max_paths]
-            paths = list(paths_iter)
+            logger.debug(
+                "Aggregated %s segments for prefix: %s",
+                len(segments),
+                normalized_prefix,
+            )
 
-            logger.debug(f"Found {len(paths)} paths for prefix: {normalized_prefix}")
-
-            # Extract segments using helper function
-            segments = self._extract_segments_from_paths(paths, normalized_prefix)
-
-            # Build result with counts
             directories = {}
             files = {}
 
-            for (segment_name, is_directory), path_set in segments.items():
-                count = len(path_set)
+            for (segment_name, is_directory), count in segments.items():
                 if is_directory:
                     directories[segment_name] = count
                 else:

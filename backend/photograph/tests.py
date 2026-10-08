@@ -975,3 +975,77 @@ class PhotographListApiTest(TestCase):
 
         assert asc_ids == sorted([a.id, b.id, c.id])
         assert desc_ids == sorted([a.id, b.id, c.id], reverse=True)
+
+
+# ---------------------------------------------------------------------------
+# Photo paths – directories API
+# ---------------------------------------------------------------------------
+
+
+class PhotoPathDirectoriesApiTest(TestCase):
+    DEVICE = "pcloud"
+
+    def setUp(self) -> None:
+        _make_reader("pathuser")
+        self.client.login(username="pathuser", password="secret")
+
+    def test_directories_lists_all_root_segments_beyond_sample_limit(self) -> None:
+        big_count = 1001
+        other_count = 5
+        rows = [
+            PhotoPath(
+                path=f"BigFolder/sub/{i}.jpg",
+                device=self.DEVICE,
+                filename=f"{i}.jpg",
+            )
+            for i in range(big_count)
+        ] + [
+            PhotoPath(
+                path=f"OtherFolder/{i}.jpg",
+                device=self.DEVICE,
+                filename=f"{i}.jpg",
+            )
+            for i in range(other_count)
+        ]
+        PhotoPath.objects.bulk_create(rows, batch_size=500)
+
+        response = self.client.get(
+            f"/api/photo-paths/directories/?device={self.DEVICE}"
+        )
+        assert response.status_code == 200
+        by_name = {item["name"]: item for item in response.json()}
+
+        assert "BigFolder" in by_name
+        assert "OtherFolder" in by_name
+        assert by_name["BigFolder"]["is_directory"] is True
+        assert by_name["OtherFolder"]["is_directory"] is True
+        assert by_name["BigFolder"]["count"] == big_count
+        assert by_name["OtherFolder"]["count"] == other_count
+
+    def test_directories_with_path_prefix_lists_immediate_children(self) -> None:
+        PhotoPath.objects.bulk_create(
+            [
+                PhotoPath(
+                    path="Album/at_root.jpg",
+                    device=self.DEVICE,
+                    filename="at_root.jpg",
+                ),
+                PhotoPath(
+                    path="Album/Sub/photo.jpg",
+                    device=self.DEVICE,
+                    filename="photo.jpg",
+                ),
+            ]
+        )
+
+        response = self.client.get(
+            "/api/photo-paths/directories/",
+            {"device": self.DEVICE, "path_prefix": "Album"},
+        )
+        assert response.status_code == 200
+        by_name = {item["name"]: item for item in response.json()}
+
+        assert by_name["at_root.jpg"]["is_directory"] is False
+        assert by_name["at_root.jpg"]["count"] == 1
+        assert by_name["Sub"]["is_directory"] is True
+        assert by_name["Sub"]["count"] == 1
