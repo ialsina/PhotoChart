@@ -49,6 +49,9 @@ All notable changes to PhotoChart are documented in this file.
 - Photo Paths directory listing aggregates over the full catalog for the device
   and prefix instead of sampling the first 1,000 distinct paths, so large
   libraries (e.g. pCloud Drive) show every top-level folder with correct counts.
+- Photo Paths uses separate loading states for devices, directories, and files,
+  and loads the first file page once per breadcrumb level, so browsing large
+  devices no longer flickers between content and a full-page spinner.
 
 ## [v0.4.0] - 2026-10-05
 
