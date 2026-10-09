@@ -23,6 +23,20 @@ except (ImportError, ModuleNotFoundError, Exception):
 LOGGER = logging.getLogger(__name__)
 
 
+def _django_models_available() -> bool:
+    global Photograph, HAS_DJANGO_BACKEND
+    if HAS_DJANGO_BACKEND and Photograph is not None:
+        return True
+    try:
+        from photograph.models import Photograph as _Photograph
+
+        Photograph = _Photograph
+        HAS_DJANGO_BACKEND = True
+        return True
+    except (ImportError, ModuleNotFoundError, Exception):
+        return False
+
+
 def _thumbnail_byte_size(photograph: Photograph) -> Optional[int]:
     if not photograph.thumbnail:
         return None
@@ -50,7 +64,7 @@ def resize_all_thumbnails(
     Returns:
         Result dict with ``success``, counts, and ``errors``.
     """
-    if not HAS_DJANGO_BACKEND:
+    if not _django_models_available():
         raise ImportError(
             "Django backend models not available.\n "
             "Please, run using the Django shell:\n"

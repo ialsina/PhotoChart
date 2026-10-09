@@ -35,6 +35,23 @@ except (ImportError, ModuleNotFoundError, Exception):
     HAS_DJANGO_BACKEND = False
 
 
+def _django_models_available() -> bool:
+    """Return whether Django app models can be imported (retry after django.setup())."""
+    global PhotoPath, Photograph, HAS_DJANGO_BACKEND
+    if HAS_DJANGO_BACKEND and PhotoPath is not None and Photograph is not None:
+        return True
+    try:
+        from photograph.models import PhotoPath as _PhotoPath
+        from photograph.models import Photograph as _Photograph
+
+        PhotoPath = _PhotoPath
+        Photograph = _Photograph
+        HAS_DJANGO_BACKEND = True
+        return True
+    except (ImportError, ModuleNotFoundError, Exception):
+        return False
+
+
 def _setup_logger(log_path: Optional[str] = None) -> Optional[logging.Logger]:
     """Set up a logger for ingestion operations.
 
@@ -519,7 +536,7 @@ def ingest_photos(
         "errors": [],
     }
 
-    if not HAS_DJANGO_BACKEND:
+    if not _django_models_available():
         raise ImportError(
             "Django backend models not available.\n "
             "Please, run using the Django shell:\n"
