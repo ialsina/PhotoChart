@@ -1102,3 +1102,46 @@ class PhotoPathDirectoriesApiTest(TestCase):
         assert by_name["at_root.jpg"]["count"] == 1
         assert by_name["Sub"]["is_directory"] is True
         assert by_name["Sub"]["count"] == 1
+
+
+class StorageDeviceUpdateDeviceTest(TestCase):
+    DEVICE = "USB (/mnt/usb)"
+    REAL_UUID = "11111111-2222-3333-4444-555555555555"
+
+    def test_update_device_rekeys_legacy_paths(self) -> None:
+        from photochart.fs.storage_probe import (
+            StorageProbeResult,
+            legacy_filesystem_uuid,
+        )
+        from photograph.storage_device_service import migrate_volume_identity
+
+        legacy = legacy_filesystem_uuid(self.DEVICE)
+        StorageDevice.objects.create(
+            filesystem_uuid=legacy,
+            catalog_device=self.DEVICE,
+            probe_notes="legacy_migration",
+        )
+        PhotoPath.objects.create(
+            path="DCIM/photo.jpg",
+            device=self.DEVICE,
+            filesystem_uuid=legacy,
+        )
+
+        probe = StorageProbeResult(
+            filesystem_uuid=self.REAL_UUID,
+            source="/dev/sdb1",
+            fstype="vfat",
+            mount_root="/mnt/usb",
+            serial="DISK123",
+            vendor="Acme",
+            model="Stick",
+            notes="",
+        )
+        sd = migrate_volume_identity(self.DEVICE, probe, self.REAL_UUID)
+
+        assert PhotoPath.objects.count() == 1
+        row = PhotoPath.objects.get()
+        assert row.filesystem_uuid == self.REAL_UUID
+        assert row.storage_device_id == sd.pk
+        assert sd.serial == "DISK123"
+        assert not StorageDevice.objects.filter(filesystem_uuid=legacy).exists()

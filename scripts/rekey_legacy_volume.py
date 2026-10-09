@@ -13,6 +13,10 @@ full re-ingest can duplicate the catalog.  This script:
 
 Other volumes (other fuse UUIDs or device labels) are not touched.
 
+For USB/block volumes with ``photchart:legacy:…`` rows, prefer
+``pchart ingest <mount> --update-device`` after upgrading PhotoChart (uses
+partition UUID and parent-disk serial metadata).
+
 Default is dry-run (transaction rolled back).  Pass ``--doit`` to persist.
 
 Example::

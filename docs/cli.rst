@@ -131,6 +131,7 @@ Metadata inspection and conversion
 .. code-block:: console
 
    pchart info IMG_1234.NEF
+   pchart volume-info /mnt/camera
    pchart convert IMG_1234.NEF --format JPEG --resolution 1080p
    pchart list-resolutions
 

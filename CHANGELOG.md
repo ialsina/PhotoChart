@@ -52,6 +52,12 @@ All notable changes to PhotoChart are documented in this file.
   drives both labeled ``Extreme SSD``) can coexist.  Existing rows are migrated
   to ``photchart:legacy:…`` synthetic UUIDs per former device label; use
   ``--update-device`` on a mounted volume to store real UUIDs where available.
+- Block-volume ingest identity: filesystem UUID from the partition (with
+  ``blkid``/``lsblk`` fallbacks); vendor/model/serial from the parent disk;
+  ``photchart:block:…`` when no UUID is available (no new ``photchart:legacy``
+  rows from ingest).
+- ``pchart ingest --update-device`` re-keys existing ``PhotoPath`` rows for the
+  volume and refreshes ``StorageDevice`` metadata when probe identity improves.
 
 ### Fixed
 

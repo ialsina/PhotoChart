@@ -28,8 +28,14 @@ except Exception:  # pragma: no cover
     HAS_RICH = False
     _console = None
 
+from photochart.fs.storage_probe import (
+    StorageProbeResult,
+    probe_storage_from_path,
+    resolve_volume_identity,
+)
 from photochart.imaging.exif import extract_exif_for_info
 from photochart.imaging.extract import extract_metadata
+from photochart.ingest.runner import build_device_label
 from photochart.media.resolution import get_resolution_presets
 
 
@@ -532,4 +538,98 @@ def cmd_info(args: argparse.Namespace) -> int:
     else:
         _console.print(f"[yellow]No metadata found for: {file_path}[/]")
 
+    return 0
+
+
+def _format_capacity_bytes(capacity_bytes: Optional[int]) -> str:
+    if capacity_bytes is None:
+        return "N/A"
+    gb = capacity_bytes / (1024**3)
+    return f"{gb:.2f} GB ({capacity_bytes:,} bytes)"
+
+
+def _volume_info_payload(
+    path: Path, probe: StorageProbeResult, catalog_device: str
+) -> dict:
+    notes = (probe.notes or "").strip()
+    return {
+        "path": str(path.resolve()),
+        "mount_root": probe.mount_root,
+        "source": probe.source,
+        "fstype": probe.fstype,
+        "filesystem_uuid": probe.filesystem_uuid,
+        "catalog_filesystem_uuid": resolve_volume_identity(probe, catalog_device),
+        "catalog_device_label": catalog_device,
+        "capacity_bytes": probe.capacity_bytes,
+        "vendor": probe.vendor,
+        "model": probe.model,
+        "serial": probe.serial,
+        "notes": notes or None,
+    }
+
+
+def cmd_volume_info(args: argparse.Namespace) -> int:
+    """Display storage volume metadata for a mount path or file on a volume."""
+    raw_path = args.path
+    path = Path(raw_path)
+
+    if not path.exists():
+        print(f"Error: Path does not exist: {raw_path}", file=sys.stderr)
+        return 1
+
+    probe = probe_storage_from_path(str(path), deep=True)
+    catalog_device = args.device_label or build_device_label(str(path))
+    payload = _volume_info_payload(path, probe, catalog_device)
+
+    if getattr(args, "json", False):
+        print(json.dumps(payload, sort_keys=True, indent=2))
+        return 0
+
+    if not HAS_RICH:
+        print(f"Volume metadata for: {payload['path']}")
+        print("=" * 80)
+        print(f"  Mount root:              {payload['mount_root'] or 'N/A'}")
+        print(f"  Source:                  {payload['source'] or 'N/A'}")
+        print(f"  Filesystem type:         {payload['fstype'] or 'N/A'}")
+        print(f"  Filesystem UUID:         {payload['filesystem_uuid'] or 'N/A'}")
+        print(
+            f"  Catalog filesystem UUID: {payload['catalog_filesystem_uuid'] or 'N/A'}"
+        )
+        print(f"  Catalog device label:    {payload['catalog_device_label']}")
+        print(
+            f"  Capacity:                {_format_capacity_bytes(payload['capacity_bytes'])}"
+        )
+        print(f"  Vendor:                  {payload['vendor'] or 'N/A'}")
+        print(f"  Model:                   {payload['model'] or 'N/A'}")
+        print(f"  Serial:                  {payload['serial'] or 'N/A'}")
+        if payload.get("notes"):
+            print(f"  Notes:                   {payload['notes']}")
+        return 0
+
+    table = Table(show_header=False, box=None, padding=(0, 2))
+    table.add_column("Field", style="cyan")
+    table.add_column("Value")
+    rows = [
+        ("Mount root", payload["mount_root"] or "N/A"),
+        ("Source", payload["source"] or "N/A"),
+        ("Filesystem type", payload["fstype"] or "N/A"),
+        ("Filesystem UUID", payload["filesystem_uuid"] or "N/A"),
+        ("Catalog filesystem UUID", payload["catalog_filesystem_uuid"] or "N/A"),
+        ("Catalog device label", payload["catalog_device_label"]),
+        ("Capacity", _format_capacity_bytes(payload["capacity_bytes"])),
+        ("Vendor", payload["vendor"] or "N/A"),
+        ("Model", payload["model"] or "N/A"),
+        ("Serial", payload["serial"] or "N/A"),
+    ]
+    if payload.get("notes"):
+        rows.append(("Notes", payload["notes"]))
+    for label, value in rows:
+        table.add_row(label, value)
+
+    _console.print(
+        Panel.fit(
+            table,
+            title=f"[bold green]Volume metadata[/] — {payload['path']}",
+        )
+    )
     return 0

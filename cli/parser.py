@@ -22,6 +22,7 @@ from .commands import (
     cmd_convert,
     cmd_list_resolutions,
     cmd_info,
+    cmd_volume_info,
     cmd_organize,
     cmd_duplicates,
     cmd_metadata_date,
@@ -155,8 +156,10 @@ def build_parser() -> argparse.ArgumentParser:
         dest="update_device",
         default=False,
         help=(
-            "Re-probe the mounted volume and refresh StorageDevice metadata "
-            "(UUID, vendor, model, serial, capacity) for this ingest path."
+            "Re-probe the mounted volume: refresh StorageDevice metadata "
+            "(filesystem UUID from the partition, vendor/model/serial from the "
+            "parent disk, capacity) and re-key existing PhotoPath rows for this "
+            "volume when identity improves (e.g. photchart:legacy to a real UUID)."
         ),
     )
     p_ing.add_argument(
@@ -296,6 +299,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output full metadata as JSON (machine-readable)",
     )
     p_info.set_defaults(func=cmd_info)
+
+    # volume-info
+    p_vol = sub.add_parser(
+        "volume-info",
+        help="Show storage volume metadata for a mount or file path",
+        description=(
+            "Probe the mounted volume containing PATH (mount point or any file "
+            "on the volume) and print filesystem UUID, catalog identity, capacity, "
+            "and block-device vendor/model/serial when available"
+        ),
+    )
+    p_vol.add_argument(
+        "path",
+        help="Mount point or path to a file on the volume to inspect",
+    )
+    p_vol.add_argument(
+        "--device-label",
+        metavar="LABEL",
+        help=(
+            "Override catalog device label used to compute catalog filesystem UUID "
+            "(default: derived from the path like ingest)"
+        ),
+    )
+    p_vol.add_argument(
+        "-j",
+        "--json",
+        action="store_true",
+        help="Output probe data as JSON (machine-readable)",
+    )
+    p_vol.set_defaults(func=cmd_volume_info)
 
     # organize
     p_org = sub.add_parser(

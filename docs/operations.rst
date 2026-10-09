@@ -337,13 +337,29 @@ FUSE volumes (e.g. pCloud Drive at ``~/pCloudDrive``) use a stable synthetic
 ``photchart:fuse:…`` id derived from the mount.  ``PhotoPath.device`` remains the
 human-readable label from ingest (or ``--device``).
 
-On first ingest for a volume, PhotoChart probes metadata once (capacity, vendor,
-model, serial when available) and stores it on ``StorageDevice``.  Later ingests
-on the same volume skip probing unless you pass ``--update-device``.
+On first ingest for a volume, PhotoChart probes metadata once and stores it on
+``StorageDevice``.  Block volumes use the **partition** for the filesystem UUID
+(``findmnt``, then ``blkid`` / ``lsblk`` when needed) and the **parent disk** for
+vendor, model, and serial.  If no filesystem UUID is available, new ingests use
+``photchart:block:…`` (derived from the block device path), not the old
+``photchart:legacy:…`` label hash.
+
+Later ingests on the same volume skip probing unless you pass ``--update-device``,
+which re-probes, updates ``StorageDevice``, and **re-keys** existing ``PhotoPath``
+rows for that catalog device (including ``photchart:legacy:…`` from migration) to
+the current volume UUID.
 
 Legacy databases upgraded in place receive ``photchart:legacy:…`` ids per
 existing device label; run ``pchart ingest <mount> --update-device`` on each
-mounted volume to refresh metadata and real UUIDs where the OS provides them.
+mounted USB volume to repair identity and metadata.  For pCloud/FUSE, use
+``scripts/rekey_legacy_volume.py`` when the probed id is ``photchart:fuse:…``.
+
+To inspect probed metadata without ingesting, run
+``pchart volume-info <mount-or-file>`` (add ``--json`` for scripting).
+
+Docker one-shot ingest may not see full ``blkid``/``lsblk`` data; run
+``--update-device`` from the host (or ensure device nodes are visible) for
+complete USB identity.
 
 **Device labels and reconnecting**
 
