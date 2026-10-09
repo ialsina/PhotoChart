@@ -29,6 +29,10 @@ All notable changes to PhotoChart are documented in this file.
   ``IngestJob.update_device``) is set.
 - Photo Paths API and UI expose ``filesystem_uuid`` and storage metadata; device
   list is grouped by volume UUID with hardware hints when present.
+- ``scripts/rekey_legacy_volume.py`` to fix post-migration FUSE catalogs (e.g.
+  pCloud Drive): removes duplicate ``PhotoPath`` rows for the probed volume
+  UUID, then re-keys ``photchart:legacy:…`` paths for a given ``--device-label``
+  to that UUID (dry-run by default; ``--doit`` to apply).
 
 ### Changed
 
