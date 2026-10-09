@@ -150,6 +150,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p_ing.add_argument(
+        "--update-device",
+        action="store_true",
+        dest="update_device",
+        default=False,
+        help=(
+            "Re-probe the mounted volume and refresh StorageDevice metadata "
+            "(UUID, vendor, model, serial, capacity) for this ingest path."
+        ),
+    )
+    p_ing.add_argument(
         "--log",
         default=None,
         help=(

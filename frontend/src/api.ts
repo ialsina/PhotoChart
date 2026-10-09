@@ -3,6 +3,7 @@
 import type {
   Photograph,
   PhotoPath,
+  PhotoPathDeviceSummary,
   Checksum,
   Directory,
   DirKind,
@@ -288,7 +289,7 @@ export const api = {
     return fetchAPI(`/photo-paths/directories/${queryString}`);
   },
 
-  getPhotoPathDevices: (): Promise<Array<{ device: string; count: number }>> => {
+  getPhotoPathDevices: (): Promise<PhotoPathDeviceSummary[]> => {
     return fetchAPI("/photo-paths/devices/");
   },
 

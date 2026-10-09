@@ -260,34 +260,34 @@ def _stored_path_prefix_for_ingest(
 
 
 def _fetch_existing_catalog_paths(
-    device: str,
+    filesystem_uuid: str,
     stored_paths: List[str],
     path_prefix: Optional[str],
 ) -> set[str]:
     n = len(stored_paths)
     if path_prefix and len(path_prefix) >= 2:
         prefix_count = PhotoPath.objects.filter(
-            device=device, path__startswith=path_prefix
+            filesystem_uuid=filesystem_uuid, path__startswith=path_prefix
         ).count()
         if prefix_count <= n:
             return set(
                 PhotoPath.objects.filter(
-                    device=device, path__startswith=path_prefix
+                    filesystem_uuid=filesystem_uuid, path__startswith=path_prefix
                 ).values_list("path", flat=True)
             )
     existing: set[str] = set()
     for i in range(0, n, _PATH_LOOKUP_CHUNK):
         chunk = stored_paths[i : i + _PATH_LOOKUP_CHUNK]
         existing.update(
-            PhotoPath.objects.filter(device=device, path__in=chunk).values_list(
-                "path", flat=True
-            )
+            PhotoPath.objects.filter(
+                filesystem_uuid=filesystem_uuid, path__in=chunk
+            ).values_list("path", flat=True)
         )
     return existing
 
 
 def _fetch_photo_paths_by_stored_paths(
-    device: str,
+    filesystem_uuid: str,
     stored_paths: List[str],
     path_prefix: Optional[str],
 ) -> Dict[str, Any]:
@@ -298,11 +298,11 @@ def _fetch_photo_paths_by_stored_paths(
 
     if path_prefix and len(path_prefix) >= 2:
         prefix_count = PhotoPath.objects.filter(
-            device=device, path__startswith=path_prefix
+            filesystem_uuid=filesystem_uuid, path__startswith=path_prefix
         ).count()
         if prefix_count <= n:
             for photo_path in PhotoPath.objects.filter(
-                device=device, path__startswith=path_prefix
+                filesystem_uuid=filesystem_uuid, path__startswith=path_prefix
             ).select_related("photograph"):
                 if photo_path.path in stored_set:
                     by_path[photo_path.path] = photo_path
@@ -311,7 +311,7 @@ def _fetch_photo_paths_by_stored_paths(
     for i in range(0, n, _PATH_LOOKUP_CHUNK):
         chunk = stored_paths[i : i + _PATH_LOOKUP_CHUNK]
         for photo_path in PhotoPath.objects.filter(
-            device=device, path__in=chunk
+            filesystem_uuid=filesystem_uuid, path__in=chunk
         ).select_related("photograph"):
             by_path[photo_path.path] = photo_path
     return by_path
@@ -319,7 +319,7 @@ def _fetch_photo_paths_by_stored_paths(
 
 def collect_thumbnail_retry_candidates(
     image_files: List[Path],
-    device: str,
+    filesystem_uuid: str,
     *,
     ingest_path: str,
     mount_table: Optional[List[str]] = None,
@@ -345,7 +345,9 @@ def collect_thumbnail_retry_candidates(
 
     stored_paths = [path_to_store for _, path_to_store in eligible]
     path_prefix = _stored_path_prefix_for_ingest(ingest_path, mount_table, ingest_mount)
-    by_path = _fetch_photo_paths_by_stored_paths(device, stored_paths, path_prefix)
+    by_path = _fetch_photo_paths_by_stored_paths(
+        filesystem_uuid, stored_paths, path_prefix
+    )
 
     candidates: List[Tuple[Path, Any]] = []
     for file_path, path_to_store in eligible:
@@ -360,7 +362,7 @@ def collect_thumbnail_retry_candidates(
 
 def collect_error_repair_candidates(
     image_files: List[Path],
-    device: str,
+    filesystem_uuid: str,
     *,
     ingest_path: str,
     mount_table: Optional[List[str]] = None,
@@ -386,7 +388,9 @@ def collect_error_repair_candidates(
 
     stored_paths = [path_to_store for _, path_to_store in eligible]
     path_prefix = _stored_path_prefix_for_ingest(ingest_path, mount_table, ingest_mount)
-    by_path = _fetch_photo_paths_by_stored_paths(device, stored_paths, path_prefix)
+    by_path = _fetch_photo_paths_by_stored_paths(
+        filesystem_uuid, stored_paths, path_prefix
+    )
 
     candidates: List[Tuple[Path, Any]] = []
     for file_path, path_to_store in eligible:
@@ -401,7 +405,7 @@ def collect_error_repair_candidates(
 
 def filter_uningested_image_files(
     image_files: List[Path],
-    device: str,
+    filesystem_uuid: str,
     *,
     ingest_path: str,
     mount_table: List[str],
@@ -429,7 +433,7 @@ def filter_uningested_image_files(
 
     stored_paths = [path_to_store for _, path_to_store in eligible]
     path_prefix = _stored_path_prefix_for_ingest(ingest_path, mount_table, ingest_mount)
-    existing = _fetch_existing_catalog_paths(device, stored_paths, path_prefix)
+    existing = _fetch_existing_catalog_paths(filesystem_uuid, stored_paths, path_prefix)
 
     pending: List[Tuple[Path, str]] = []
     skipped = 0
@@ -452,6 +456,7 @@ def ingest_photos(
     retry_thumbnails: bool = False,
     fix_errors: bool = False,
     raw_only: bool = False,
+    update_device: bool = False,
 ) -> Dict[str, Any]:
     """Ingest photos from a directory and store them in the database.
 
@@ -538,6 +543,14 @@ def ingest_photos(
         if device is None:
             device = get_device_name(path)
 
+        from photograph.storage_device_service import ensure_storage_device_for_ingest
+
+        filesystem_uuid, storage_device = ensure_storage_device_for_ingest(
+            path,
+            device,
+            update_device=update_device,
+        )
+
         # Parse resolution if provided
         resolution_tuple: Optional[Tuple[int, int]] = None
         if resolution:
@@ -572,7 +585,7 @@ def ingest_photos(
         if fix_errors:
             repair_candidates = collect_error_repair_candidates(
                 image_files,
-                device,
+                filesystem_uuid,
                 ingest_path=path,
                 mount_table=mount_table,
                 ingest_mount=ingest_mount,
@@ -674,7 +687,7 @@ def ingest_photos(
         if retry_thumbnails:
             retry_candidates = collect_thumbnail_retry_candidates(
                 image_files,
-                device,
+                filesystem_uuid,
                 ingest_path=path,
                 mount_table=mount_table,
                 ingest_mount=ingest_mount,
@@ -765,7 +778,7 @@ def ingest_photos(
 
         pending_files, skipped = filter_uningested_image_files(
             image_files,
-            device,
+            filesystem_uuid,
             ingest_path=path,
             mount_table=mount_table,
             ingest_mount=ingest_mount,
@@ -837,6 +850,8 @@ def ingest_photos(
                             path=path_to_store,
                             filename=filename,
                             device=device,
+                            filesystem_uuid=filesystem_uuid,
+                            storage_device=storage_device,
                             photograph=photograph,
                         )
 

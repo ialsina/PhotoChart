@@ -577,6 +577,44 @@ class Photograph(models.Model):
             return False
 
 
+class StorageDevice(models.Model):
+    """Hardware or volume metadata for a mounted filesystem."""
+
+    filesystem_uuid = models.CharField(
+        max_length=80,
+        unique=True,
+        help_text="Canonical volume id (OS UUID or photchart:synthetic)",
+    )
+    catalog_device = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Last seen PhotoPath.device label for this volume",
+    )
+    capacity_bytes = models.BigIntegerField(
+        null=True,
+        blank=True,
+        help_text="Filesystem total size in bytes",
+    )
+    vendor = models.CharField(max_length=255, null=True, blank=True)
+    model = models.CharField(max_length=255, null=True, blank=True)
+    serial = models.CharField(max_length=255, null=True, blank=True)
+    source = models.CharField(max_length=512, null=True, blank=True)
+    fstype = models.CharField(max_length=64, null=True, blank=True)
+    mount_root = models.CharField(max_length=2048, null=True, blank=True)
+    probed_at = models.DateTimeField(null=True, blank=True)
+    probe_notes = models.TextField(blank=True, default="")
+
+    class Meta:
+        verbose_name = "Storage Device"
+        verbose_name_plural = "Storage Devices"
+
+    def __str__(self) -> str:
+        label = self.catalog_device or self.filesystem_uuid[:16]
+        return f"StorageDevice({label})"
+
+
 class PhotoPath(models.Model):
     """Photo path model tracking file locations across devices.
 
@@ -596,6 +634,18 @@ class PhotoPath(models.Model):
     )
     device = models.CharField(
         max_length=255, help_text="Device identifier where the photo is located"
+    )
+    filesystem_uuid = models.CharField(
+        max_length=80,
+        help_text="Volume identity for catalog uniqueness (OS UUID or synthetic)",
+    )
+    storage_device = models.ForeignKey(
+        StorageDevice,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="paths",
+        help_text="Linked volume metadata",
     )
     photograph = models.ForeignKey(
         Photograph,
@@ -634,9 +684,15 @@ class PhotoPath(models.Model):
         indexes = [
             models.Index(fields=["path"]),
             models.Index(fields=["device"]),
+            models.Index(fields=["filesystem_uuid"]),
             models.Index(fields=["photograph"]),
         ]
-        unique_together = [["path", "device"]]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["path", "filesystem_uuid"],
+                name="photopath_path_filesystem_uuid_uniq",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.path} on {self.device}"
@@ -959,6 +1015,12 @@ class IngestJob(models.Model):
     raw_only = models.BooleanField(
         default=False,
         help_text="Ingest only RAW image extensions.",
+    )
+    update_device = models.BooleanField(
+        default=False,
+        help_text=(
+            "Re-probe and refresh StorageDevice metadata for the ingested volume."
+        ),
     )
 
     # ---- Job tracking ----

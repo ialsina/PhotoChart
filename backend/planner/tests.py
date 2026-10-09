@@ -41,11 +41,14 @@ class PlannedActionTests(TestCase):
     def test_delete_verifies_file_and_preserves_audit(self):
         path = self._temp_photo()
         photograph = Photograph.objects.create(checksum=calculate_checksum(str(path)))
+        from photochart.fs.storage_probe import legacy_filesystem_uuid
+
         PhotoPath.objects.create(
             photograph=photograph,
             path=str(path),
             filename=path.name,
             device="test",
+            filesystem_uuid=legacy_filesystem_uuid("test"),
         )
         action = PlannedAction.objects.create(
             action_type=PlannedAction.ActionType.DELETE,

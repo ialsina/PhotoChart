@@ -23,6 +23,12 @@ All notable changes to PhotoChart are documented in this file.
 - ``pchart ingest --fix-errors`` (and ``IngestJob.fix_errors``) to re-attempt
   checksum, thumbnail, and metadata repair for catalogued files whose
   photograph is flagged ``has_errors``, without adding new catalog rows.
+- ``StorageDevice`` model and ingest-time volume probing (filesystem UUID,
+  capacity, vendor, model, serial when available).  Probe runs once per new
+  ``filesystem_uuid`` or when ``pchart ingest --update-device`` (and
+  ``IngestJob.update_device``) is set.
+- Photo Paths API and UI expose ``filesystem_uuid`` and storage metadata; device
+  list is grouped by volume UUID with hardware hints when present.
 
 ### Changed
 
@@ -36,6 +42,12 @@ All notable changes to PhotoChart are documented in this file.
 - Photographs leaf views (Unknown date and a specific day): load photos with
   cursor-based API pagination and infinite scroll instead of fetching every page
   up front; sort order is applied on the server.
+- ``PhotoPath.device`` remains the display label only.
+- **Breaking:** ``PhotoPath`` uniqueness is ``(path, filesystem_uuid)`` instead of
+  ``(path, device)``.  The same relative path on two different volumes (e.g. two
+  drives both labeled ``Extreme SSD``) can coexist.  Existing rows are migrated
+  to ``photchart:legacy:…`` synthetic UUIDs per former device label; use
+  ``--update-device`` on a mounted volume to store real UUIDs where available.
 
 ### Fixed
 

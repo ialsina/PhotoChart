@@ -17,7 +17,7 @@ from .filters import (
     photograph_list_needs_display_time_annotation,
     photograph_list_ordering_tuple,
 )
-from .models import Photograph, PhotoPath, IngestJob
+from .models import Photograph, PhotoPath, IngestJob, StorageDevice
 from .pagination import PhotographCursorPagination
 from .serializers import PhotographSerializer, PhotoPathSerializer, IngestJobSerializer
 from backend.permissions import IsPhotoChartOperator
@@ -200,7 +200,7 @@ class PhotoPathViewSet(viewsets.ModelViewSet):
 
     queryset = (
         PhotoPath.objects.all()
-        .select_related("photograph")
+        .select_related("photograph", "storage_device")
         .prefetch_related("photograph__paths", "photograph__albums")
     )
     serializer_class = PhotoPathSerializer
@@ -209,10 +209,14 @@ class PhotoPathViewSet(viewsets.ModelViewSet):
         """Filter queryset based on query parameters."""
         queryset = super().get_queryset()
 
-        # Filter by device
+        # Filter by device label
         device = self.request.query_params.get("device", None)
         if device:
             queryset = queryset.filter(device=device)
+
+        filesystem_uuid = self.request.query_params.get("filesystem_uuid", None)
+        if filesystem_uuid:
+            queryset = queryset.filter(filesystem_uuid=filesystem_uuid)
 
         # Filter by path prefix
         path_prefix = self.request.query_params.get("path_prefix", None)
@@ -306,18 +310,46 @@ class PhotoPathViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"])
     def devices(self, request):
-        """Get list of devices with photo path counts."""
-        from django.db.models import Count
+        """Get list of volumes (by filesystem_uuid) with path counts and metadata."""
+        from django.db.models import Count, Max
 
-        devices = (
-            PhotoPath.objects.values("device")
-            .annotate(count=Count("id"))
-            .order_by("device")
+        rows = (
+            PhotoPath.objects.values("filesystem_uuid")
+            .annotate(
+                count=Count("id"),
+                device=Max("device"),
+            )
+            .order_by("filesystem_uuid")
         )
 
-        result = [
-            {"device": item["device"], "count": item["count"]} for item in devices
-        ]
+        sd_map = {
+            sd.filesystem_uuid: sd
+            for sd in StorageDevice.objects.filter(
+                filesystem_uuid__in=[r["filesystem_uuid"] for r in rows]
+            )
+        }
+
+        result = []
+        for item in rows:
+            fs_uuid = item["filesystem_uuid"]
+            entry = {
+                "device": item["device"],
+                "filesystem_uuid": fs_uuid,
+                "count": item["count"],
+            }
+            sd = sd_map.get(fs_uuid)
+            if sd:
+                entry.update(
+                    {
+                        "capacity_bytes": sd.capacity_bytes,
+                        "vendor": sd.vendor,
+                        "model": sd.model,
+                        "serial": sd.serial,
+                        "fstype": sd.fstype,
+                        "catalog_device": sd.catalog_device,
+                    }
+                )
+            result.append(entry)
 
         return Response(result)
 

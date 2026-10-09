@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { api } from "../api";
-import type { PhotoPath } from "../types";
+import type { PhotoPath, PhotoPathDeviceSummary } from "../types";
 import { LazyThumbnail } from "./LazyThumbnail";
 
 type NavigationPath = {
@@ -26,7 +26,28 @@ export function PhotoPaths() {
   const [navigationPath, setNavigationPath] = useState<NavigationPath[]>([]);
   const [sortMode, setSortMode] = useState<SortMode>("id");
   const [ascending, setAscending] = useState<boolean>(true);
-  const [devices, setDevices] = useState<Array<{ device: string; count: number }>>([]);
+  const [devices, setDevices] = useState<PhotoPathDeviceSummary[]>([]);
+
+  const formatDeviceMeta = (d: PhotoPathDeviceSummary): string | null => {
+    const parts: string[] = [];
+    if (d.vendor || d.model) {
+      parts.push([d.vendor, d.model].filter(Boolean).join(" "));
+    }
+    if (d.serial) {
+      parts.push(`S/N ${d.serial}`);
+    }
+    const uuid = d.filesystem_uuid;
+    if (uuid && !uuid.startsWith("photchart:")) {
+      parts.push(uuid.slice(0, 8) + "…");
+    } else if (d.fstype) {
+      parts.push(d.fstype);
+    }
+    if (d.capacity_bytes != null && d.capacity_bytes > 0) {
+      const gb = d.capacity_bytes / (1024 ** 3);
+      parts.push(`${gb.toFixed(1)} GB`);
+    }
+    return parts.length > 0 ? parts.join(" · ") : null;
+  };
 
   // Pagination state
   const [loadingMore, setLoadingMore] = useState(false);
@@ -518,16 +539,20 @@ export function PhotoPaths() {
         <div className="hierarchy-section">
           <h3>Devices</h3>
           <div className="hierarchy-grid">
-            {currentView.devices.map((device) => (
+            {currentView.devices.map((device) => {
+              const meta = formatDeviceMeta(device);
+              return (
               <div
-                key={device.device}
+                key={device.filesystem_uuid}
                 className="hierarchy-item"
                 onClick={() => navigateToDevice(device.device)}
               >
                 <div className="hierarchy-item-name">{device.device}</div>
+                {meta && <div className="hierarchy-item-meta">{meta}</div>}
                 <div className="hierarchy-item-count">{device.count} path{device.count !== 1 ? "s" : ""}</div>
               </div>
-            ))}
+            );
+            })}
           </div>
         </div>
       )}
@@ -608,6 +633,15 @@ export function PhotoPaths() {
                         </span>
                         <span className="path-device">
                           <span className="field-label">Device:</span> {path.device}
+                          {path.storage_device && (
+                            <span className="path-device-meta">
+                              {" "}
+                              ({[path.storage_device.vendor, path.storage_device.model]
+                                .filter(Boolean)
+                                .join(" ") || path.filesystem_uuid.slice(0, 13)}
+                              …)
+                            </span>
+                          )}
                         </span>
                       </div>
                       <div className="path-value">

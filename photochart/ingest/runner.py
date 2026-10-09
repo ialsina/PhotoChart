@@ -82,51 +82,11 @@ def validate_ingest_path(
 
 
 def build_device_label(path: str) -> str:
-    """Return a stable device label for *path* suitable for ``PhotoPath.device``.
+    """Return a stable device label for *path* suitable for ``PhotoPath.device``."""
+    from photochart.fs.device import device_label_for_path
 
-    Mirrors the format produced by ``photochart.fs.device.get_device_name``
-    (``"LABEL (/mnt/target)"``).  If ``findmnt`` is unavailable, falls back
-    to ``get_device_name``.
-
-    Args:
-        path: Absolute path to a file or directory on the device.
-
-    Returns:
-        Device label string.
-    """
     try:
-        result = subprocess.run(
-            [
-                "findmnt",
-                "-T",
-                path,
-                "--output",
-                "LABEL,TARGET",
-                "--noheadings",
-                "--raw",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            line = result.stdout.strip()
-            if line:
-                parts = line.split(None, 1)
-                if len(parts) == 2:
-                    label, target = parts[0].strip(), parts[1].strip()
-                    if label and label not in ("-", ""):
-                        return f"{label} ({target})"
-                    if target and target != "/":
-                        return target
-    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
-        pass
-
-    # Fall back to existing device detection
-    try:
-        from photochart.fs.device import get_device_name
-
-        return get_device_name(path)
+        return device_label_for_path(path)
     except Exception:
         return "unknown"
 
@@ -148,6 +108,7 @@ def run_ingest_local(
     retry_thumbnails: bool = False,
     fix_errors: bool = False,
     raw_only: bool = False,
+    update_device: bool = False,
 ) -> dict:
     """Call ``ingest_photos`` directly in the current process.
 
@@ -173,6 +134,7 @@ def run_ingest_local(
         retry_thumbnails=retry_thumbnails,
         fix_errors=fix_errors,
         raw_only=raw_only,
+        update_device=update_device,
     )
 
 
@@ -196,6 +158,7 @@ def run_ingest_docker(
     retry_thumbnails: bool = False,
     fix_errors: bool = False,
     raw_only: bool = False,
+    update_device: bool = False,
 ) -> dict:
     """Spawn a one-shot ``docker compose run`` container that bind-mounts
     *mount_root* read-only, then runs ``pchart ingest`` inside it.
@@ -273,6 +236,8 @@ def run_ingest_docker(
         cmd += ["--fix-errors"]
     if raw_only:
         cmd += ["--raw"]
+    if update_device:
+        cmd += ["--update-device"]
 
     logger.info(
         "Launching one-shot ingest container: %s",
@@ -370,6 +335,7 @@ def choose_and_run_ingest(
     retry_thumbnails: bool = False,
     fix_errors: bool = False,
     raw_only: bool = False,
+    update_device: bool = False,
 ) -> dict:
     """Dispatch an ingest request to the local or Docker backend.
 
@@ -450,6 +416,7 @@ def choose_and_run_ingest(
             retry_thumbnails=retry_thumbnails,
             fix_errors=fix_errors,
             raw_only=raw_only,
+            update_device=update_device,
         )
 
     # ----- Docker path ----------------------------------------------------
@@ -508,4 +475,5 @@ def choose_and_run_ingest(
         retry_thumbnails=retry_thumbnails,
         fix_errors=fix_errors,
         raw_only=raw_only,
+        update_device=update_device,
     )

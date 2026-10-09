@@ -8,7 +8,24 @@ from django.contrib.auth.models import Permission, User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
-from .models import IngestJob, PhotoPath, Photograph
+from photochart.fs.storage_probe import legacy_filesystem_uuid
+
+from .models import IngestJob, PhotoPath, Photograph, StorageDevice
+
+
+def _legacy_uuid(device: str) -> str:
+    return legacy_filesystem_uuid(device)
+
+
+def _mock_ensure_storage_device(
+    ingest_path: str, catalog_device: str, *, update_device: bool = False
+):
+    fs = legacy_filesystem_uuid(catalog_device)
+    sd, _ = StorageDevice.objects.get_or_create(
+        filesystem_uuid=fs,
+        defaults={"catalog_device": catalog_device},
+    )
+    return fs, sd
 
 
 def _make_operator(username: str = "operator", password: str = "secret") -> User:
@@ -311,6 +328,10 @@ class IngestJobTaskTest(TestCase):
 # ---------------------------------------------------------------------------
 
 
+@patch(
+    "photograph.storage_device_service.ensure_storage_device_for_ingest",
+    side_effect=_mock_ensure_storage_device,
+)
 class IngestRetryThumbnailsTest(TestCase):
     DEVICE = "test-device"
 
@@ -349,7 +370,10 @@ class IngestRetryThumbnailsTest(TestCase):
                     path_str = str(img.resolve())
                     photograph = Photograph.objects.create()
                     PhotoPath.objects.create(
-                        path=path_str, device=self.DEVICE, photograph=photograph
+                        path=path_str,
+                        device=self.DEVICE,
+                        filesystem_uuid=_legacy_uuid(self.DEVICE),
+                        photograph=photograph,
                     )
 
                     with patch(
@@ -388,7 +412,10 @@ class IngestRetryThumbnailsTest(TestCase):
                         save=True,
                     )
                     PhotoPath.objects.create(
-                        path=path_str, device=self.DEVICE, photograph=photograph
+                        path=path_str,
+                        device=self.DEVICE,
+                        filesystem_uuid=_legacy_uuid(self.DEVICE),
+                        photograph=photograph,
                     )
 
                     with patch(
@@ -421,6 +448,7 @@ class IngestRetryThumbnailsTest(TestCase):
                     PhotoPath.objects.create(
                         path=str(catalogued.resolve()),
                         device=self.DEVICE,
+                        filesystem_uuid=_legacy_uuid(self.DEVICE),
                         photograph=photograph,
                     )
 
@@ -456,13 +484,14 @@ class IngestRetryThumbnailsTest(TestCase):
                     PhotoPath.objects.create(
                         path=str(paths_on_disk[0].resolve()),
                         device=self.DEVICE,
+                        filesystem_uuid=_legacy_uuid(self.DEVICE),
                         photograph=photograph,
                     )
 
                     with self.assertNumQueries(2):
                         candidates = collect_thumbnail_retry_candidates(
                             paths_on_disk,
-                            self.DEVICE,
+                            _legacy_uuid(self.DEVICE),
                             ingest_path=tmp,
                             mount_table=[],
                         )
@@ -497,6 +526,10 @@ class IngestRetryThumbnailsTest(TestCase):
 # ---------------------------------------------------------------------------
 
 
+@patch(
+    "photograph.storage_device_service.ensure_storage_device_for_ingest",
+    side_effect=_mock_ensure_storage_device,
+)
 class IngestFixErrorsTest(TestCase):
     DEVICE = "test-device"
 
@@ -534,7 +567,10 @@ class IngestFixErrorsTest(TestCase):
                     path_str = str(img.resolve())
                     photograph = Photograph.objects.create(has_errors=True)
                     PhotoPath.objects.create(
-                        path=path_str, device=self.DEVICE, photograph=photograph
+                        path=path_str,
+                        device=self.DEVICE,
+                        filesystem_uuid=_legacy_uuid(self.DEVICE),
+                        photograph=photograph,
                     )
 
                     with patch(
@@ -572,7 +608,10 @@ class IngestFixErrorsTest(TestCase):
                         save=True,
                     )
                     PhotoPath.objects.create(
-                        path=path_str, device=self.DEVICE, photograph=photograph
+                        path=path_str,
+                        device=self.DEVICE,
+                        filesystem_uuid=_legacy_uuid(self.DEVICE),
+                        photograph=photograph,
                     )
 
                     with patch(
@@ -631,13 +670,14 @@ class IngestFixErrorsTest(TestCase):
                     PhotoPath.objects.create(
                         path=str(paths_on_disk[0].resolve()),
                         device=self.DEVICE,
+                        filesystem_uuid=_legacy_uuid(self.DEVICE),
                         photograph=photograph,
                     )
 
                     with self.assertNumQueries(2):
                         candidates = collect_error_repair_candidates(
                             paths_on_disk,
-                            self.DEVICE,
+                            _legacy_uuid(self.DEVICE),
                             ingest_path=tmp,
                         )
 
@@ -696,6 +736,10 @@ class PhotographRepairFromFileTest(TestCase):
 # ---------------------------------------------------------------------------
 
 
+@patch(
+    "photograph.storage_device_service.ensure_storage_device_for_ingest",
+    side_effect=_mock_ensure_storage_device,
+)
 class IngestPrefilterCataloguedTest(TestCase):
     DEVICE = "test-device"
 
@@ -732,7 +776,10 @@ class IngestPrefilterCataloguedTest(TestCase):
                     img = self._write_minimal_jpeg(Path(tmp))
                     path_str = str(img.resolve())
                     PhotoPath.objects.create(
-                        path=path_str, device=self.DEVICE, photograph=None
+                        path=path_str,
+                        device=self.DEVICE,
+                        filesystem_uuid=_legacy_uuid(self.DEVICE),
+                        photograph=None,
                     )
 
                     result = ingest_photos(
@@ -762,6 +809,7 @@ class IngestPrefilterCataloguedTest(TestCase):
                     PhotoPath.objects.create(
                         path=str(existing.resolve()),
                         device=self.DEVICE,
+                        filesystem_uuid=_legacy_uuid(self.DEVICE),
                         photograph=None,
                     )
 
@@ -792,6 +840,7 @@ class IngestPrefilterCataloguedTest(TestCase):
                         PhotoPath.objects.create(
                             path=str(img.resolve()),
                             device=self.DEVICE,
+                            filesystem_uuid=_legacy_uuid(self.DEVICE),
                             photograph=None,
                         )
 
@@ -833,6 +882,7 @@ class IngestPrefilterCataloguedTest(TestCase):
                     PhotoPath.objects.create(
                         path=str(catalogued.resolve()),
                         device=self.DEVICE,
+                        filesystem_uuid=_legacy_uuid(self.DEVICE),
                         photograph=None,
                     )
 
@@ -984,6 +1034,7 @@ class PhotographListApiTest(TestCase):
 
 class PhotoPathDirectoriesApiTest(TestCase):
     DEVICE = "pcloud"
+    FILESYSTEM_UUID = _legacy_uuid("pcloud")
 
     def setUp(self) -> None:
         _make_reader("pathuser")
@@ -996,6 +1047,7 @@ class PhotoPathDirectoriesApiTest(TestCase):
             PhotoPath(
                 path=f"BigFolder/sub/{i}.jpg",
                 device=self.DEVICE,
+                filesystem_uuid=self.FILESYSTEM_UUID,
                 filename=f"{i}.jpg",
             )
             for i in range(big_count)
@@ -1003,6 +1055,7 @@ class PhotoPathDirectoriesApiTest(TestCase):
             PhotoPath(
                 path=f"OtherFolder/{i}.jpg",
                 device=self.DEVICE,
+                filesystem_uuid=self.FILESYSTEM_UUID,
                 filename=f"{i}.jpg",
             )
             for i in range(other_count)

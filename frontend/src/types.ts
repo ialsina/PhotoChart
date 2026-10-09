@@ -23,10 +23,39 @@ export interface Photograph {
   updated_at: string;
 }
 
+export interface StorageDevice {
+  id: number;
+  filesystem_uuid: string;
+  catalog_device: string | null;
+  capacity_bytes: number | null;
+  vendor: string | null;
+  model: string | null;
+  serial: string | null;
+  source: string | null;
+  fstype: string | null;
+  mount_root: string | null;
+  probed_at: string | null;
+  probe_notes: string;
+}
+
+export interface PhotoPathDeviceSummary {
+  device: string;
+  filesystem_uuid: string;
+  count: number;
+  capacity_bytes?: number | null;
+  vendor?: string | null;
+  model?: string | null;
+  serial?: string | null;
+  fstype?: string | null;
+  catalog_device?: string | null;
+}
+
 export interface PhotoPath {
   id: number;
   path: string;
   device: string;
+  filesystem_uuid: string;
+  storage_device: StorageDevice | null;
   photograph: number | null;
   photograph_image_url: string | null;
   photograph_paths_count: number;

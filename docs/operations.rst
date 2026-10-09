@@ -329,10 +329,24 @@ container pattern used by ``scripts/compose-ingest.sh``.  This requires:
 3. ``INGEST_ALWAYS_ALLOWED_PREFIXES`` (default ``/photos``) ensures library
    paths always pass validation even when external prefixes are configured.
 
+**Volume identity and device labels**
+
+Catalog rows are unique by ``(path, filesystem_uuid)``, not by the display
+label.  ``PhotoPath.filesystem_uuid`` is the OS filesystem UUID when available;
+FUSE volumes (e.g. pCloud Drive at ``~/pCloudDrive``) use a stable synthetic
+``photchart:fuse:…`` id derived from the mount.  ``PhotoPath.device`` remains the
+human-readable label from ingest (or ``--device``).
+
+On first ingest for a volume, PhotoChart probes metadata once (capacity, vendor,
+model, serial when available) and stores it on ``StorageDevice``.  Later ingests
+on the same volume skip probing unless you pass ``--update-device``.
+
+Legacy databases upgraded in place receive ``photchart:legacy:…`` ids per
+existing device label; run ``pchart ingest <mount> --update-device`` on each
+mounted volume to refresh metadata and real UUIDs where the OS provides them.
+
 **Device labels and reconnecting**
 
-``PhotoPath.device`` stores the label produced at ingest time.  For a USB drive
-ingested as ``"EOS_DIGITAL (/mnt/camera)"``, the Photo Paths tab will show that
-device name.  If you plug the same drive in later at a different mount point,
-run ingest again with the same ``--device`` value to link new shots to the
-same device in the catalog.
+For a USB drive ingested as ``"EOS_DIGITAL (/mnt/camera)"``, the Photo Paths tab
+shows that label.  The same physical drive is matched by ``filesystem_uuid`` even
+if the label text changes; use ``--device`` only to override the display name.

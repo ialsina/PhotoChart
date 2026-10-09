@@ -90,6 +90,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         retry_thumbnails=retry_thumbnails,
         fix_errors=fix_errors,
         raw_only=getattr(args, "raw_only", False),
+        update_device=getattr(args, "update_device", False),
     )
 
     if not result["success"]:

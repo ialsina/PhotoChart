@@ -1,7 +1,27 @@
 """Serializers for the photograph app."""
 
 from rest_framework import serializers
-from .models import Photograph, PhotoPath, IngestJob
+from .models import Photograph, PhotoPath, IngestJob, StorageDevice
+
+
+class StorageDeviceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StorageDevice
+        fields = [
+            "id",
+            "filesystem_uuid",
+            "catalog_device",
+            "capacity_bytes",
+            "vendor",
+            "model",
+            "serial",
+            "source",
+            "fstype",
+            "mount_root",
+            "probed_at",
+            "probe_notes",
+        ]
+        read_only_fields = fields
 
 
 class PhotoPathSerializer(serializers.ModelSerializer):
@@ -13,6 +33,7 @@ class PhotoPathSerializer(serializers.ModelSerializer):
     photograph_has_errors = serializers.SerializerMethodField()
     photograph_model = serializers.SerializerMethodField()
     photograph_albums = serializers.SerializerMethodField()
+    storage_device = StorageDeviceSerializer(read_only=True)
 
     class Meta:
         model = PhotoPath
@@ -20,6 +41,8 @@ class PhotoPathSerializer(serializers.ModelSerializer):
             "id",
             "path",
             "device",
+            "filesystem_uuid",
+            "storage_device",
             "photograph",
             "size",
             "photograph_image_url",
@@ -187,6 +210,7 @@ class IngestJobSerializer(serializers.ModelSerializer):
             "retry_thumbnails",
             "fix_errors",
             "raw_only",
+            "update_device",
             "status",
             "task_id",
             "error",
