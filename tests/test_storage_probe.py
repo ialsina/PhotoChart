@@ -20,8 +20,12 @@ def test_canonical_filesystem_uuid() -> None:
         canonical_filesystem_uuid("A1B2C3D4-E5F6-7890-ABCD-EF1234567890")
         == "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
     )
+    assert canonical_filesystem_uuid("5461-9657") == "5461-9657"
+    assert canonical_filesystem_uuid("67E3-6CCD") == "67e3-6ccd"
+    assert canonical_filesystem_uuid("67e36ccd") == "67e3-6ccd"
     assert canonical_filesystem_uuid("-") is None
     assert canonical_filesystem_uuid("not-a-uuid") is None
+    assert canonical_filesystem_uuid("1234567") is None
 
 
 def test_legacy_filesystem_uuid_stable() -> None:
@@ -68,6 +72,17 @@ def test_volume_filesystem_uuid_block_not_legacy() -> None:
     assert uuid == synthetic_block_filesystem_uuid("/dev/sdb1")
 
 
+def test_volume_filesystem_uuid_exfat_volume_serial() -> None:
+    probe = StorageProbeResult(
+        filesystem_uuid="5461-9657",
+        source="/dev/sda1",
+        fstype="exfat",
+        mount_root="/media/ivan/Extreme SSD",
+    )
+    assert volume_filesystem_uuid(probe, "label") == "5461-9657"
+    assert not volume_filesystem_uuid(probe, "label").startswith("photchart:")
+
+
 def test_probe_fills_uuid_from_blkid_when_findmnt_empty() -> None:
     with (
         patch(
@@ -94,6 +109,34 @@ def test_probe_fills_uuid_from_blkid_when_findmnt_empty() -> None:
     ):
         result = probe_storage_from_path("/mnt/data/file.jpg", deep=False)
     assert result.filesystem_uuid == "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+
+
+def test_probe_fills_exfat_volume_serial_from_blkid() -> None:
+    with (
+        patch(
+            "photochart.fs.storage_probe._run_findmnt",
+            return_value={
+                "uuid": "-",
+                "source": "/dev/sda1",
+                "fstype": "exfat",
+                "target": "/media/ivan/Extreme SSD",
+            },
+        ),
+        patch(
+            "photochart.fs.storage_probe._blkid_filesystem_uuid",
+            return_value="5461-9657",
+        ),
+        patch(
+            "photochart.fs.storage_probe.get_mount_point_from_file",
+            return_value=None,
+        ),
+        patch(
+            "photochart.fs.storage_probe._statvfs_capacity_bytes",
+            return_value=None,
+        ),
+    ):
+        result = probe_storage_from_path("/media/ivan/Extreme SSD", deep=False)
+    assert result.filesystem_uuid == "5461-9657"
 
 
 def test_run_findmnt_without_uuid_column(monkeypatch) -> None:

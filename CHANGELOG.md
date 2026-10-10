@@ -58,6 +58,10 @@ All notable changes to PhotoChart are documented in this file.
   rows from ingest).
 - ``pchart ingest --update-device`` re-keys existing ``PhotoPath`` rows for the
   volume and refreshes ``StorageDevice`` metadata when probe identity improves.
+- Volume probe accepts vfat/exfat volume serials (``XXXX-XXXX``, as in
+  ``lsblk``/``blkid``) as ``filesystem_uuid``, so exFAT USB drives use a stable
+  id instead of ``photchart:block:…``.  Run ``--update-device`` to re-key rows
+  that were catalogued with the block-path synthetic id.
 
 ### Fixed
 

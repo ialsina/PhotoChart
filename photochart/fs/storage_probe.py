@@ -12,10 +12,13 @@ from typing import Optional
 
 from photochart.fs.device import get_mount_point_from_file
 
-_UUID_RE = re.compile(
+_RFC_UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
     re.IGNORECASE,
 )
+# vfat/exfat volume serial as reported by lsblk/blkid (32-bit, not RFC 128-bit).
+_FAT_VOLUME_SERIAL_RE = re.compile(r"^[0-9a-f]{4}-[0-9a-f]{4}$", re.IGNORECASE)
+_FAT_VOLUME_SERIAL_COMPACT_RE = re.compile(r"^[0-9a-f]{8}$", re.IGNORECASE)
 
 
 @dataclass
@@ -34,12 +37,20 @@ class StorageProbeResult:
 
 
 def canonical_filesystem_uuid(value: Optional[str]) -> Optional[str]:
-    """Normalize a filesystem UUID string, or return None if invalid."""
+    """Normalize a filesystem UUID string, or return None if invalid.
+
+    Accepts RFC 128-bit UUIDs (ext4, btrfs, NTFS, …) and vfat/exfat volume
+    serials in ``XXXX-XXXX`` form (or eight hex digits without a dash).
+    """
     if not value or value in ("-", ""):
         return None
     cleaned = value.strip().lower()
-    if _UUID_RE.match(cleaned):
+    if _RFC_UUID_RE.match(cleaned):
         return cleaned
+    if _FAT_VOLUME_SERIAL_RE.match(cleaned):
+        return cleaned
+    if _FAT_VOLUME_SERIAL_COMPACT_RE.match(cleaned):
+        return f"{cleaned[:4]}-{cleaned[4:]}"
     return None
 
 

@@ -340,9 +340,10 @@ human-readable label from ingest (or ``--device``).
 On first ingest for a volume, PhotoChart probes metadata once and stores it on
 ``StorageDevice``.  Block volumes use the **partition** for the filesystem UUID
 (``findmnt``, then ``blkid`` / ``lsblk`` when needed) and the **parent disk** for
-vendor, model, and serial.  If no filesystem UUID is available, new ingests use
-``photchart:block:…`` (derived from the block device path), not the old
-``photchart:legacy:…`` label hash.
+vendor, model, and serial.  Accepted ids include RFC 128-bit UUIDs (ext4, NTFS,
+…) and vfat/exfat **volume serials** in ``XXXX-XXXX`` form as shown by ``lsblk``.
+If no filesystem id is available, new ingests use ``photchart:block:…`` (derived
+from the block device path), not the old ``photchart:legacy:…`` label hash.
 
 Later ingests on the same volume skip probing unless you pass ``--update-device``,
 which re-probes, updates ``StorageDevice``, and **re-keys** existing ``PhotoPath``
