@@ -119,7 +119,7 @@ class TestBuildDeviceLabel:
             return_value=MagicMock(returncode=0, stdout="MyDisk /mnt/camera\n"),
         ):
             label = build_device_label(str(tmp_path))
-        assert label == "MyDisk (/mnt/camera)"
+        assert label == "MyDisk"
 
     def test_uses_target_when_label_missing(self, tmp_path: Path) -> None:
         with patch(

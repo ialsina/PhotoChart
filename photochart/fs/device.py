@@ -118,14 +118,14 @@ def device_label_for_path(path: str) -> str:
     locally-visible paths.
 
     Label format mirrors ``get_device_name``:
-    ``"LABEL (/mnt/target)"`` when a filesystem label is available, otherwise
-    the mount target path or a hostname-based fallback.
+    filesystem label when available, otherwise the mount target path or a
+    hostname-based fallback (mount path is not appended to the label).
 
     Args:
         path: Absolute path to a file or directory on the device.
 
     Returns:
-        Device label string (e.g. ``"MyDisk (/mnt/camera)"``).
+        Device label string (e.g. ``"MyDisk"`` or ``"/mnt/camera"``).
     """
     import subprocess as _subprocess
 
@@ -151,7 +151,7 @@ def device_label_for_path(path: str) -> str:
                 if len(parts) == 2:
                     label, target = parts[0].strip(), parts[1].strip()
                     if label and label not in ("-", ""):
-                        return f"{label} ({target})"
+                        return label
                     if target and target != "/":
                         return target
     except (FileNotFoundError, _subprocess.TimeoutExpired, OSError):
@@ -291,7 +291,7 @@ def get_device_name(file_path: Optional[str] = None) -> str:
                                     label = label_link.name
                                     # Sanitize label (handles URL encoding, hex/octal escape sequences)
                                     label = sanitize_label(label)
-                                    return f"{label} ({mount_point})"
+                                    return label
                             except (OSError, ValueError):
                                 continue
                 except (OSError, IOError):
@@ -354,11 +354,11 @@ def get_device_name(file_path: Optional[str] = None) -> str:
                     # Format might be server:/path or //server/share
                     if ":" in device:
                         server = device.split(":")[0]
-                        return f"{server} ({mount_point})"
+                        return server
                     elif device.startswith("//"):
                         parts = device[2:].split("/", 1)
                         server = parts[0] if parts else "network"
-                        return f"{server} ({mount_point})"
+                        return server
 
                 # Before using device name, check if it's the root filesystem
                 # Only do this if no label/UUID was found above
@@ -386,9 +386,7 @@ def get_device_name(file_path: Optional[str] = None) -> str:
                     # Otherwise, it's an external device mounted at / (unusual but possible)
                     # Continue to use device name below
 
-                # Use device name with mount point
-                mount_name = Path(mount_point).name or mount_point
-                return f"{device_name} ({mount_name})"
+                return device_name
 
             # For other device types, use mount point name
             mount_name = Path(mount_point).name or mount_point

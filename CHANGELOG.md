@@ -46,7 +46,9 @@ All notable changes to PhotoChart are documented in this file.
 - Photographs leaf views (Unknown date and a specific day): load photos with
   cursor-based API pagination and infinite scroll instead of fetching every page
   up front; sort order is applied on the server.
-- ``PhotoPath.device`` remains the display label only.
+- ``PhotoPath.device`` remains the display label only; ingest no longer appends
+  the mount path in parentheses (e.g. ``MyDisk`` instead of
+  ``MyDisk (/mnt/camera)``).
 - **Breaking:** ``PhotoPath`` uniqueness is ``(path, filesystem_uuid)`` instead of
   ``(path, device)``.  The same relative path on two different volumes (e.g. two
   drives both labeled ``Extreme SSD``) can coexist.  Existing rows are migrated
