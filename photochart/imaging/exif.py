@@ -182,6 +182,10 @@ def extract_exif_for_info(file_path: str, all_exif: bool = False) -> Dict[str, A
 @contextmanager
 def _exif_image(file_path: str) -> Iterator[Any]:
     """Open an image suitable for EXIF reads (file or RAW embedded JPEG)."""
+    from photochart.imaging.pillow_config import configure_pillow_once
+
+    configure_pillow_once()
+
     from PIL import Image
 
     img: Any = None

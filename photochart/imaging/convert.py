@@ -50,6 +50,10 @@ def convert_image(
         >>> convert_image("photo.jpg", "photo_medium.jpg", resolution="medium")
         True
     """
+    from photochart.imaging.pillow_config import configure_pillow_once
+
+    configure_pillow_once()
+
     if not os.path.exists(src):
         logger.error("Source file does not exist: %s", src)
         return False

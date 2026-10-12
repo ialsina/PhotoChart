@@ -33,6 +33,9 @@ All notable changes to PhotoChart are documented in this file.
   pCloud Drive): removes duplicate ``PhotoPath`` rows for the probed volume
   UUID, then re-keys ``photchart:legacy:…`` paths for a given ``--device-label``
   to that UUID (dry-run by default; ``--doit`` to apply).
+- ``ENABLE_MAX_IMAGE_PIXELS`` and ``MAX_IMAGE_PIXELS`` settings to configure
+  Pillow decompression-bomb limits for ingest thumbnails and other imaging
+  paths (see ``docs/configuration.rst``).
 
 ### Changed
 

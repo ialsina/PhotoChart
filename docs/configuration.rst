@@ -173,3 +173,16 @@ The Django application reads:
    topology use ``docker/compose.yaml:docker/compose.host-postgres.yaml`` on the host.  The
    worker also uses this setting when spawning API-triggered one-shot ingest
    containers.
+
+``ENABLE_MAX_IMAGE_PIXELS``
+   When ``true`` (default), Pillow's decompression-bomb protection stays active.
+   Set to ``false`` to disable the check entirely (``Image.MAX_IMAGE_PIXELS =
+   None``).  Use only for trusted local media; ingest with ``--resolution``
+   decodes the full source image before resizing.
+
+``MAX_IMAGE_PIXELS``
+   Optional override for Pillow's ``MAX_IMAGE_PIXELS``.  Unset, empty, or
+   ``null`` leaves Pillow's built-in default (~89M pixels; hard error above
+   about twice that).  Set a positive integer to raise the limit—for example
+   ``500000000`` for very large panoramas or scans.  Ignored when
+   ``ENABLE_MAX_IMAGE_PIXELS=false``.

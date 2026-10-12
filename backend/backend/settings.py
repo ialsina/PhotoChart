@@ -278,6 +278,10 @@ INGEST_READ_STABILITY_INTERVAL_SECONDS = config(
     "INGEST_READ_STABILITY_INTERVAL_SECONDS", default=0.25, cast=float
 )
 
+# Pillow decompression-bomb limits (parsed in photochart.imaging.pillow_config).
+ENABLE_MAX_IMAGE_PIXELS = config("ENABLE_MAX_IMAGE_PIXELS", default=True, cast=bool)
+MAX_IMAGE_PIXELS = config("MAX_IMAGE_PIXELS", default="")
+
 # When the Celery worker has the host root bind-mounted read-only
 # (compose.override.yaml: volumes: - /:/host:ro), set this to the bind target
 # (e.g. /host).  The runner uses it to resolve mount roots and device labels
