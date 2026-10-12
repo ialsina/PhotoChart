@@ -173,6 +173,49 @@ class Photograph(models.Model):
             self.save(update_fields=["has_errors"])
             return None
 
+    def apply_metadata_from_file(
+        self, file_path, *, filename: str | None = None
+    ) -> bool:
+        """Set ``time`` and ``model`` from EXIF, then filename, when still empty.
+
+        EXIF takes precedence; filename patterns are used only when ``time`` is
+        still unset after EXIF. Filename parse failure does not set ``has_errors``.
+        """
+        if not file_path or not os.path.exists(file_path):
+            return False
+
+        updated = False
+        if not self.time or not self.model:
+            exif_data = self._extract_exif_data(file_path)
+            if exif_data:
+                update_fields = []
+                if not self.time and exif_data.get("datetime"):
+                    exif_time = exif_data["datetime"]
+                    self.time = (
+                        timezone.make_aware(exif_time)
+                        if timezone.is_naive(exif_time)
+                        else exif_time
+                    )
+                    update_fields.append("time")
+                if not self.model and exif_data.get("model"):
+                    self.model = exif_data["model"]
+                    update_fields.append("model")
+                if update_fields:
+                    self.save(update_fields=update_fields)
+                    updated = True
+
+        if not self.time:
+            from photochart.imaging.filename_time import parse_datetime_from_filename
+
+            name = filename or os.path.basename(file_path)
+            parsed = parse_datetime_from_filename(name)
+            if parsed is not None:
+                self.time = timezone.make_aware(parsed)
+                self.save(update_fields=["time"])
+                updated = True
+
+        return updated
+
     def compute_checksum_from_image(self):
         """Compute and set the checksum from the image file if available.
 
@@ -274,32 +317,7 @@ class Photograph(models.Model):
         if store_thumbnail and not self.thumbnail:
             self.get_image_from_file(file_path, resolution=resolution)
 
-        if not self.time or not self.model:
-            try:
-                from photochart.imaging.exif import ExifTagName, extract_exif
-
-                exif_data = extract_exif(
-                    file_path, [ExifTagName.DATETIME, ExifTagName.MODEL]
-                )
-                if exif_data:
-                    update_fields = []
-                    if not self.time and exif_data.get("datetime"):
-                        exif_time = exif_data["datetime"]
-                        self.time = (
-                            timezone.make_aware(exif_time)
-                            if timezone.is_naive(exif_time)
-                            else exif_time
-                        )
-                        update_fields.append("time")
-                    if not self.model and exif_data.get("model"):
-                        self.model = exif_data["model"]
-                        update_fields.append("model")
-                    if update_fields:
-                        self.save(update_fields=update_fields)
-                elif not self.time or not self.model:
-                    self._extract_exif_data(file_path)
-            except Exception:
-                self._extract_exif_data(file_path)
+        self.apply_metadata_from_file(file_path, filename=os.path.basename(file_path))
 
         self.refresh_from_db()
         return not self.has_errors
@@ -392,28 +410,9 @@ class Photograph(models.Model):
 
                 self.thumbnail.save(filename, File(processed_image), save=True)
 
-                # Extract and set EXIF data (datetime and model) if not already set
-                exif_data = self._extract_exif_data(file_path)
-                if exif_data:
-                    update_fields = []
-
-                    # Set datetime if not already set
-                    if not self.time and exif_data.get("datetime"):
-                        exif_time = exif_data["datetime"]
-                        self.time = (
-                            timezone.make_aware(exif_time)
-                            if timezone.is_naive(exif_time)
-                            else exif_time
-                        )
-                        update_fields.append("time")
-
-                    # Set model if not already set
-                    if not self.model and exif_data.get("model"):
-                        self.model = exif_data["model"]
-                        update_fields.append("model")
-
-                    if update_fields:
-                        self.save(update_fields=update_fields)
+                self.apply_metadata_from_file(
+                    file_path, filename=os.path.basename(file_path)
+                )
 
                 return True
 
@@ -477,28 +476,9 @@ class Photograph(models.Model):
                 file_data = read_bytes_with_retry(file_path, config=read_retry_config)
                 self.thumbnail.save(filename, ContentFile(file_data), save=True)
 
-            # Extract and set EXIF data (datetime and model) if not already set
-            exif_data = self._extract_exif_data(file_path)
-            if exif_data:
-                update_fields = []
-
-                # Set datetime if not already set
-                if not self.time and exif_data.get("datetime"):
-                    exif_time = exif_data["datetime"]
-                    self.time = (
-                        timezone.make_aware(exif_time)
-                        if timezone.is_naive(exif_time)
-                        else exif_time
-                    )
-                    update_fields.append("time")
-
-                # Set model if not already set
-                if not self.model and exif_data.get("model"):
-                    self.model = exif_data["model"]
-                    update_fields.append("model")
-
-                if update_fields:
-                    self.save(update_fields=update_fields)
+            self.apply_metadata_from_file(
+                file_path, filename=os.path.basename(file_path)
+            )
 
             return True
         except Exception as exc:
@@ -882,33 +862,13 @@ class PhotoPath(models.Model):
                 photograph.save(update_fields=["has_errors"])
                 self.photograph = photograph
 
-        # Extract and set EXIF data (datetime and model) if not already set
-        # This should happen regardless of whether we're storing the image
+        # EXIF and filename metadata when fields are still empty
         if self.photograph and file_access_path and os.path.exists(file_access_path):
             try:
-                exif_data = self.photograph._extract_exif_data(file_access_path)
-                if exif_data:
-                    update_fields = []
-
-                    # Set datetime if not already set
-                    if not self.photograph.time and exif_data.get("datetime"):
-                        exif_time = exif_data["datetime"]
-                        self.photograph.time = (
-                            timezone.make_aware(exif_time)
-                            if timezone.is_naive(exif_time)
-                            else exif_time
-                        )
-                        update_fields.append("time")
-
-                    # Set model if not already set
-                    if not self.photograph.model and exif_data.get("model"):
-                        self.photograph.model = exif_data["model"]
-                        update_fields.append("model")
-
-                    if update_fields:
-                        self.photograph.save(update_fields=update_fields)
+                self.photograph.apply_metadata_from_file(
+                    file_access_path, filename=self.filename
+                )
             except Exception:
-                # Any error during EXIF extraction
                 self.photograph.has_errors = True
                 self.photograph.save(update_fields=["has_errors"])
 
@@ -1010,6 +970,13 @@ class IngestJob(models.Model):
             "Do not add new catalog entries; re-attempt checksum, thumbnail, "
             "and metadata repair for catalogued files whose photograph has "
             "has_errors."
+        ),
+    )
+    update_metadata = models.BooleanField(
+        default=False,
+        help_text=(
+            "Do not add new catalog entries; refresh missing photograph time "
+            "(EXIF, then filename) and camera model for catalogued files."
         ),
     )
     raw_only = models.BooleanField(

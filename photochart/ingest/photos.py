@@ -420,6 +420,46 @@ def collect_error_repair_candidates(
     return candidates
 
 
+def collect_metadata_update_candidates(
+    image_files: List[Path],
+    filesystem_uuid: str,
+    *,
+    ingest_path: str,
+    mount_table: Optional[List[str]] = None,
+    ingest_mount: Optional[str] = None,
+    media_root: Optional[Path] = None,
+) -> List[Tuple[Path, Any]]:
+    """Return catalogued on-disk files eligible for metadata refresh."""
+    if mount_table is None:
+        mount_table = load_mount_table()
+    eligible: List[Tuple[Path, str]] = []
+    for file_path in image_files:
+        if is_path_in_media_root(file_path, media_root=media_root):
+            continue
+        eligible.append(
+            (
+                file_path,
+                stored_path_for_file(file_path, mount_table=mount_table),
+            )
+        )
+
+    if not eligible:
+        return []
+
+    stored_paths = [path_to_store for _, path_to_store in eligible]
+    path_prefix = _stored_path_prefix_for_ingest(ingest_path, mount_table, ingest_mount)
+    by_path = _fetch_photo_paths_by_stored_paths(
+        filesystem_uuid, stored_paths, path_prefix
+    )
+
+    candidates: List[Tuple[Path, Any]] = []
+    for file_path, path_to_store in eligible:
+        existing_path = by_path.get(path_to_store)
+        if existing_path:
+            candidates.append((file_path, existing_path))
+    return candidates
+
+
 def filter_uningested_image_files(
     image_files: List[Path],
     filesystem_uuid: str,
@@ -472,6 +512,7 @@ def ingest_photos(
     log_path: Optional[str] = None,
     retry_thumbnails: bool = False,
     fix_errors: bool = False,
+    update_metadata: bool = False,
     raw_only: bool = False,
     update_device: bool = False,
 ) -> Dict[str, Any]:
@@ -507,6 +548,8 @@ def ingest_photos(
         fix_errors: If True, do not create new catalog rows; for catalogued files
             whose photograph has ``has_errors``, re-attempt checksum, thumbnail,
             and metadata repair from disk.
+        update_metadata: If True, do not create new catalog rows; for catalogued
+            files, refresh missing ``time`` / ``model`` from EXIF and filename.
         raw_only: When True, ingest only camera RAW file extensions.
 
     Returns:
@@ -518,6 +561,9 @@ def ingest_photos(
             - thumbnails_retried: number of existing catalog entries thumbnail-retry was attempted on
             - errors_repair_attempted: fix_errors mode repair attempts
             - errors_cleared: fix_errors mode photographs cleared of has_errors
+            - metadata_update_attempted: update_metadata mode files processed
+            - metadata_time_set: update_metadata mode photographs that gained time
+            - metadata_model_set: update_metadata mode photographs that gained model
             - skipped_already_ingested: files already in the catalog for this device (not processed)
             - errors: list of error messages
     """
@@ -532,6 +578,9 @@ def ingest_photos(
         "thumbnails_retried": 0,
         "errors_repair_attempted": 0,
         "errors_cleared": 0,
+        "metadata_update_attempted": 0,
+        "metadata_time_set": 0,
+        "metadata_model_set": 0,
         "skipped_already_ingested": 0,
         "errors": [],
     }
@@ -551,6 +600,7 @@ def ingest_photos(
             f"Parameters: resolution={resolution}, calculate_checksum={calculate_checksum}, "
             f"recursive={recursive}, store_images={store_images}, "
             f"retry_thumbnails={retry_thumbnails}, fix_errors={fix_errors}, "
+            f"update_metadata={update_metadata}, "
             f"raw_only={raw_only}"
         )
 
@@ -697,6 +747,89 @@ def ingest_photos(
                 logger.info(
                     f"Ingestion completed. Success: {result['success']}, "
                     f"Errors cleared: {result['errors_cleared']}, "
+                    f"Errors: {len(result['errors'])}"
+                )
+            return result
+
+        if update_metadata:
+            metadata_candidates = collect_metadata_update_candidates(
+                image_files,
+                filesystem_uuid,
+                ingest_path=path,
+                mount_table=mount_table,
+                ingest_mount=ingest_mount,
+                media_root=media_root,
+            )
+            if logger:
+                logger.info(
+                    "Metadata update: %s catalogued file(s) "
+                    "(of %s image file(s) scanned)",
+                    len(metadata_candidates),
+                    len(image_files),
+                )
+            with tqdm(
+                total=len(metadata_candidates),
+                desc="Updating metadata",
+                unit="file",
+                unit_scale=False,
+                dynamic_ncols=True,
+            ) as pbar:
+                for file_path, existing_path in metadata_candidates:
+                    file_path_str = str(file_path.resolve())
+                    photograph = existing_path.photograph
+                    if not photograph:
+                        pbar.update(1)
+                        continue
+                    try:
+                        with transaction.atomic():
+                            pbar.set_postfix_str(
+                                os.path.basename(file_path_str)[:50], refresh=False
+                            )
+                            result["metadata_update_attempted"] += 1
+                            had_time = bool(photograph.time)
+                            had_model = bool(photograph.model)
+                            try:
+                                photograph.apply_metadata_from_file(
+                                    file_path_str,
+                                    filename=existing_path.filename
+                                    or os.path.basename(existing_path.path),
+                                )
+                                photograph.refresh_from_db()
+                                if not had_time and photograph.time:
+                                    result["metadata_time_set"] += 1
+                                if not had_model and photograph.model:
+                                    result["metadata_model_set"] += 1
+                            except Exception as meta_exc:
+                                error_msg = (
+                                    f"Error updating metadata for {file_path_str}: "
+                                    f"{meta_exc}"
+                                )
+                                result["errors"].append(error_msg)
+                                if logger:
+                                    logger.error(
+                                        f"Metadata update error for file: {file_path_str}",
+                                        exc_info=True,
+                                        extra={"file_path": file_path_str},
+                                    )
+                    except Exception as e:
+                        error_msg = f"Error processing {file_path}: {str(e)}"
+                        result["errors"].append(error_msg)
+                        if logger:
+                            logger.error(
+                                f"Error processing file: {file_path}",
+                                exc_info=True,
+                                extra={"file_path": str(file_path)},
+                            )
+                    pbar.update(1)
+
+            if result["errors"] and result["metadata_time_set"] == 0:
+                if result["metadata_model_set"] == 0:
+                    result["success"] = False
+
+            if logger:
+                logger.info(
+                    f"Ingestion completed. Success: {result['success']}, "
+                    f"Metadata time set: {result['metadata_time_set']}, "
                     f"Errors: {len(result['errors'])}"
                 )
             return result

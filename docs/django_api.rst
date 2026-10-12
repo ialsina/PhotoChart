@@ -92,6 +92,7 @@ Request body (all fields except ``path`` are optional):
      "resolution":         "",
      "retry_thumbnails":   false,
      "fix_errors":         false,
+     "update_metadata":    false,
      "raw_only":           false
    }
 
@@ -107,7 +108,11 @@ implied (``store_images`` is treated as true).
 When ``fix_errors`` is true, no new ``PhotoPath`` rows are created; the job
 re-attempts checksum, thumbnail (when ``store_images`` is true), and metadata
 repair from disk for catalogued files whose photograph has ``has_errors``.
-``retry_thumbnails`` and ``fix_errors`` must not both be true on the same job.
+
+When ``update_metadata`` is true, no new ``PhotoPath`` rows are created; the job
+refreshes missing photograph time (EXIF, then filename patterns) and camera model
+for all catalogued files under the scan path. ``retry_thumbnails``,
+``fix_errors``, and ``update_metadata`` are mutually exclusive on the same job.
 
 Response (202 Accepted):
 

@@ -36,6 +36,12 @@ All notable changes to PhotoChart are documented in this file.
 - ``ENABLE_MAX_IMAGE_PIXELS`` and ``MAX_IMAGE_PIXELS`` settings to configure
   Pillow decompression-bomb limits for ingest thumbnails and other imaging
   paths (see ``docs/configuration.rst``).
+- Ingest sets ``Photograph.time`` from common filename patterns (``IMG_YYYYMMDD_hhmmss``,
+  optional ``_suffix``, 9-digit millisecond times, and the same without ``IMG_``)
+  when EXIF does not provide a capture time. EXIF is preferred when available.
+- ``pchart ingest --update-metadata`` (and ``IngestJob.update_metadata``) to
+  refresh missing capture time and camera model for catalogued files without
+  adding new catalog rows.
 
 ### Changed
 

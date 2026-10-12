@@ -87,7 +87,7 @@ Catalog ingestion
 
 Important options include ``--no-checksum``, ``--no-recursive``,
 ``--no-store-images``, ``--resolution``, ``--log``, ``--retry-thumbnails``,
-``--fix-errors``, and ``--raw`` (``-r``).
+``--fix-errors``, ``--update-metadata``, and ``--raw`` (``-r``).
 Ingestion records files and thumbnails in Django but does not classify or move
 the source.
 
@@ -101,13 +101,25 @@ card holds paired RAW+JPEG folders and you only want RAW in the catalog.
 add new catalog entries. It builds a work list of catalogued files (same stored
 path and device label) whose photograph has no thumbnail; only those files are
 processed and reflected in the progress bar. ``--no-store-images`` is ignored
-in this mode. ``--retry-thumbnails`` and ``--fix-errors`` cannot be used together.
+in this mode. It cannot be combined with ``--fix-errors`` or ``--update-metadata``.
 
 ``--fix-errors`` uses the same scan-and-match rules but selects catalogued files
 whose photograph is flagged ``has_errors``. For each candidate it re-reads the
 file on disk to fill a missing checksum or thumbnail (thumbnail retry only when
 thumbnails are stored) and refresh EXIF metadata, clearing ``has_errors`` when
 repair succeeds. Files that are not yet in the catalog are skipped.
+
+During normal ingest, when EXIF does not provide a capture time, PhotoChart may
+set ``Photograph.time`` from the file name when it matches common patterns such
+as ``IMG_YYYYMMDD_hhmmss``, ``IMG_YYYYMMDD_hhmmss_xxx``, ``IMG_YYYYMMDD_hhmmssSSS``
+(9-digit time with milliseconds), or the same shapes without the ``IMG_``
+prefix. EXIF always takes precedence when present.
+
+``--update-metadata`` scans the tree like ingest but does not add catalog rows.
+For each file already catalogued on the ingest device it re-reads metadata from
+disk, filling missing capture time (EXIF, then filename) and camera model.
+``--retry-thumbnails``, ``--fix-errors``, and ``--update-metadata`` are mutually
+exclusive.
 
 Resize stored thumbnails
 ------------------------

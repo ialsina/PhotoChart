@@ -195,6 +195,17 @@ def build_parser() -> argparse.ArgumentParser:
             "(unless --no-store-images), and metadata repair from disk."
         ),
     )
+    ingest_mode.add_argument(
+        "--update-metadata",
+        action="store_true",
+        dest="update_metadata",
+        default=False,
+        help=(
+            "Do not add new catalog entries. For catalogued files on this "
+            "device, refresh missing photograph time (EXIF, then filename "
+            "patterns) and camera model from disk."
+        ),
+    )
     p_ing.add_argument(
         "-r",
         "--raw",

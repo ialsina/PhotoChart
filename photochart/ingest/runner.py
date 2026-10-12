@@ -107,6 +107,7 @@ def run_ingest_local(
     log_path: Optional[str] = None,
     retry_thumbnails: bool = False,
     fix_errors: bool = False,
+    update_metadata: bool = False,
     raw_only: bool = False,
     update_device: bool = False,
 ) -> dict:
@@ -133,6 +134,7 @@ def run_ingest_local(
         log_path=log_path,
         retry_thumbnails=retry_thumbnails,
         fix_errors=fix_errors,
+        update_metadata=update_metadata,
         raw_only=raw_only,
         update_device=update_device,
     )
@@ -157,6 +159,7 @@ def run_ingest_docker(
     timeout: int = 3600,
     retry_thumbnails: bool = False,
     fix_errors: bool = False,
+    update_metadata: bool = False,
     raw_only: bool = False,
     update_device: bool = False,
 ) -> dict:
@@ -234,6 +237,8 @@ def run_ingest_docker(
         cmd += ["--retry-thumbnails"]
     if fix_errors:
         cmd += ["--fix-errors"]
+    if update_metadata:
+        cmd += ["--update-metadata"]
     if raw_only:
         cmd += ["--raw"]
     if update_device:
@@ -252,6 +257,9 @@ def run_ingest_docker(
         "thumbnails_retried": 0,
         "errors_repair_attempted": 0,
         "errors_cleared": 0,
+        "metadata_update_attempted": 0,
+        "metadata_time_set": 0,
+        "metadata_model_set": 0,
         "skipped_already_ingested": 0,
         "errors": [],
     }
@@ -334,6 +342,7 @@ def choose_and_run_ingest(
     log_path: Optional[str] = None,
     retry_thumbnails: bool = False,
     fix_errors: bool = False,
+    update_metadata: bool = False,
     raw_only: bool = False,
     update_device: bool = False,
 ) -> dict:
@@ -415,6 +424,7 @@ def choose_and_run_ingest(
             log_path=log_path,
             retry_thumbnails=retry_thumbnails,
             fix_errors=fix_errors,
+            update_metadata=update_metadata,
             raw_only=raw_only,
             update_device=update_device,
         )
@@ -474,6 +484,7 @@ def choose_and_run_ingest(
         resolution=resolution,
         retry_thumbnails=retry_thumbnails,
         fix_errors=fix_errors,
+        update_metadata=update_metadata,
         raw_only=raw_only,
         update_device=update_device,
     )

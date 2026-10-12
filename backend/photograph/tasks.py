@@ -41,6 +41,7 @@ def run_ingest_job(self, job_id: int) -> str:
             resolution=job.resolution or None,
             retry_thumbnails=job.retry_thumbnails,
             fix_errors=job.fix_errors,
+            update_metadata=job.update_metadata,
             raw_only=job.raw_only,
             update_device=job.update_device,
         )
