@@ -22,6 +22,14 @@ _ANCHOR_DT = datetime.fromtimestamp(_ANCHOR_TS, tz=timezone.utc).replace(tzinfo=
         ),
         ("20160406_195654.jpg", datetime(2016, 4, 6, 19, 56, 54)),
         ("20160406_195654_burst.jpg", datetime(2016, 4, 6, 19, 56, 54)),
+        (
+            "20251228_214719_963188.jpg",
+            datetime(2025, 12, 28, 21, 47, 19, 963188),
+        ),
+        (
+            "IMG_20251228_214719_963188.jpg",
+            datetime(2025, 12, 28, 21, 47, 19, 963188),
+        ),
     ],
 )
 def test_parse_datetime_from_filename_valid(name: str, expected: datetime) -> None:

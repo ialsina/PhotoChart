@@ -112,7 +112,8 @@ repair succeeds. Files that are not yet in the catalog are skipped.
 During normal ingest, when EXIF does not provide a capture time, PhotoChart may
 set ``Photograph.time`` from the file name when it matches common patterns such
 as ``IMG_YYYYMMDD_hhmmss``, ``IMG_YYYYMMDD_hhmmss_xxx``, ``IMG_YYYYMMDD_hhmmssSSS``
-(9-digit time with milliseconds), or the same shapes without the ``IMG_``
+(9-digit time with milliseconds), ``YYYYMMDD_hhmmss_uuuuuu`` (6-digit microsecond
+suffix), or the same shapes without the ``IMG_``
 prefix. EXIF always takes precedence when present. When ``EPOCH_TIME_INFERRAL=true``
 (see :doc:`configuration`), a numeric-only stem may also be interpreted as Unix
 epoch time (seconds through nanoseconds).
