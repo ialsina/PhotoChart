@@ -809,6 +809,62 @@ class IngestFixErrorsTest(TestCase):
 
     @patch("photochart.ingest.photos.get_mount_point", return_value=None)
     @patch("photochart.ingest.photos.get_device_name", return_value=DEVICE)
+    def test_update_metadata_only_processes_rows_missing_metadata(
+        self, *_mocks
+    ) -> None:
+        from django.utils import timezone
+
+        from photochart.ingest.photos import ingest_photos
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with tempfile.TemporaryDirectory() as tmp:
+                with self.settings(MEDIA_ROOT=media_root):
+                    tmp_path = Path(tmp)
+                    missing = self._write_minimal_jpeg(
+                        tmp_path, "IMG_20160406_195654.jpg"
+                    )
+                    complete = self._write_minimal_jpeg(tmp_path, "complete.jpg")
+                    missing_path = str(missing.resolve())
+                    complete_path = str(complete.resolve())
+                    PhotoPath.objects.create(
+                        path=missing_path,
+                        filename="IMG_20160406_195654.jpg",
+                        device=self.DEVICE,
+                        filesystem_uuid=_legacy_uuid(self.DEVICE),
+                        photograph=Photograph.objects.create(),
+                    )
+                    PhotoPath.objects.create(
+                        path=complete_path,
+                        filename="complete.jpg",
+                        device=self.DEVICE,
+                        filesystem_uuid=_legacy_uuid(self.DEVICE),
+                        photograph=Photograph.objects.create(
+                            time=timezone.now(),
+                            model="TestCam",
+                        ),
+                    )
+
+                    with patch(
+                        "photograph.models.Photograph._extract_exif_data",
+                        return_value={"datetime": None, "model": None},
+                    ):
+                        with patch(
+                            "photochart.ingest.photos.get_image_files"
+                        ) as mock_walk:
+                            result = ingest_photos(
+                                tmp,
+                                device=self.DEVICE,
+                                recursive=False,
+                                calculate_checksum=False,
+                                store_images=False,
+                                update_metadata=True,
+                            )
+                            mock_walk.assert_not_called()
+
+                    assert result["metadata_update_attempted"] == 1
+
+    @patch("photochart.ingest.photos.get_mount_point", return_value=None)
+    @patch("photochart.ingest.photos.get_device_name", return_value=DEVICE)
     def test_update_metadata_skips_not_in_catalog(self, *_mocks) -> None:
         from photochart.ingest.photos import ingest_photos
 

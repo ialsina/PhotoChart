@@ -115,9 +115,10 @@ as ``IMG_YYYYMMDD_hhmmss``, ``IMG_YYYYMMDD_hhmmss_xxx``, ``IMG_YYYYMMDD_hhmmssSS
 (9-digit time with milliseconds), or the same shapes without the ``IMG_``
 prefix. EXIF always takes precedence when present.
 
-``--update-metadata`` scans the tree like ingest but does not add catalog rows.
-For each file already catalogued on the ingest device it re-reads metadata from
-disk, filling missing capture time (EXIF, then filename) and camera model.
+``--update-metadata`` does not add catalog rows and does not walk the ingest
+tree on disk. It queries the catalog for rows under the ingest path whose
+photograph is missing capture time or camera model, then re-reads only those
+files from disk (EXIF, then filename patterns for time).
 ``--retry-thumbnails``, ``--fix-errors``, and ``--update-metadata`` are mutually
 exclusive.
 

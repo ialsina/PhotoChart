@@ -13,6 +13,7 @@ from typing import Optional, Dict, Any, List, Tuple
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
 from tqdm import tqdm
 
 from photochart.fs.device import (
@@ -420,43 +421,111 @@ def collect_error_repair_candidates(
     return candidates
 
 
+def _catalog_path_within_ingest_scope(
+    stored_path: str,
+    path_prefix: Optional[str],
+    *,
+    recursive: bool,
+) -> bool:
+    if not path_prefix or len(path_prefix) < 2:
+        return True
+    if not stored_path.startswith(path_prefix):
+        return False
+    if recursive:
+        return True
+    remainder = stored_path[len(path_prefix) :]
+    return "/" not in remainder.strip("/")
+
+
+def _disk_path_for_photo_path(
+    photo_path: Any,
+    *,
+    ingest_path: str,
+    ingest_mount: Optional[str],
+) -> Optional[Path]:
+    """Resolve a catalog ``PhotoPath`` row to an existing file on disk."""
+    stored = photo_path.path or ""
+    if stored and os.path.isabs(stored):
+        candidate = Path(stored)
+        if candidate.is_file():
+            return candidate
+
+    full = photo_path.get_full_path()
+    if full:
+        candidate = Path(full)
+        if candidate.is_file():
+            return candidate
+
+    if ingest_mount and stored and not os.path.isabs(stored):
+        candidate = Path(ingest_mount) / stored
+        if candidate.is_file():
+            return candidate
+
+    ingest_resolved = Path(ingest_path).resolve()
+    if ingest_resolved.is_file():
+        if stored in (str(ingest_resolved), ingest_resolved.name):
+            return ingest_resolved
+    if ingest_resolved.is_dir() and stored and not os.path.isabs(stored):
+        candidate = ingest_resolved / stored
+        if candidate.is_file():
+            return candidate
+
+    return None
+
+
 def collect_metadata_update_candidates(
-    image_files: List[Path],
     filesystem_uuid: str,
     *,
     ingest_path: str,
     mount_table: Optional[List[str]] = None,
     ingest_mount: Optional[str] = None,
     media_root: Optional[Path] = None,
+    recursive: bool = True,
+    raw_only: bool = False,
 ) -> List[Tuple[Path, Any]]:
-    """Return catalogued on-disk files eligible for metadata refresh."""
-    if mount_table is None:
-        mount_table = load_mount_table()
-    eligible: List[Tuple[Path, str]] = []
-    for file_path in image_files:
-        if is_path_in_media_root(file_path, media_root=media_root):
-            continue
-        eligible.append(
-            (
-                file_path,
-                stored_path_for_file(file_path, mount_table=mount_table),
-            )
-        )
+    """Return on-disk files for catalog rows missing photograph time or model.
 
-    if not eligible:
+    Queries the catalog first instead of walking the ingest tree on disk.
+    """
+    if not _django_models_available():
         return []
 
-    stored_paths = [path_to_store for _, path_to_store in eligible]
+    if mount_table is None:
+        mount_table = load_mount_table()
+
     path_prefix = _stored_path_prefix_for_ingest(ingest_path, mount_table, ingest_mount)
-    by_path = _fetch_photo_paths_by_stored_paths(
-        filesystem_uuid, stored_paths, path_prefix
+
+    queryset = (
+        PhotoPath.objects.filter(
+            filesystem_uuid=filesystem_uuid,
+            photograph__isnull=False,
+        )
+        .filter(Q(photograph__time__isnull=True) | Q(photograph__model__isnull=True))
+        .select_related("photograph")
     )
+    if path_prefix and len(path_prefix) >= 2:
+        queryset = queryset.filter(path__startswith=path_prefix)
 
     candidates: List[Tuple[Path, Any]] = []
-    for file_path, path_to_store in eligible:
-        existing_path = by_path.get(path_to_store)
-        if existing_path:
-            candidates.append((file_path, existing_path))
+    for photo_path in queryset.iterator():
+        if not _catalog_path_within_ingest_scope(
+            photo_path.path, path_prefix, recursive=recursive
+        ):
+            continue
+
+        disk_path = _disk_path_for_photo_path(
+            photo_path,
+            ingest_path=ingest_path,
+            ingest_mount=ingest_mount,
+        )
+        if disk_path is None:
+            continue
+        if is_path_in_media_root(disk_path, media_root=media_root):
+            continue
+        if not is_image_file(disk_path, raw_only=raw_only):
+            continue
+        candidates.append((disk_path, photo_path))
+
     return candidates
 
 
@@ -633,6 +702,88 @@ def ingest_photos(
         ingest_mount = mount_point_for_path(str(Path(path).resolve()), mount_table)
         media_root = _resolved_media_root()
 
+        if update_metadata:
+            metadata_candidates = collect_metadata_update_candidates(
+                filesystem_uuid,
+                ingest_path=path,
+                mount_table=mount_table,
+                ingest_mount=ingest_mount,
+                media_root=media_root,
+                recursive=recursive,
+                raw_only=raw_only,
+            )
+            if logger:
+                logger.info(
+                    "Metadata update: %s catalogued file(s) missing time or model",
+                    len(metadata_candidates),
+                )
+            with tqdm(
+                total=len(metadata_candidates),
+                desc="Updating metadata",
+                unit="file",
+                unit_scale=False,
+                dynamic_ncols=True,
+            ) as pbar:
+                for file_path, existing_path in metadata_candidates:
+                    file_path_str = str(file_path.resolve())
+                    photograph = existing_path.photograph
+                    if not photograph:
+                        pbar.update(1)
+                        continue
+                    try:
+                        with transaction.atomic():
+                            pbar.set_postfix_str(
+                                os.path.basename(file_path_str)[:50], refresh=False
+                            )
+                            result["metadata_update_attempted"] += 1
+                            had_time = bool(photograph.time)
+                            had_model = bool(photograph.model)
+                            try:
+                                photograph.apply_metadata_from_file(
+                                    file_path_str,
+                                    filename=existing_path.filename
+                                    or os.path.basename(existing_path.path),
+                                )
+                                photograph.refresh_from_db()
+                                if not had_time and photograph.time:
+                                    result["metadata_time_set"] += 1
+                                if not had_model and photograph.model:
+                                    result["metadata_model_set"] += 1
+                            except Exception as meta_exc:
+                                error_msg = (
+                                    f"Error updating metadata for {file_path_str}: "
+                                    f"{meta_exc}"
+                                )
+                                result["errors"].append(error_msg)
+                                if logger:
+                                    logger.error(
+                                        f"Metadata update error for file: {file_path_str}",
+                                        exc_info=True,
+                                        extra={"file_path": file_path_str},
+                                    )
+                    except Exception as e:
+                        error_msg = f"Error processing {file_path}: {str(e)}"
+                        result["errors"].append(error_msg)
+                        if logger:
+                            logger.error(
+                                f"Error processing file: {file_path}",
+                                exc_info=True,
+                                extra={"file_path": str(file_path)},
+                            )
+                    pbar.update(1)
+
+            if result["errors"] and result["metadata_time_set"] == 0:
+                if result["metadata_model_set"] == 0:
+                    result["success"] = False
+
+            if logger:
+                logger.info(
+                    f"Ingestion completed. Success: {result['success']}, "
+                    f"Metadata time set: {result['metadata_time_set']}, "
+                    f"Errors: {len(result['errors'])}"
+                )
+            return result
+
         # Get all image files
         image_files = get_image_files(
             path,
@@ -747,89 +898,6 @@ def ingest_photos(
                 logger.info(
                     f"Ingestion completed. Success: {result['success']}, "
                     f"Errors cleared: {result['errors_cleared']}, "
-                    f"Errors: {len(result['errors'])}"
-                )
-            return result
-
-        if update_metadata:
-            metadata_candidates = collect_metadata_update_candidates(
-                image_files,
-                filesystem_uuid,
-                ingest_path=path,
-                mount_table=mount_table,
-                ingest_mount=ingest_mount,
-                media_root=media_root,
-            )
-            if logger:
-                logger.info(
-                    "Metadata update: %s catalogued file(s) "
-                    "(of %s image file(s) scanned)",
-                    len(metadata_candidates),
-                    len(image_files),
-                )
-            with tqdm(
-                total=len(metadata_candidates),
-                desc="Updating metadata",
-                unit="file",
-                unit_scale=False,
-                dynamic_ncols=True,
-            ) as pbar:
-                for file_path, existing_path in metadata_candidates:
-                    file_path_str = str(file_path.resolve())
-                    photograph = existing_path.photograph
-                    if not photograph:
-                        pbar.update(1)
-                        continue
-                    try:
-                        with transaction.atomic():
-                            pbar.set_postfix_str(
-                                os.path.basename(file_path_str)[:50], refresh=False
-                            )
-                            result["metadata_update_attempted"] += 1
-                            had_time = bool(photograph.time)
-                            had_model = bool(photograph.model)
-                            try:
-                                photograph.apply_metadata_from_file(
-                                    file_path_str,
-                                    filename=existing_path.filename
-                                    or os.path.basename(existing_path.path),
-                                )
-                                photograph.refresh_from_db()
-                                if not had_time and photograph.time:
-                                    result["metadata_time_set"] += 1
-                                if not had_model and photograph.model:
-                                    result["metadata_model_set"] += 1
-                            except Exception as meta_exc:
-                                error_msg = (
-                                    f"Error updating metadata for {file_path_str}: "
-                                    f"{meta_exc}"
-                                )
-                                result["errors"].append(error_msg)
-                                if logger:
-                                    logger.error(
-                                        f"Metadata update error for file: {file_path_str}",
-                                        exc_info=True,
-                                        extra={"file_path": file_path_str},
-                                    )
-                    except Exception as e:
-                        error_msg = f"Error processing {file_path}: {str(e)}"
-                        result["errors"].append(error_msg)
-                        if logger:
-                            logger.error(
-                                f"Error processing file: {file_path}",
-                                exc_info=True,
-                                extra={"file_path": str(file_path)},
-                            )
-                    pbar.update(1)
-
-            if result["errors"] and result["metadata_time_set"] == 0:
-                if result["metadata_model_set"] == 0:
-                    result["success"] = False
-
-            if logger:
-                logger.info(
-                    f"Ingestion completed. Success: {result['success']}, "
-                    f"Metadata time set: {result['metadata_time_set']}, "
                     f"Errors: {len(result['errors'])}"
                 )
             return result

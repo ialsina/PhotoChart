@@ -40,8 +40,9 @@ All notable changes to PhotoChart are documented in this file.
   optional ``_suffix``, 9-digit millisecond times, and the same without ``IMG_``)
   when EXIF does not provide a capture time. EXIF is preferred when available.
 - ``pchart ingest --update-metadata`` (and ``IngestJob.update_metadata``) to
-  refresh missing capture time and camera model for catalogued files without
-  adding new catalog rows.
+  refresh missing capture time and camera model for catalogued rows that still
+  lack those fields, without walking the full ingest tree or adding new catalog
+  rows.
 
 ### Changed
 

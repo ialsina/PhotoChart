@@ -110,8 +110,9 @@ re-attempts checksum, thumbnail (when ``store_images`` is true), and metadata
 repair from disk for catalogued files whose photograph has ``has_errors``.
 
 When ``update_metadata`` is true, no new ``PhotoPath`` rows are created; the job
-refreshes missing photograph time (EXIF, then filename patterns) and camera model
-for all catalogued files under the scan path. ``retry_thumbnails``,
+selects catalogued rows under the scan path whose photograph lacks time or model,
+then refreshes metadata from disk for those files only (EXIF, then filename
+patterns for time). ``retry_thumbnails``,
 ``fix_errors``, and ``update_metadata`` are mutually exclusive on the same job.
 
 Response (202 Accepted):
