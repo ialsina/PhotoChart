@@ -282,6 +282,9 @@ INGEST_READ_STABILITY_INTERVAL_SECONDS = config(
 ENABLE_MAX_IMAGE_PIXELS = config("ENABLE_MAX_IMAGE_PIXELS", default=True, cast=bool)
 MAX_IMAGE_PIXELS = config("MAX_IMAGE_PIXELS", default="")
 
+# When true, ingest may set Photograph.time from numeric-only filenames as Unix epoch.
+EPOCH_TIME_INFERRAL = config("EPOCH_TIME_INFERRAL", default=False, cast=bool)
+
 # When the Celery worker has the host root bind-mounted read-only
 # (compose.override.yaml: volumes: - /:/host:ro), set this to the bind target
 # (e.g. /host).  The runner uses it to resolve mount roots and device labels

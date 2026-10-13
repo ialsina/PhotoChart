@@ -178,8 +178,9 @@ class Photograph(models.Model):
     ) -> bool:
         """Set ``time`` and ``model`` from EXIF, then filename, when still empty.
 
-        EXIF takes precedence; filename patterns are used only when ``time`` is
-        still unset after EXIF. Filename parse failure does not set ``has_errors``.
+        EXIF takes precedence; filename patterns (and optional epoch stems when
+        ``EPOCH_TIME_INFERRAL`` is enabled) are used only when ``time`` is still
+        unset after EXIF. Filename parse failure does not set ``has_errors``.
         """
         if not file_path or not os.path.exists(file_path):
             return False

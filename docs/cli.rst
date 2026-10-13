@@ -113,12 +113,14 @@ During normal ingest, when EXIF does not provide a capture time, PhotoChart may
 set ``Photograph.time`` from the file name when it matches common patterns such
 as ``IMG_YYYYMMDD_hhmmss``, ``IMG_YYYYMMDD_hhmmss_xxx``, ``IMG_YYYYMMDD_hhmmssSSS``
 (9-digit time with milliseconds), or the same shapes without the ``IMG_``
-prefix. EXIF always takes precedence when present.
+prefix. EXIF always takes precedence when present. When ``EPOCH_TIME_INFERRAL=true``
+(see :doc:`configuration`), a numeric-only stem may also be interpreted as Unix
+epoch time (seconds through nanoseconds).
 
 ``--update-metadata`` does not add catalog rows and does not walk the ingest
 tree on disk. It queries the catalog for rows under the ingest path whose
 photograph is missing capture time or camera model, then re-reads only those
-files from disk (EXIF, then filename patterns for time).
+files from disk (EXIF, then filename patterns and optional epoch inference).
 ``--retry-thumbnails``, ``--fix-errors``, and ``--update-metadata`` are mutually
 exclusive.
 

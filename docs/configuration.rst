@@ -186,3 +186,12 @@ The Django application reads:
    about twice that).  Set a positive integer to raise the limit—for example
    ``500000000`` for very large panoramas or scans.  Ignored when
    ``ENABLE_MAX_IMAGE_PIXELS=false``.
+
+``EPOCH_TIME_INFERRAL``
+   When ``true``, ingest may set ``Photograph.time`` from filenames whose stem
+   is only digits (e.g. ``1697123456.jpg``), after EXIF and camera-style
+   patterns are tried.  The value is interpreted as Unix epoch in order:
+   seconds, milliseconds, microseconds, then nanoseconds; the first
+   interpretation whose year falls between 1990 and next calendar year wins.
+   Default ``false``.  Short numeric names can map to implausible or unintended
+   dates—enable only when your library uses epoch-based filenames.

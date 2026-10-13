@@ -39,6 +39,9 @@ All notable changes to PhotoChart are documented in this file.
 - Ingest sets ``Photograph.time`` from common filename patterns (``IMG_YYYYMMDD_hhmmss``,
   optional ``_suffix``, 9-digit millisecond times, and the same without ``IMG_``)
   when EXIF does not provide a capture time. EXIF is preferred when available.
+- ``EPOCH_TIME_INFERRAL`` (default false) to optionally infer capture time from
+  numeric-only filenames as Unix epoch (seconds, milliseconds, microseconds, or
+  nanoseconds).
 - ``pchart ingest --update-metadata`` (and ``IngestJob.update_metadata``) to
   refresh missing capture time and camera model for catalogued rows that still
   lack those fields, without walking the full ingest tree or adding new catalog
