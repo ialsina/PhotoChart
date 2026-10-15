@@ -42,10 +42,12 @@ All notable changes to PhotoChart are documented in this file.
 - ``EPOCH_TIME_INFERRAL`` (default false) to optionally infer capture time from
   numeric-only filenames as Unix epoch (seconds, milliseconds, microseconds, or
   nanoseconds).
+- ``pchart ingest --fill-metadata`` (and ``IngestJob.fill_metadata``) to fill
+  missing capture time and camera model for catalogued rows that still lack those
+  fields, without walking the full ingest tree or adding new catalog rows.
 - ``pchart ingest --update-metadata`` (and ``IngestJob.update_metadata``) to
-  refresh missing capture time and camera model for catalogued rows that still
-  lack those fields, without walking the full ingest tree or adding new catalog
-  rows.
+  re-read capture time and camera model from disk for all catalogued rows under
+  the ingest path and overwrite when EXIF or filename supplies values.
 
 ### Changed
 

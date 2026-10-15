@@ -80,6 +80,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     retry_thumbnails = getattr(args, "retry_thumbnails", False)
     fix_errors = getattr(args, "fix_errors", False)
     update_metadata = getattr(args, "update_metadata", False)
+    fill_metadata = getattr(args, "fill_metadata", False)
     store_images = getattr(args, "store_images", True)
     if retry_thumbnails:
         store_images = True
@@ -97,6 +98,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         retry_thumbnails=retry_thumbnails,
         fix_errors=fix_errors,
         update_metadata=update_metadata,
+        fill_metadata=fill_metadata,
         raw_only=getattr(args, "raw_only", False),
         update_device=getattr(args, "update_device", False),
     )
@@ -122,17 +124,28 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         print(f"Retried thumbnails for {retried} photo(s) from '{args.path}'.")
         if result.get("images_stored", 0) > 0:
             print(f"Stored {result['images_stored']} image(s) in database.")
-    elif update_metadata:
+    elif fill_metadata:
         attempted = result.get("metadata_update_attempted", 0)
         time_set = result.get("metadata_time_set", 0)
         model_set = result.get("metadata_model_set", 0)
         print(
-            f"Updated metadata for {attempted} catalogued photo(s) from '{args.path}'."
+            f"Filled metadata for {attempted} catalogued photo(s) from '{args.path}'."
         )
         if time_set > 0:
             print(f"Set capture time on {time_set} photograph(s).")
         if model_set > 0:
             print(f"Set camera model on {model_set} photograph(s).")
+    elif update_metadata:
+        attempted = result.get("metadata_update_attempted", 0)
+        time_refreshed = result.get("metadata_time_refreshed", 0)
+        model_refreshed = result.get("metadata_model_refreshed", 0)
+        print(
+            f"Updated metadata for {attempted} catalogued photo(s) from '{args.path}'."
+        )
+        if time_refreshed > 0:
+            print(f"Refreshed capture time on {time_refreshed} photograph(s).")
+        if model_refreshed > 0:
+            print(f"Refreshed camera model on {model_refreshed} photograph(s).")
     else:
         skipped = result.get("skipped_already_ingested", 0)
         if skipped > 0:

@@ -101,7 +101,8 @@ card holds paired RAW+JPEG folders and you only want RAW in the catalog.
 add new catalog entries. It builds a work list of catalogued files (same stored
 path and device label) whose photograph has no thumbnail; only those files are
 processed and reflected in the progress bar. ``--no-store-images`` is ignored
-in this mode. It cannot be combined with ``--fix-errors`` or ``--update-metadata``.
+in this mode. It cannot be combined with ``--fix-errors``, ``--update-metadata``,
+or ``--fill-metadata``.
 
 ``--fix-errors`` uses the same scan-and-match rules but selects catalogued files
 whose photograph is flagged ``has_errors``. For each candidate it re-reads the
@@ -118,12 +119,21 @@ prefix. EXIF always takes precedence when present. When ``EPOCH_TIME_INFERRAL=tr
 (see :doc:`configuration`), a numeric-only stem may also be interpreted as Unix
 epoch time (seconds through nanoseconds).
 
-``--update-metadata`` does not add catalog rows and does not walk the ingest
-tree on disk. It queries the catalog for rows under the ingest path whose
-photograph is missing capture time or camera model, then re-reads only those
-files from disk (EXIF, then filename patterns and optional epoch inference).
-``--retry-thumbnails``, ``--fix-errors``, and ``--update-metadata`` are mutually
-exclusive.
+Metadata ingest modes apply only to **capture time** (``Photograph.time``, from
+EXIF DateTime then filename patterns and optional epoch inference) and **camera
+model** (``Photograph.model``, from EXIF only). They do not change checksum,
+thumbnail, or other catalog fields.
+
+``--fill-metadata`` does not add catalog rows and does not walk the ingest tree
+on disk. It queries the catalog for rows under the ingest path whose photograph
+is missing capture time or camera model, then fills only empty fields from disk.
+
+``--update-metadata`` uses the same sources but includes every catalogued row
+under the ingest path (not only rows with missing fields) and overwrites
+``time`` and ``model`` when EXIF or filename supplies values.
+
+``--retry-thumbnails``, ``--fix-errors``, ``--update-metadata``, and
+``--fill-metadata`` are mutually exclusive.
 
 Resize stored thumbnails
 ------------------------

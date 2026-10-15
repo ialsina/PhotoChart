@@ -174,38 +174,42 @@ class Photograph(models.Model):
             return None
 
     def apply_metadata_from_file(
-        self, file_path, *, filename: str | None = None
+        self, file_path, *, filename: str | None = None, rewrite: bool = False
     ) -> bool:
-        """Set ``time`` and ``model`` from EXIF, then filename, when still empty.
+        """Set or refresh ``time`` and ``model`` from EXIF, then filename for time.
 
-        EXIF takes precedence; filename patterns (and optional epoch stems when
-        ``EPOCH_TIME_INFERRAL`` is enabled) are used only when ``time`` is still
-        unset after EXIF. Filename parse failure does not set ``has_errors``.
+        When *rewrite* is False (default), only empty fields are filled.
+        When *rewrite* is True, ``time`` and ``model`` are overwritten when EXIF
+        or (for time) filename patterns supply values. EXIF capture time takes
+        precedence over filename; filename is used only when EXIF has no datetime.
+        Filename parse failure does not set ``has_errors``.
         """
         if not file_path or not os.path.exists(file_path):
             return False
 
         updated = False
-        if not self.time or not self.model:
-            exif_data = self._extract_exif_data(file_path)
-            if exif_data:
-                update_fields = []
-                if not self.time and exif_data.get("datetime"):
-                    exif_time = exif_data["datetime"]
-                    self.time = (
-                        timezone.make_aware(exif_time)
-                        if timezone.is_naive(exif_time)
-                        else exif_time
-                    )
-                    update_fields.append("time")
-                if not self.model and exif_data.get("model"):
-                    self.model = exif_data["model"]
-                    update_fields.append("model")
-                if update_fields:
-                    self.save(update_fields=update_fields)
-                    updated = True
+        need_exif = rewrite or not self.time or not self.model
+        exif_data = self._extract_exif_data(file_path) if need_exif else None
+        exif_time_set = False
+        if exif_data:
+            update_fields = []
+            if exif_data.get("datetime") and (rewrite or not self.time):
+                exif_time = exif_data["datetime"]
+                self.time = (
+                    timezone.make_aware(exif_time)
+                    if timezone.is_naive(exif_time)
+                    else exif_time
+                )
+                update_fields.append("time")
+                exif_time_set = True
+            if exif_data.get("model") and (rewrite or not self.model):
+                self.model = exif_data["model"]
+                update_fields.append("model")
+            if update_fields:
+                self.save(update_fields=update_fields)
+                updated = True
 
-        if not self.time:
+        if (rewrite or not self.time) and not exif_time_set:
             from photochart.imaging.filename_time import parse_datetime_from_filename
 
             name = filename or os.path.basename(file_path)
@@ -976,8 +980,18 @@ class IngestJob(models.Model):
     update_metadata = models.BooleanField(
         default=False,
         help_text=(
-            "Do not add new catalog entries; refresh missing photograph time "
-            "(EXIF, then filename) and camera model for catalogued files."
+            "Do not add new catalog entries; re-read photograph capture time "
+            "(EXIF, then filename) and camera model from disk for all "
+            "catalogued files under the ingest path and overwrite when sources "
+            "provide values."
+        ),
+    )
+    fill_metadata = models.BooleanField(
+        default=False,
+        help_text=(
+            "Do not add new catalog entries; fill only missing photograph "
+            "capture time (EXIF, then filename) and camera model for "
+            "catalogued files that still lack those fields."
         ),
     )
     raw_only = models.BooleanField(

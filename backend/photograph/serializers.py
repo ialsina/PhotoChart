@@ -210,6 +210,7 @@ class IngestJobSerializer(serializers.ModelSerializer):
             "retry_thumbnails",
             "fix_errors",
             "update_metadata",
+            "fill_metadata",
             "raw_only",
             "update_device",
             "status",
@@ -249,11 +250,12 @@ class IngestJobSerializer(serializers.ModelSerializer):
             attrs.get("retry_thumbnails"),
             attrs.get("fix_errors"),
             attrs.get("update_metadata"),
+            attrs.get("fill_metadata"),
         ]
         if sum(1 for flag in exclusive if flag) > 1:
             raise serializers.ValidationError(
-                "retry_thumbnails, fix_errors, and update_metadata are mutually "
-                "exclusive; at most one may be true."
+                "retry_thumbnails, fix_errors, update_metadata, and fill_metadata "
+                "are mutually exclusive; at most one may be true."
             )
         return attrs
 

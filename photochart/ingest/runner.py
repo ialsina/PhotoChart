@@ -108,6 +108,7 @@ def run_ingest_local(
     retry_thumbnails: bool = False,
     fix_errors: bool = False,
     update_metadata: bool = False,
+    fill_metadata: bool = False,
     raw_only: bool = False,
     update_device: bool = False,
 ) -> dict:
@@ -135,6 +136,7 @@ def run_ingest_local(
         retry_thumbnails=retry_thumbnails,
         fix_errors=fix_errors,
         update_metadata=update_metadata,
+        fill_metadata=fill_metadata,
         raw_only=raw_only,
         update_device=update_device,
     )
@@ -160,6 +162,7 @@ def run_ingest_docker(
     retry_thumbnails: bool = False,
     fix_errors: bool = False,
     update_metadata: bool = False,
+    fill_metadata: bool = False,
     raw_only: bool = False,
     update_device: bool = False,
 ) -> dict:
@@ -239,6 +242,8 @@ def run_ingest_docker(
         cmd += ["--fix-errors"]
     if update_metadata:
         cmd += ["--update-metadata"]
+    if fill_metadata:
+        cmd += ["--fill-metadata"]
     if raw_only:
         cmd += ["--raw"]
     if update_device:
@@ -260,6 +265,8 @@ def run_ingest_docker(
         "metadata_update_attempted": 0,
         "metadata_time_set": 0,
         "metadata_model_set": 0,
+        "metadata_time_refreshed": 0,
+        "metadata_model_refreshed": 0,
         "skipped_already_ingested": 0,
         "errors": [],
     }
@@ -343,6 +350,7 @@ def choose_and_run_ingest(
     retry_thumbnails: bool = False,
     fix_errors: bool = False,
     update_metadata: bool = False,
+    fill_metadata: bool = False,
     raw_only: bool = False,
     update_device: bool = False,
 ) -> dict:
@@ -425,6 +433,7 @@ def choose_and_run_ingest(
             retry_thumbnails=retry_thumbnails,
             fix_errors=fix_errors,
             update_metadata=update_metadata,
+            fill_metadata=fill_metadata,
             raw_only=raw_only,
             update_device=update_device,
         )
@@ -485,6 +494,7 @@ def choose_and_run_ingest(
         retry_thumbnails=retry_thumbnails,
         fix_errors=fix_errors,
         update_metadata=update_metadata,
+        fill_metadata=fill_metadata,
         raw_only=raw_only,
         update_device=update_device,
     )

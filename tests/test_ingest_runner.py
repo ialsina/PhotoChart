@@ -276,6 +276,21 @@ class TestRunIngestDocker:
         cmd = mock_run.call_args[0][0]
         assert "--update-metadata" in cmd
 
+    def test_fill_metadata_flag_forwarded(self) -> None:
+        with self._patched_settings():
+            with patch(
+                "photochart.ingest.runner.subprocess.run",
+                return_value=MagicMock(
+                    returncode=0,
+                    stdout="Filled metadata for 0 catalogued photo(s) from '/x'.",
+                    stderr="",
+                ),
+            ) as mock_run:
+                run_ingest_docker(path="/x", mount_root="/x", fill_metadata=True)
+
+        cmd = mock_run.call_args[0][0]
+        assert "--fill-metadata" in cmd
+
     def test_fix_errors_flag_forwarded(self) -> None:
         with self._patched_settings():
             with patch(
@@ -448,6 +463,26 @@ class TestChooseAndRunIngest:
 
         call_kwargs = mock_local.call_args.kwargs
         assert call_kwargs["update_metadata"] is True
+
+    def test_fill_metadata_forwarded_to_local(self, tmp_path: Path) -> None:
+        mock_result = {
+            "success": True,
+            "count": 0,
+            "checksums_calculated": 0,
+            "images_stored": 0,
+            "metadata_update_attempted": 1,
+            "metadata_time_set": 1,
+            "metadata_model_set": 0,
+            "errors": [],
+        }
+        with _fake_django_settings():
+            with patch(
+                "photochart.ingest.runner.run_ingest_local", return_value=mock_result
+            ) as mock_local:
+                choose_and_run_ingest(str(tmp_path), fill_metadata=True)
+
+        call_kwargs = mock_local.call_args.kwargs
+        assert call_kwargs["fill_metadata"] is True
 
     def test_missing_path_without_docker_returns_error(self) -> None:
         with _fake_django_settings(INGEST_DOCKER_ENABLED=False):

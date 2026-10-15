@@ -768,7 +768,7 @@ class IngestFixErrorsTest(TestCase):
 
     @patch("photochart.ingest.photos.get_mount_point", return_value=None)
     @patch("photochart.ingest.photos.get_device_name", return_value=DEVICE)
-    def test_update_metadata_sets_time_for_catalogued_file(self, *_mocks) -> None:
+    def test_fill_metadata_sets_time_for_catalogued_file(self, *_mocks) -> None:
         from django.utils import timezone
 
         from photochart.ingest.photos import ingest_photos
@@ -797,7 +797,7 @@ class IngestFixErrorsTest(TestCase):
                             recursive=False,
                             calculate_checksum=False,
                             store_images=False,
-                            update_metadata=True,
+                            fill_metadata=True,
                         )
 
                     assert result["metadata_update_attempted"] == 1
@@ -809,9 +809,7 @@ class IngestFixErrorsTest(TestCase):
 
     @patch("photochart.ingest.photos.get_mount_point", return_value=None)
     @patch("photochart.ingest.photos.get_device_name", return_value=DEVICE)
-    def test_update_metadata_only_processes_rows_missing_metadata(
-        self, *_mocks
-    ) -> None:
+    def test_fill_metadata_only_processes_rows_missing_metadata(self, *_mocks) -> None:
         from django.utils import timezone
 
         from photochart.ingest.photos import ingest_photos
@@ -857,7 +855,7 @@ class IngestFixErrorsTest(TestCase):
                                 recursive=False,
                                 calculate_checksum=False,
                                 store_images=False,
-                                update_metadata=True,
+                                fill_metadata=True,
                             )
                             mock_walk.assert_not_called()
 
@@ -865,7 +863,7 @@ class IngestFixErrorsTest(TestCase):
 
     @patch("photochart.ingest.photos.get_mount_point", return_value=None)
     @patch("photochart.ingest.photos.get_device_name", return_value=DEVICE)
-    def test_update_metadata_skips_not_in_catalog(self, *_mocks) -> None:
+    def test_fill_metadata_skips_not_in_catalog(self, *_mocks) -> None:
         from photochart.ingest.photos import ingest_photos
 
         with tempfile.TemporaryDirectory() as media_root:
@@ -878,10 +876,54 @@ class IngestFixErrorsTest(TestCase):
                         recursive=False,
                         calculate_checksum=False,
                         store_images=False,
-                        update_metadata=True,
+                        fill_metadata=True,
                     )
 
                     assert result["metadata_update_attempted"] == 0
+
+    @patch("photochart.ingest.photos.get_mount_point", return_value=None)
+    @patch("photochart.ingest.photos.get_device_name", return_value=DEVICE)
+    def test_update_metadata_rewrites_existing_time_from_filename(
+        self, *_mocks
+    ) -> None:
+        from django.utils import timezone
+
+        from photochart.ingest.photos import ingest_photos
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with tempfile.TemporaryDirectory() as tmp:
+                with self.settings(MEDIA_ROOT=media_root):
+                    img = self._write_minimal_jpeg(Path(tmp), "IMG_20160406_195654.jpg")
+                    path_str = str(img.resolve())
+                    old_time = timezone.make_aware(datetime(2000, 1, 1, 0, 0, 0))
+                    photograph = Photograph.objects.create(time=old_time)
+                    PhotoPath.objects.create(
+                        path=path_str,
+                        filename="IMG_20160406_195654.jpg",
+                        device=self.DEVICE,
+                        filesystem_uuid=_legacy_uuid(self.DEVICE),
+                        photograph=photograph,
+                    )
+
+                    with patch(
+                        "photograph.models.Photograph._extract_exif_data",
+                        return_value={"datetime": None, "model": None},
+                    ):
+                        result = ingest_photos(
+                            tmp,
+                            device=self.DEVICE,
+                            recursive=False,
+                            calculate_checksum=False,
+                            store_images=False,
+                            update_metadata=True,
+                        )
+
+                    assert result["metadata_update_attempted"] == 1
+                    assert result["metadata_time_refreshed"] == 1
+                    photograph.refresh_from_db()
+                    assert photograph.time == timezone.make_aware(
+                        datetime(2016, 4, 6, 19, 56, 54)
+                    )
 
 
 class PhotographRepairFromFileTest(TestCase):

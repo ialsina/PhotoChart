@@ -93,6 +93,7 @@ Request body (all fields except ``path`` are optional):
      "retry_thumbnails":   false,
      "fix_errors":         false,
      "update_metadata":    false,
+     "fill_metadata":      false,
      "raw_only":           false
    }
 
@@ -109,11 +110,14 @@ When ``fix_errors`` is true, no new ``PhotoPath`` rows are created; the job
 re-attempts checksum, thumbnail (when ``store_images`` is true), and metadata
 repair from disk for catalogued files whose photograph has ``has_errors``.
 
+When ``fill_metadata`` is true, no new ``PhotoPath`` rows are created; the job
+selects catalogued rows whose photograph lacks capture time or camera model and
+fills only empty fields from disk (EXIF, then filename patterns for time).
+
 When ``update_metadata`` is true, no new ``PhotoPath`` rows are created; the job
-selects catalogued rows under the scan path whose photograph lacks time or model,
-then refreshes metadata from disk for those files only (EXIF, then filename
-patterns for time). ``retry_thumbnails``,
-``fix_errors``, and ``update_metadata`` are mutually exclusive on the same job.
+re-reads capture time and camera model for all catalogued rows under the path and
+overwrites when disk sources provide values. ``retry_thumbnails``, ``fix_errors``,
+``update_metadata``, and ``fill_metadata`` are mutually exclusive on the same job.
 
 Response (202 Accepted):
 

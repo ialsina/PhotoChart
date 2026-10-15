@@ -201,9 +201,21 @@ def build_parser() -> argparse.ArgumentParser:
         dest="update_metadata",
         default=False,
         help=(
-            "Do not add new catalog entries. For catalogued files on this "
-            "device, refresh missing photograph time (EXIF, then filename "
-            "patterns) and camera model from disk."
+            "Do not add new catalog entries. Re-read capture time (EXIF, then "
+            "filename patterns) and camera model from disk for all catalogued "
+            "files under the ingest path and overwrite when sources provide "
+            "values."
+        ),
+    )
+    ingest_mode.add_argument(
+        "--fill-metadata",
+        action="store_true",
+        dest="fill_metadata",
+        default=False,
+        help=(
+            "Do not add new catalog entries. For catalogued files missing "
+            "capture time or camera model, fill only empty fields from EXIF "
+            "and filename (does not overwrite existing values)."
         ),
     )
     p_ing.add_argument(
